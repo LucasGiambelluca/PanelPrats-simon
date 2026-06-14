@@ -490,20 +490,28 @@ import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || '';
+const hasRealCreds = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('⚠️ [supabase] Falta SUPABASE_URL o SUPABASE_SERVICE_KEY en .env');
+if (!hasRealCreds) {
+  console.warn('⚠️ [supabase] Falta SUPABASE_URL o SUPABASE_SERVICE_KEY en .env — usando placeholders (sin acceso real a la DB)');
 }
+
+// Fallbacks no-vacíos: @supabase/supabase-js (>=2.108) lanza si la URL/clave están vacías.
+const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 'placeholder-service-key';
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: true },
-  realtime: { timeout: 60000, params: { events_per_second: 20 } },
+  // Node < 22 no trae WebSocket global; supabase-realtime necesita el transport explícito (paquete `ws`).
+  realtime: { timeout: 60000, params: { events_per_second: 20 }, transport: ws as any },
   db: { schema: 'public' },
 });
 ```
+
+> **Dep extra:** `ws` (+ `@types/ws` dev) requerida por supabase-realtime en Node 20. Instalar: `npm install ws && npm install -D @types/ws`.
+> **Windows/npm:** si `npm`/`npx` fallan con `ERR_INVALID_ARG_TYPE: "file" argument`, prefijar con `ComSpec="C:\Windows\System32\cmd.exe"` (la var ComSpec puede venir vacía en Git Bash).
 
 - [ ] **Step 3: Escribir `server/src/config/redis.ts`**
 
@@ -546,7 +554,8 @@ describe('config clients', () => {
   it('redis exporta una instancia ioredis', async () => {
     const { redis } = await import('../redis');
     expect(typeof redis.get).toBe('function');
-    await redis.quit();
+    // disconnect() es síncrono y no envía comando; quit() falla offline con enableOfflineQueue:false (ioredis >=5.11).
+    redis.disconnect();
   });
 });
 ```
