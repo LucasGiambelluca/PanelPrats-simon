@@ -10,12 +10,15 @@ export class BufferMemoryExecutor implements NodeExecutor {
     async execute(nodeData: any, context: ExecutionContext): Promise<NodeExecutionResult> {
         const capacity = nodeData.capacity || 10;
         const phone = context.phone;
+        // Plan 2 Task 7: getHistory ahora exige accountId como primer parámetro
+        // para aislar el historial por cuenta. El contexto de ejecución lo lleva.
+        const accountId = context.accountId;
 
         logger.info(`[Memory] 🧠 Loading last ${capacity} messages for ${phone} from Redis...`);
 
         try {
             // Fetch history from shared memory service
-            const history = await redisPersistence.getHistory(phone, capacity);
+            const history = await redisPersistence.getHistory(accountId, phone, capacity);
 
             return {
                 messages: [],
