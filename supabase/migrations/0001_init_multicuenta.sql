@@ -142,6 +142,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_session ON audit_logs(session_id);
 
+-- 9. reports: registros genéricos creados por el nodo reportNode (reclamos/avisos)
+CREATE TABLE IF NOT EXISTS reports (
+    id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id  uuid REFERENCES accounts(id) ON DELETE CASCADE,
+    phone       text,
+    type        text DEFAULT 'reclamo',
+    description text,
+    priority    text DEFAULT 'medium',
+    status      text DEFAULT 'open',
+    metadata    jsonb DEFAULT '{}',
+    created_at  timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reports_account ON reports(account_id);
+
 -- RLS: cada usuario ve sus propias cuentas y datos derivados.
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flows ENABLE ROW LEVEL SECURITY;
