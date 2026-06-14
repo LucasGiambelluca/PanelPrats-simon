@@ -128,6 +128,20 @@ CREATE TABLE IF NOT EXISTS flow_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_flowlogs_session ON flow_logs(session_id);
 
+-- 8. audit_logs: trazas crudas del SessionAuditor (eventos/errores de sesión)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    "timestamp" timestamptz DEFAULT now(),
+    account_id  uuid,
+    session_id  text,
+    event_type  text,
+    message_id  text,
+    user_phone  text,
+    details     jsonb,
+    stack_trace text
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_session ON audit_logs(session_id);
+
 -- RLS: cada usuario ve sus propias cuentas y datos derivados.
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flows ENABLE ROW LEVEL SECURITY;
