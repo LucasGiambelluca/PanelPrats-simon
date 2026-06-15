@@ -7,11 +7,16 @@ import { conversationsRouter } from './routes/conversations.routes';
 import { messagesRouter } from './routes/messages.routes';
 import { configRouter } from './routes/config.routes';
 import { appointmentsRouter } from './routes/appointments.routes';
+import { metaWebhookRouter } from './routes/webhooks.routes';
 
 export function createApp(manager: AccountManager) {
   const app = express();
   app.use(cors({ origin: (process.env.CORS_ORIGIN || '*').split(',') }));
-  app.use(express.json({ limit: '5mb' }));
+  // Capturamos el raw body para verificar la firma del webhook de Meta (HMAC-SHA256).
+  app.use(express.json({
+    limit: '5mb',
+    verify: (req, _res, buf) => { (req as any).rawBody = buf; },
+  }));
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.use('/api/accounts', accountsRouter(manager));
@@ -20,6 +25,7 @@ export function createApp(manager: AccountManager) {
   app.use('/api/messages', messagesRouter(manager));
   app.use('/api/config', configRouter());
   app.use('/api/appointments', appointmentsRouter());
+  app.use('/api/webhooks/meta', metaWebhookRouter(manager));
 
   return app;
 }
