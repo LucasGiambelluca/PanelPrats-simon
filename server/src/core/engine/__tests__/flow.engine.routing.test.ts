@@ -16,7 +16,6 @@ vi.mock('../../../config/database', () => {
 import { FlowEngine } from '../flow.engine';
 
 // findNextNodeId es privado; lo probamos vía un acceso de test.
-// @ts-expect-error acceso a método privado para testing
 const findNext = (FlowEngine.prototype as any).findNextNodeId.bind(new FlowEngine());
 
 const flow = {
