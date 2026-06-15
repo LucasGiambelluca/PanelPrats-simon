@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
 import { useAuth } from './AuthContext';
+import { accountsApi } from '../lib/api';
 import type { Account } from '../types';
 
 interface AccountCtx {
@@ -27,36 +27,26 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (!user) {
-      setAccounts([]);
-      setActiveAccountId(null);
-      return;
+    if (!user?.id) return;
+    try {
+      const list = await accountsApi.list(user.id);
+      setAccounts(list);
+      setActiveAccountId((cur) => cur ?? list[0]?.id ?? null);
+    } catch (err) {
+      console.error('[AccountContext] Error loading accounts:', err);
     }
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at');
-    if (error) {
-      console.error('Error loading accounts:', error.message);
-      return;
-    }
-    const list = (data as Account[]) || [];
-    setAccounts(list);
-    setActiveAccountId((cur) => cur ?? list[0]?.id ?? null);
   }, [user]);
 
   const createAccount = useCallback(async (name: string) => {
-    if (!user) return;
-    const { error } = await supabase
-      .from('accounts')
-      .insert({ user_id: user.id, name, status: 'disconnected' });
-    if (error) {
-      console.error('Error creating account:', error.message);
-      throw error;
+    if (!user?.id) return;
+    try {
+      const newAccount = await accountsApi.create(user.id, name);
+      setAccounts(prev => [...prev, newAccount]);
+    } catch (err) {
+      console.error('[AccountContext] Error creating account:', err);
+      throw err;
     }
-    await reload();
-  }, [user, reload]);
+  }, [user]);
 
   useEffect(() => { reload(); }, [reload]);
 

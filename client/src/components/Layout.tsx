@@ -1,12 +1,14 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { MessageSquare, Users, Bot, LogOut, Smartphone, ChevronDown } from 'lucide-react';
+import { MessageSquare, Bot, LogOut, Smartphone, ChevronDown, Phone, Settings, Calendar } from 'lucide-react';
 
 const navItems = [
-  { to: '/accounts', label: 'Cuentas', icon: Users },
-  { to: '/inbox', label: 'Inbox', icon: MessageSquare },
+  { to: '/accounts', label: 'Mis Números', icon: Phone },
+  { to: '/inbox', label: 'Mensajes', icon: MessageSquare },
   { to: '/builder', label: 'Bot Builder', icon: Bot },
+  { to: '/agenda', label: 'Agenda', icon: Calendar },
+  { to: '/connections', label: 'Conexiones', icon: Settings },
 ];
 
 export default function Layout() {

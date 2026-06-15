@@ -6,9 +6,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Accounts from './pages/Accounts';
-import WhatsAppConnect from './pages/WhatsAppConnect';
 import WhatsAppInbox from './pages/WhatsAppInbox';
 import BotBuilder from './pages/BotBuilder';
+import Connections from './pages/Connections';
+import Agenda from './pages/Agenda';
 
 function App() {
   return (
@@ -35,9 +36,10 @@ function App() {
             }>
               <Route index element={<Navigate to="/accounts" replace />} />
               <Route path="/accounts" element={<Accounts />} />
-              <Route path="/accounts/:id/connect" element={<WhatsAppConnect />} />
               <Route path="/inbox" element={<WhatsAppInbox />} />
               <Route path="/builder" element={<BotBuilder />} />
+              <Route path="/connections" element={<Connections />} />
+              <Route path="/agenda" element={<Agenda />} />
             </Route>
           </Route>
         </Routes>

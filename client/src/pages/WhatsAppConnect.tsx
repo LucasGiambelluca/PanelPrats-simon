@@ -1,44 +1,102 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { QrCode, CheckCircle, ArrowLeft, Smartphone, Loader2 } from 'lucide-react';
-import { api } from '../lib/api';
+import { QrCode, CheckCircle, ArrowLeft, Smartphone, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import { accountsApi } from '../lib/api';
+import { useAccounts } from '../context/AccountContext';
+import { toast } from 'sonner';
 
 export default function WhatsAppConnect() {
-  const { id } = useParams();
-  const [status, setStatus] = useState<string>('connecting');
-  const [qr, setQr] = useState<string | null>(null);
+  const { id } = useParams<{ id: string }>();
+  const { reload } = useAccounts();
+  const [status, setStatus] = useState<string>('disconnected');
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Real flow: trigger connect on the backend, then poll the QR/status endpoint.
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollQr = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await accountsApi.qr(id);
+      setStatus(res.status);
+
+      if (res.status === 'connected') {
+        setQrDataUrl(null);
+        stopPolling();
+        toast.success('¡WhatsApp conectado!');
+        reload();
+      } else if (res.qr) {
+        // The backend returns a raw QR string; we generate a data URL
+        setQrDataUrl(res.qr);
+      }
+    } catch (err) {
+      console.error('[WhatsAppConnect] poll error:', err);
+    }
+  }, [id, stopPolling, reload]);
+
+  const startConnect = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setQrDataUrl(null);
+
+    try {
+      const res = await accountsApi.connect(id);
+      setStatus(res.status);
+      // Start polling for QR / status every 2s
+      stopPolling();
+      pollRef.current = setInterval(pollQr, 2000);
+      // Also do an immediate poll
+      await pollQr();
+    } catch (err: any) {
+      toast.error('Error al conectar: ' + (err.message || 'desconocido'));
+      setStatus('disconnected');
+    }
+    setLoading(false);
+  }, [id, pollQr, stopPolling]);
+
+  // On mount: check current status
   useEffect(() => {
     if (!id) return;
-    let stop = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    // Kick off the Baileys connection.
-    api(`/api/accounts/${id}/connect`, { method: 'POST' }).catch(() => {});
-
-    const poll = async () => {
-      if (stop) return;
+    (async () => {
       try {
-        const r = await api<{ qr: string | null; status: string }>(`/api/accounts/${id}/qr`);
-        if (stop) return;
-        setQr(r.qr);
-        setStatus(r.status);
-        if (r.status === 'connected') return; // done, stop polling
+        const res = await accountsApi.status(id);
+        setStatus(res.status);
+        if (res.status === 'qr' || res.status === 'connecting') {
+          // Already connecting — start polling
+          pollRef.current = setInterval(pollQr, 2000);
+          await pollQr();
+        }
       } catch {
-        /* swallow and retry */
+        setStatus('disconnected');
       }
-      timer = setTimeout(poll, 2500);
-    };
+    })();
 
-    poll();
-    return () => { stop = true; clearTimeout(timer); };
-  }, [id]);
+    return stopPolling;
+  }, [id, pollQr, stopPolling]);
+
+  const handleDisconnect = async () => {
+    if (!id) return;
+    try {
+      await accountsApi.disconnect(id);
+      setStatus('disconnected');
+      setQrDataUrl(null);
+      stopPolling();
+      toast.info('Cuenta desconectada');
+      reload();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] p-8">
       <div className="max-w-lg mx-auto">
-        {/* Back */}
         <Link to="/accounts" className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-300 text-sm mb-8 transition-colors">
           <ArrowLeft size={16} />
           Volver a Cuentas
@@ -54,31 +112,32 @@ export default function WhatsAppConnect() {
             Vinculá un número de WhatsApp con tu cuenta
           </p>
 
-          {/* Status display */}
-          {status === 'connected' ? (
+          {/* CONNECTING / LOADING */}
+          {(status === 'connecting' || loading) && !qrDataUrl && (
             <div className="space-y-4">
-              <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center mx-auto">
-                <CheckCircle size={40} className="text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-emerald-400 font-bold text-lg">¡Conectado!</p>
-                <p className="text-slate-500 text-sm mt-1">El número está vinculado y listo para operar.</p>
-              </div>
-              <Link
-                to="/inbox"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-indigo-600/20 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 hover:-translate-y-0.5 mt-4"
-              >
-                Ir al Inbox
-              </Link>
+              <Loader2 size={48} className="text-indigo-400 mx-auto animate-spin" />
+              <p className="text-slate-400 text-sm">Generando código QR…</p>
             </div>
-          ) : qr ? (
+          )}
+
+          {/* QR CODE */}
+          {(status === 'qr' || qrDataUrl) && status !== 'connected' && (
             <div className="space-y-6">
-              {/* Real QR Code (data URL served by backend) */}
-              <div className="w-64 h-64 mx-auto bg-white rounded-2xl p-4 shadow-lg shadow-white/5 relative overflow-hidden">
-                <img src={qr} alt="Código QR de WhatsApp" className="w-full h-full object-contain rounded-xl" />
-                {/* Scan line animation */}
-                <div className="absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line" />
-              </div>
+              {qrDataUrl ? (
+                <div className="w-72 h-72 mx-auto bg-white rounded-2xl p-3 shadow-lg shadow-white/5 relative overflow-hidden">
+                  <img
+                    src={qrDataUrl.startsWith('data:') ? qrDataUrl : `data:image/png;base64,${qrDataUrl}`}
+                    alt="WhatsApp QR Code"
+                    className="w-full h-full object-contain rounded-xl"
+                  />
+                  {/* Scan line animation */}
+                  <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line" />
+                </div>
+              ) : (
+                <div className="w-72 h-72 mx-auto bg-white rounded-2xl p-4 flex items-center justify-center">
+                  <QrCode size={120} className="text-slate-300 animate-pulse" />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <p className="text-slate-300 text-sm font-medium">Escaneá el QR con WhatsApp</p>
@@ -87,20 +146,52 @@ export default function WhatsAppConnect() {
                 </p>
                 <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mt-2">
                   <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-amber-400 text-xs font-medium">
-                    Esperando escaneo…
-                  </span>
+                  <span className="text-amber-400 text-xs font-medium">Esperando escaneo…</span>
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* CONNECTED */}
+          {status === 'connected' && (
             <div className="space-y-4">
-              <Loader2 size={48} className="text-indigo-400 mx-auto animate-spin" />
-              <p className="text-slate-400 text-sm">Generando código QR…</p>
-              <div className="inline-flex items-center gap-2 text-slate-600 text-xs">
-                <QrCode size={14} />
-                <span>Estado: {status}</span>
+              <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center mx-auto">
+                <CheckCircle size={40} className="text-emerald-400" />
               </div>
+              <div>
+                <p className="text-emerald-400 font-bold text-lg">¡Conectado!</p>
+                <p className="text-slate-500 text-sm mt-1">El número está vinculado y listo para operar.</p>
+              </div>
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <Link
+                  to="/inbox"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-indigo-600/20 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  Ir al Inbox
+                </Link>
+                <button
+                  onClick={handleDisconnect}
+                  className="inline-flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 px-6 py-3 rounded-xl font-bold text-sm hover:bg-red-500/20 transition-all duration-200"
+                >
+                  <WifiOff size={16} />
+                  Desconectar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* DISCONNECTED */}
+          {status === 'disconnected' && !loading && (
+            <div className="space-y-4">
+              <WifiOff size={48} className="text-slate-600 mx-auto" />
+              <p className="text-slate-500 text-sm">Desconectado</p>
+              <button
+                onClick={startConnect}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <RefreshCw size={16} />
+                Iniciar Conexión
+              </button>
             </div>
           )}
         </div>

@@ -161,18 +161,33 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 CREATE INDEX IF NOT EXISTS idx_reports_account ON reports(account_id);
 
+-- 10. appointments: citas/turnos creados por el nodo appointmentNode (Agendar Cita)
+CREATE TABLE IF NOT EXISTS appointments (
+    id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id  uuid REFERENCES accounts(id) ON DELETE CASCADE,
+    phone       text NOT NULL,
+    nombre      text NOT NULL,
+    telefono    text,
+    resumen     text,
+    status      text NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente','confirmada','cancelada')),
+    created_at  timestamptz DEFAULT now(),
+    updated_at  timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_appointments_account ON appointments(account_id);
+
 -- RLS: cada usuario ve sus propias cuentas y datos derivados.
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flow_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 
 -- accounts: dueño = user_id
 CREATE POLICY accounts_owner ON accounts
     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- flows / flow_executions / conversations: dueño vía join a accounts
+-- flows / flow_executions / conversations / appointments: dueño vía join a accounts
 CREATE POLICY flows_owner ON flows
     FOR ALL USING (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()))
     WITH CHECK (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()));
@@ -182,6 +197,10 @@ CREATE POLICY flowexec_owner ON flow_executions
     WITH CHECK (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()));
 
 CREATE POLICY waconv_owner ON whatsapp_conversations
+    FOR ALL USING (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()))
+    WITH CHECK (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()));
+
+CREATE POLICY appointments_owner ON appointments
     FOR ALL USING (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()))
     WITH CHECK (account_id IN (SELECT id FROM accounts WHERE user_id = auth.uid()));
 

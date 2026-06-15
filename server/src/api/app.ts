@@ -5,6 +5,8 @@ import { accountsRouter } from './routes/accounts.routes';
 import { flowsRouter } from './routes/flows.routes';
 import { conversationsRouter } from './routes/conversations.routes';
 import { messagesRouter } from './routes/messages.routes';
+import { configRouter } from './routes/config.routes';
+import { appointmentsRouter } from './routes/appointments.routes';
 
 export function createApp(manager: AccountManager) {
   const app = express();
@@ -16,6 +18,8 @@ export function createApp(manager: AccountManager) {
   app.use('/api/flows', flowsRouter());
   app.use('/api/conversations', conversationsRouter());
   app.use('/api/messages', messagesRouter(manager));
+  app.use('/api/config', configRouter());
+  app.use('/api/appointments', appointmentsRouter());
 
   return app;
 }
