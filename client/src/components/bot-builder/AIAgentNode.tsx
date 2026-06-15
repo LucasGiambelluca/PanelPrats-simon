@@ -104,8 +104,8 @@ export default function AIAgentNode({ data, selected }: any) {
           </label>
           <div className="space-y-1.5">
             {[
-              { id: 'tool_stock', label: 'Consultar Stock' },
-              { id: 'tool_orders', label: 'Estado de Pedidos' },
+              { id: 'tool_memory', label: 'Memoria conversacional' },
+              { id: 'tool_history', label: 'Historial reciente' },
               { id: 'tool_hours', label: 'Horarios de Atención' }
             ].map(tool => (
               <label key={tool.id} className="flex items-center gap-2 cursor-pointer group">
