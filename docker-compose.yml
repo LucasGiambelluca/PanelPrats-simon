@@ -1,0 +1,14 @@
+# Redis local para checkpoints de sesión del bot.
+# Uso: docker compose up -d   (apagar: docker compose down)
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: panel-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
