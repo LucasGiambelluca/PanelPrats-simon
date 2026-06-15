@@ -453,7 +453,7 @@ export function subscribeToInbox(accountId: string, onChange: () => void) {
 }
 ```
 
-> Realtime de `whatsapp_messages` no filtra por account_id (no tiene la columna; cuelga de conversation_id). El handler `onChange` recarga la conversación activa, que ya está scoped — suficiente. Si se quiere filtrar, agregar `account_id` denormalizado a `whatsapp_messages` en una migración futura.
+> `whatsapp_messages` ya tiene `account_id` denormalizado (migración Plan 1), así que el Realtime PUEDE filtrar por cuenta: `filter: account_id=eq.${accountId}` en el canal de mensajes. El handler `onChange` recarga la conversación activa (scoped) igual.
 
 - [ ] **Step 2: Escribir `useWhatsAppInbox.ts`** (sin parseOrderFromText ni convert-to-order)
 
