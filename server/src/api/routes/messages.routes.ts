@@ -1,0 +1,21 @@
+import { Router } from 'express';
+import type { AccountManager } from '../../core/accounts/AccountManager';
+import { messageStore } from '../../services/MessageStore';
+
+export function messagesRouter(manager: AccountManager): Router {
+  const r = Router();
+
+  // Enviar mensaje manual (handover): envía por Baileys y persiste OUTBOUND
+  r.post('/send', async (req, res) => {
+    const { account_id, phone, text } = req.body;
+    try {
+      await manager.sendMessage(account_id, phone, text);
+      await messageStore.record({ accountId: account_id, phone, direction: 'OUTBOUND', content: text });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  return r;
+}
