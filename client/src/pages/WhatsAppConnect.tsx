@@ -1,13 +1,15 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { QrCode, CheckCircle, ArrowLeft, Smartphone, Loader2, WifiOff, RefreshCw } from 'lucide-react';
-import { accountsApi } from '../lib/api';
+import { QrCode, CheckCircle, ArrowLeft, Smartphone, Loader2, WifiOff, RefreshCw, Facebook, Instagram } from 'lucide-react';
+import { accountsApi, apiBase } from '../lib/api';
 import { useAccounts } from '../context/AccountContext';
 import { toast } from 'sonner';
 
 export default function WhatsAppConnect() {
   const { id } = useParams<{ id: string }>();
-  const { reload } = useAccounts();
+  const { accounts, reload } = useAccounts();
+  const account = accounts.find((a) => a.id === id);
+  const isMeta = !!account?.channel && account.channel !== 'whatsapp';
   const [status, setStatus] = useState<string>('disconnected');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,6 +104,45 @@ export default function WhatsAppConnect() {
           Volver a Cuentas
         </Link>
 
+        {isMeta ? (
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl ${
+              account?.channel === 'instagram'
+                ? 'bg-gradient-to-br from-pink-500 to-purple-600 shadow-pink-500/20'
+                : 'bg-gradient-to-br from-blue-500 to-blue-700 shadow-blue-500/20'
+            }`}>
+              {account?.channel === 'instagram'
+                ? <Instagram size={28} className="text-white" />
+                : <Facebook size={28} className="text-white" />}
+            </div>
+
+            <h2 className="text-2xl font-bold text-white mb-2 text-center">
+              Conectar {account?.channel === 'instagram' ? 'Instagram' : 'Facebook'}
+            </h2>
+            <p className="text-slate-500 text-sm mb-8 text-center">
+              Configurá el webhook en tu app de Meta
+            </p>
+
+            <div className="space-y-3 text-left">
+              <div>
+                <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL</p>
+                <code className="block bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-emerald-400 text-xs font-mono break-all">
+                  {apiBase}/api/webhooks/meta
+                </code>
+              </div>
+              <div>
+                <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Verify Token</p>
+                <code className="block bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-amber-400 text-xs font-mono break-all">
+                  {account?.verify_token || '— (definí un Verify Token al crear la cuenta)'}
+                </code>
+              </div>
+              <p className="text-slate-500 text-xs leading-relaxed">
+                Pegá la Webhook URL y el Verify Token en la configuración de tu app de Meta.
+                Una vez que Meta verifique el webhook, los mensajes llegarán automáticamente al inbox.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8 text-center">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/20">
             <Smartphone size={28} className="text-white" />
@@ -195,6 +236,7 @@ export default function WhatsAppConnect() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

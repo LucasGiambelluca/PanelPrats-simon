@@ -19,10 +19,41 @@ export const accountsApi = {
   list: (userId: string) =>
     api<Account[]>(`/api/accounts?user_id=${encodeURIComponent(userId)}`),
 
-  create: (userId: string, name: string) =>
+  create: (
+    userId: string,
+    name: string,
+    opts?: {
+      channel?: 'whatsapp' | 'facebook' | 'instagram';
+      provider?: 'baileys' | 'official';
+      flow_id?: string | null;
+      external_id?: string;
+      access_token?: string;
+      app_secret?: string;
+      verify_token?: string;
+    }
+  ) =>
     api<Account>('/api/accounts', {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId, name }),
+      body: JSON.stringify({ user_id: userId, name, ...(opts || {}) }),
+    }),
+
+  update: (
+    id: string,
+    updates: {
+      name?: string;
+      phone_number?: string | null;
+      channel?: 'whatsapp' | 'facebook' | 'instagram';
+      provider?: 'baileys' | 'official';
+      flow_id?: string | null;
+      external_id?: string | null;
+      access_token?: string | null;
+      app_secret?: string | null;
+      verify_token?: string | null;
+    }
+  ) =>
+    api<Account>(`/api/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
     }),
 
   connect: (id: string) =>

@@ -4,6 +4,13 @@ export interface Account {
   name: string;
   phone_number: string | null;
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
+  channel?: 'whatsapp' | 'facebook' | 'instagram';
+  provider?: 'baileys' | 'official';
+  flow_id?: string | null;
+  external_id?: string | null;
+  access_token?: string | null;
+  app_secret?: string | null;
+  verify_token?: string | null;
   created_at: string;
 }
 

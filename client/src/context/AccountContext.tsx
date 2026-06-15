@@ -8,7 +8,18 @@ interface AccountCtx {
   activeAccountId: string | null;
   setActiveAccountId: (id: string) => void;
   reload: () => Promise<void>;
-  createAccount: (name: string) => Promise<void>;
+  createAccount: (name: string, opts?: CreateAccountOpts) => Promise<void>;
+  updateAccount: (id: string, updates: any) => Promise<void>;
+}
+
+interface CreateAccountOpts {
+  channel?: 'whatsapp' | 'facebook' | 'instagram';
+  provider?: 'baileys' | 'official';
+  flow_id?: string | null;
+  external_id?: string;
+  access_token?: string;
+  app_secret?: string;
+  verify_token?: string;
 }
 
 const Ctx = createContext<AccountCtx>({
@@ -17,6 +28,7 @@ const Ctx = createContext<AccountCtx>({
   setActiveAccountId: () => {},
   reload: async () => {},
   createAccount: async () => {},
+  updateAccount: async () => {},
 });
 
 export const useAccounts = () => useContext(Ctx);
@@ -37,10 +49,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const createAccount = useCallback(async (name: string) => {
+  const createAccount = useCallback(async (name: string, opts?: CreateAccountOpts) => {
     if (!user?.id) return;
     try {
-      const newAccount = await accountsApi.create(user.id, name);
+      const newAccount = await accountsApi.create(user.id, name, opts);
       setAccounts(prev => [...prev, newAccount]);
     } catch (err) {
       console.error('[AccountContext] Error creating account:', err);
@@ -48,10 +60,20 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const updateAccount = useCallback(async (id: string, updates: any) => {
+    try {
+      const updated = await accountsApi.update(id, updates);
+      setAccounts(prev => prev.map(a => a.id === id ? updated : a));
+    } catch (err) {
+      console.error('[AccountContext] Error updating account:', err);
+      throw err;
+    }
+  }, []);
+
   useEffect(() => { reload(); }, [reload]);
 
   return (
-    <Ctx.Provider value={{ accounts, activeAccountId, setActiveAccountId, reload, createAccount }}>
+    <Ctx.Provider value={{ accounts, activeAccountId, setActiveAccountId, reload, createAccount, updateAccount }}>
       {children}
     </Ctx.Provider>
   );

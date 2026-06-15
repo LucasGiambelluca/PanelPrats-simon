@@ -18,12 +18,20 @@ export function accountsRouter(manager: AccountManager): Router {
 
   // Crear cuenta
   r.post('/', async (req, res) => {
-    const { user_id, name, phone_number } = req.body;
+    const { user_id, name, phone_number, channel, external_id, access_token, app_secret, verify_token } = req.body;
+    const resolvedChannel = channel || 'whatsapp';
 
     if (isSupabaseConfigured) {
       const { data, error } = await supabase
         .from('accounts')
-        .insert({ user_id, name, phone_number, status: 'disconnected' })
+        .insert({
+          user_id, name, phone_number, status: 'disconnected',
+          channel: resolvedChannel,
+          external_id: external_id || null,
+          access_token: access_token || null,
+          app_secret: app_secret || null,
+          verify_token: verify_token || null,
+        })
         .select('*')
         .single();
       if (error) return res.status(400).json({ error: error.message });
@@ -36,6 +44,11 @@ export function accountsRouter(manager: AccountManager): Router {
       id, user_id, name,
       phone_number: phone_number || null,
       status: 'disconnected',
+      channel: resolvedChannel,
+      external_id: external_id || null,
+      access_token: access_token || null,
+      app_secret: app_secret || null,
+      verify_token: verify_token || null,
       qr_code: null,
       created_at: new Date().toISOString(),
     };
@@ -113,6 +126,59 @@ export function accountsRouter(manager: AccountManager): Router {
     const memAcc = memoryAccounts.get(req.params.id);
     if (memAcc) memAcc.status = 'disconnected';
     res.json({ status: 'disconnected' });
+  });
+
+  // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
+  r.put('/:id', async (req, res) => {
+    const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id } = req.body;
+    const accountId = req.params.id;
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('accounts')
+        .update({
+          name,
+          phone_number,
+          channel,
+          external_id,
+          access_token,
+          app_secret,
+          verify_token,
+          provider,
+          flow_id: flow_id || null
+        })
+        .eq('id', accountId)
+        .select('*')
+        .single();
+      if (error) return res.status(400).json({ error: error.message });
+      
+      // Desconectar para que al reconectar tome la nueva configuración
+      await manager.disconnect(accountId).catch(() => {});
+      
+      return res.json(data);
+    }
+
+    // Fallback: in-memory
+    const memAcc = memoryAccounts.get(accountId);
+    if (!memAcc) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+    const updated = {
+      ...memAcc,
+      name: name !== undefined ? name : memAcc.name,
+      phone_number: phone_number !== undefined ? phone_number : memAcc.phone_number,
+      channel: channel !== undefined ? channel : memAcc.channel,
+      external_id: external_id !== undefined ? external_id : memAcc.external_id,
+      access_token: access_token !== undefined ? access_token : memAcc.access_token,
+      app_secret: app_secret !== undefined ? app_secret : memAcc.app_secret,
+      verify_token: verify_token !== undefined ? verify_token : memAcc.verify_token,
+      provider: provider !== undefined ? provider : memAcc.provider,
+      flow_id: flow_id !== undefined ? flow_id : memAcc.flow_id,
+    };
+    memoryAccounts.set(accountId, updated);
+    
+    await manager.disconnect(accountId).catch(() => {});
+
+    res.json(updated);
   });
 
   return r;
