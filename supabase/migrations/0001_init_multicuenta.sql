@@ -95,10 +95,14 @@ CREATE TABLE IF NOT EXISTS whatsapp_conversations (
 CREATE INDEX IF NOT EXISTS idx_waconv_acct_phone ON whatsapp_conversations(account_id, phone);
 
 -- 6. whatsapp_messages: log de mensajes
+-- account_id + phone están DENORMALIZADOS (además de colgar de conversation_id) para
+-- consultas directas: historial por cuenta (getHistory) y filtrado de Realtime en el inbox.
 CREATE TYPE wa_message_direction AS ENUM ('INBOUND','OUTBOUND');
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
     id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id uuid NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
+    account_id      uuid REFERENCES accounts(id) ON DELETE CASCADE,
+    phone           text,
     direction       wa_message_direction NOT NULL,
     content         text,
     media_url       text,
@@ -110,6 +114,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_wamsg_conv ON whatsapp_messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_wamsg_ts ON whatsapp_messages("timestamp");
+CREATE INDEX IF NOT EXISTS idx_wamsg_acct_phone ON whatsapp_messages(account_id, phone);
 
 -- 7. flow_logs: auditoría de ejecución de nodos
 CREATE TABLE IF NOT EXISTS flow_logs (
@@ -141,6 +146,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     stack_trace text
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_session ON audit_logs(session_id);
+
+-- 9. reports: registros genéricos creados por el nodo reportNode (reclamos/avisos)
+CREATE TABLE IF NOT EXISTS reports (
+    id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id  uuid REFERENCES accounts(id) ON DELETE CASCADE,
+    phone       text,
+    type        text DEFAULT 'reclamo',
+    description text,
+    priority    text DEFAULT 'medium',
+    status      text DEFAULT 'open',
+    metadata    jsonb DEFAULT '{}',
+    created_at  timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reports_account ON reports(account_id);
 
 -- RLS: cada usuario ve sus propias cuentas y datos derivados.
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;

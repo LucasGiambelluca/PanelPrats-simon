@@ -79,6 +79,8 @@ export class MessageStore {
   async insertMessage(conversationId: string, msg: StoredMessage): Promise<void> {
     const { error } = await supabase.from('whatsapp_messages').insert({
       conversation_id: conversationId,
+      account_id: msg.accountId,   // denormalizado: historial por cuenta + filtro Realtime
+      phone: msg.phone,            // denormalizado: getHistory filtra por (account_id, phone)
       direction: msg.direction,
       content: msg.content,
       media_url: msg.mediaUrl ?? null,
