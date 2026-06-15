@@ -329,24 +329,6 @@ export class FlowEngine {
                     session.setVariable(`_poll_selected_handle_${currentNode.id}`, `option-${index}`);
                     logger.info(`[FlowEngine] [INPUT] Resolved poll input "${input}" to "${processedInput}"`);
                 } else {
-                    // --- INTELLIGENT ESCAPE (Phase 5) DESACTIVADO ---
-                    /*
-                    try {
-                        const { AIExtractor } = require('../nlu/AIExtractor');
-                        const aiResult = await AIExtractor.analyze(input);
-
-                        if (aiResult && aiResult.intent !== 'unknown' && aiResult.confidence > 0.6) {
-                            logger.info(`[FlowEngine] [ESCAPE] Input "${input}" matched intent "${aiResult.intent}". Breaking flow for AI processing.`);
-                            await this.sessionRepository.forceReset(session.userPhone);
-                            (session as any)._exitToAI = true;
-                            (session as any)._aiResult = aiResult;
-                            return;
-                        }
-                    } catch (e) {
-                        logger.error('[FlowEngine] Escape check failed', e);
-                    }
-                    */
-
                     // INVALID INPUT: Fallback to re-prompt
                     logger.info(`[FlowEngine] [INPUT] Invalid poll response: "${input}". Re-prompting user.`);
                     const optionLines = options.map((opt: string, i: number) => {
