@@ -1,5 +1,5 @@
 import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
-import { supabase } from '../../config/database';
+import { AppointmentService } from '../../services/AppointmentService';
 
 /**
  * AppointmentExecutor — Agenda una cita: guarda nombre, teléfono y resumen
@@ -22,33 +22,23 @@ export class AppointmentExecutor implements NodeExecutor {
         console.log(`[AppointmentExecutor] Agendando cita para "${nombre}" (${telefono})`);
 
         try {
-            const { error } = await supabase
-                .from('appointments')
-                .insert({
-                    account_id: context.accountId,
-                    phone: telefono,
-                    nombre,
-                    telefono,
-                    resumen,
-                    status: 'pendiente',
-                });
-
-            if (error) {
-                console.error('[AppointmentExecutor] Error al guardar la cita:', error);
-                return {
-                    messages: ['⚠️ Hubo un error al agendar la cita. Por favor intentá más tarde.'],
-                    wait_for_input: false,
-                };
-            }
+            await AppointmentService.create({
+                account_id: context.accountId,
+                phone: telefono,
+                nombre,
+                telefono,
+                resumen,
+                status: 'pendiente',
+            });
 
             return {
                 messages: [nodeData.text || '✅ ¡Listo! Tu cita quedó agendada. Te contactamos a la brevedad.'],
                 wait_for_input: false,
             };
-        } catch (e) {
-            console.error('[AppointmentExecutor] Error inesperado:', e);
+        } catch (e: any) {
+            console.error('[AppointmentExecutor] Error al guardar la cita:', e);
             return {
-                messages: ['⚠️ Error inesperado al agendar la cita.'],
+                messages: ['⚠️ Hubo un error al agendar la cita. Por favor intentá más tarde.'],
                 wait_for_input: false,
             };
         }
