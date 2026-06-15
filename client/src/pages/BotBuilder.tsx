@@ -12,7 +12,7 @@ import type { Connection, Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Save, Trash2, Download, Upload, Menu, X, Plus, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../supabaseClient';
+import { flowsApi } from '../lib/api';
 import { useAccounts } from '../context/AccountContext';
 import Sidebar from '../components/bot-builder/Sidebar';
 import MessageNode from '../components/bot-builder/MessageNode';
@@ -25,6 +25,7 @@ import DocumentGeneratorNode from '../components/bot-builder/DocumentGeneratorNo
 import ThreadNode from '../components/bot-builder/ThreadNode';
 import TimerNode from '../components/bot-builder/TimerNode';
 import ReportNode from '../components/bot-builder/ReportNode';
+import AppointmentNode from '../components/bot-builder/AppointmentNode';
 import HandoverNode from '../components/bot-builder/HandoverNode';
 import BusinessHoursNode from '../components/bot-builder/BusinessHoursNode';
 import SendMediaNode from '../components/bot-builder/SendMediaNode';
@@ -53,6 +54,7 @@ const nodeTypes = {
   threadNode: ThreadNode,
   timerNode: TimerNode,
   reportNode: ReportNode,
+  appointmentNode: AppointmentNode,
   handoverNode: HandoverNode,
   businessHoursNode: BusinessHoursNode,
   sendMediaNode: SendMediaNode,
@@ -111,13 +113,12 @@ export default function BotBuilder() {
       setFlows([]);
       return;
     }
-    const { data } = await supabase
-      .from('flows')
-      .select('id, name, trigger_word, nodes, edges, is_active')
-      .eq('account_id', activeAccountId)
-      .order('created_at', { ascending: false });
-    console.log('🔄 Fetched Flows:', data);
-    if (data) setFlows(data);
+    try {
+      const data = await flowsApi.list(activeAccountId);
+      setFlows(data);
+    } catch (err) {
+      console.error('[BotBuilder] Error fetching flows:', err);
+    }
   };
 
   const updateNodeData = useCallback((id: string, data: any) => {
@@ -353,28 +354,29 @@ export default function BotBuilder() {
     });
 
     try {
-        const payload: any = {
-            account_id: activeAccountId,
-            name: flowName,
-            trigger_word: trigger,
-            nodes: cleanNodes,
-            edges: flow.edges,
-            is_active: isActive
-        };
-        
         if (currentFlowId) {
-            payload.id = currentFlowId;
-        }
-
-        const { data, error } = await supabase.from('flows').upsert(payload).select().single();
-
-        if (error) throw error;
-        
-        if (data) {
+            // Update existing flow
+            const data = await flowsApi.update(String(currentFlowId), {
+                name: flowName,
+                trigger_word: trigger,
+                nodes: cleanNodes,
+                edges: flow.edges,
+                is_active: isActive
+            });
             setCurrentFlowId(data.id);
-            fetchFlows(); // Refresh list
+        } else {
+            // Create new flow
+            const data = await flowsApi.create({
+                account_id: activeAccountId!,
+                name: flowName,
+                trigger_word: trigger,
+                nodes: cleanNodes,
+                edges: flow.edges,
+                is_active: isActive
+            });
+            setCurrentFlowId(data.id);
         }
-        
+        fetchFlows();
         toast.success('Flujo guardado correctamente');
     } catch (err: any) {
         toast.error('Error al guardar: ' + err.message);
@@ -457,9 +459,7 @@ export default function BotBuilder() {
       if (!confirmDelete) return;
 
       try {
-          const { error } = await supabase.from('flows').delete().eq('id', currentFlowId);
-          if (error) throw error;
-          
+          await flowsApi.delete(String(currentFlowId));
           toast.success('Flujo eliminado correctamente');
           createNewFlow();
           fetchFlows();
