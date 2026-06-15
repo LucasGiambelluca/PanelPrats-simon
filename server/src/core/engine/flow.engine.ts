@@ -34,6 +34,14 @@ export class FlowEngine {
     }
 
     /**
+     * Reseteo público delgado: limpia la sesión activa y el checkpoint de Redis.
+     */
+    async forceReset(accountId: string, phone: string): Promise<void> {
+        await this.sessionRepository.forceReset(accountId, phone);
+        await redisPersistence.deleteCheckpoint(accountId, phone);
+    }
+
+    /**
      * Entry point for messages. Routes to the appropriate session queue.
      */
     async processMessage(accountId: string, phone: string, messageText: string, context: any = {}, options: { flowId?: string, startNodeId?: string, initialState?: { session: Session | null, conversation: any } } = {}): Promise<any> {
