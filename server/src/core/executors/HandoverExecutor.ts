@@ -6,15 +6,17 @@ export class HandoverExecutor implements NodeExecutor {
         const cleanPhone = PhoneUtils.normalize(context.phone);
         console.log(`[HandoverExecutor] Triggering human handover for ${cleanPhone}`);
 
-        // 1. Set the state to PAUSED/HANDOVER so the automated bot stops answering
+        // 1. Set the state to HANDOVER so the automated bot stops answering
         await engine.db.from('flow_executions')
-            .update({ status: 'HANDOVER', paused_at: new Date().toISOString() })
+            .update({ status: 'HANDOVER' })
+            .eq('account_id', context.accountId)
             .eq('phone', cleanPhone)
             .eq('status', 'active');
 
         // 2. Mark the conversation as HANDOVER for the frontend to move it to the Attention tab
         await engine.db.from('whatsapp_conversations')
             .update({ status: 'HANDOVER', updated_at: new Date().toISOString() })
+            .eq('account_id', context.accountId)
             .eq('phone', cleanPhone);
 
         // 3. Build and interpolate the response message

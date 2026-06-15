@@ -13,6 +13,26 @@ vi.mock('../../../config/redis', () => {
   };
 });
 
+// Capture the columns passed to .select(...) and feed back canned rows.
+const capturedSelect: { arg?: string } = {};
+vi.mock('../../../config/database', () => {
+  // El query ordena DESC por created_at; getHistory hace .reverse() para
+  // dejar el historial en orden cronológico ascendente.
+  const rows = [
+    { content: 'buenas, ¿en qué te ayudo?', direction: 'OUTBOUND', created_at: '2026-01-01T00:00:01Z' },
+    { content: 'hola', direction: 'INBOUND', created_at: '2026-01-01T00:00:00Z' },
+  ];
+  const builder: any = {
+    select: vi.fn((arg: string) => { capturedSelect.arg = arg; return builder; }),
+    eq: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    limit: vi.fn(() => Promise.resolve({ data: rows, error: null })),
+  };
+  return {
+    supabase: { from: vi.fn(() => builder) },
+  };
+});
+
 import { redisPersistence } from '../RedisPersistenceService';
 
 describe('RedisPersistenceService accountId', () => {
@@ -21,5 +41,20 @@ describe('RedisPersistenceService accountId', () => {
     await redisPersistence.setCheckpoint('accB', '549111', { node: 'b' });
     expect((await redisPersistence.getCheckpoint('accA', '549111')).node).toBe('a');
     expect((await redisPersistence.getCheckpoint('accB', '549111')).node).toBe('b');
+  });
+});
+
+describe('RedisPersistenceService.getHistory', () => {
+  it('selecciona columnas reales y mapea direction -> role', async () => {
+    const history = await redisPersistence.getHistory('accA', '549111', 10);
+
+    // Selecciona columnas que SÍ existen en whatsapp_messages
+    expect(capturedSelect.arg).toBe('content, direction, created_at');
+
+    // OUTBOUND => assistant, lo demás => user; usa `content` como texto.
+    expect(history).toEqual([
+      { role: 'user', content: 'hola' },
+      { role: 'assistant', content: 'buenas, ¿en qué te ayudo?' },
+    ]);
   });
 });

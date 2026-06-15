@@ -12,16 +12,24 @@ export class ThreadManagerExecutor implements NodeExecutor {
             if (action === 'HANDOVER') {
                 await engine.db.from('whatsapp_conversations')
                     .update({ status: 'HANDOVER' })
+                    .eq('account_id', context.accountId)
                     .eq('phone', phone);
                 await engine.db.from('flow_executions')
-                    .update({ status: 'HANDOVER', paused_at: new Date().toISOString() })
+                    .update({ status: 'HANDOVER' })
+                    .eq('account_id', context.accountId)
                     .eq('phone', phone)
                     .eq('status', 'active');
                 message = data.message || "⏳ Te estamos transfiriendo con un humano. Por favor espera.";
             } else if (action === 'RESUME') {
                 await engine.db.from('whatsapp_conversations')
-                    .update({ status: 'ACTIVE' })
+                    .update({ status: 'BOT' })
+                    .eq('account_id', context.accountId)
                     .eq('phone', phone);
+                await engine.db.from('flow_executions')
+                    .update({ status: 'active' })
+                    .eq('account_id', context.accountId)
+                    .eq('phone', phone)
+                    .eq('status', 'HANDOVER');
                 message = data.message || "🤖 El bot ha retomado la conversación.";
             }
 

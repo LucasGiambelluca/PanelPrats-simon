@@ -25,6 +25,7 @@ export class ReportExecutor implements NodeExecutor {
             const { error } = await supabase
                 .from('reports')
                 .insert({
+                    account_id: context.accountId,
                     phone: context.phone,
                     type,
                     description,

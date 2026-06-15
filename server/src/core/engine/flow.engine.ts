@@ -109,7 +109,7 @@ export class FlowEngine {
             // Clear handover status if present to resume bot control
             if (conversation?.status === 'HANDOVER') {
                 await this.db.from('whatsapp_conversations')
-                    .update({ status: 'active', updated_at: new Date().toISOString() })
+                    .update({ status: 'BOT', updated_at: new Date().toISOString() })
                     .eq('account_id', accountId)
                     .eq('phone', cleanPhone);
             }
@@ -173,6 +173,7 @@ export class FlowEngine {
                         shared: {},
                         global: {
                             ...context,
+                            accountId,
                             pushName: context.pushName || 'Cliente',
                             phoneNumber: phone,
                             chatJid: remoteJid,
@@ -262,7 +263,8 @@ export class FlowEngine {
         const executor = nodeExecutorFactory.getExecutor(currentNode.type);
         console.log(`\x1b[43m [FLOW-TRACE] Executor: ${currentNode.type} | hasHandleInput: ${!!executor.handleInput} | Input: "${input}" \x1b[0m`);
         if (executor.handleInput) {
-            const result = await executor.handleInput(input, currentNode.data, session.getAllVariablesForCurrentFlow() as any);
+            const handleInputContext = { ...session.getAllVariablesForCurrentFlow(), phone: session.userPhone, accountId };
+            const result = await executor.handleInput(input, currentNode.data, handleInputContext as any);
             console.log(`\x1b[43m [FLOW-TRACE] executor.handleInput result: isValid=${result.isValidInput}, updatedKeys=${result.updatedContext ? Object.keys(result.updatedContext) : 'none'}, msgs=${result.messages?.length || 0} \x1b[0m`);
 
             // Apply context updates from executor
@@ -437,7 +439,7 @@ export class FlowEngine {
 
             // 2.3. Execute
             const executor = nodeExecutorFactory.getExecutor(currentNode.type);
-            const context = { ...session.getAllVariablesForCurrentFlow(), phone: session.userPhone };
+            const context = { ...session.getAllVariablesForCurrentFlow(), phone: session.userPhone, accountId };
 
             const stepStartTime = Date.now();
             const result = await executor.execute(currentNode.data, context as any, this);

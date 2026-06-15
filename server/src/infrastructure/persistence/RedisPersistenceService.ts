@@ -63,15 +63,15 @@ class RedisPersistenceService {
         try {
             const { data } = await supabase
                 .from('whatsapp_messages')
-                .select('text, from_me, created_at')
+                .select('content, direction, created_at')
                 .eq('account_id', accountId)
                 .eq('phone', PhoneUtils.normalize(phone))
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
             return (data || []).reverse().map((m: any) => ({
-                role: m.from_me ? 'assistant' : 'user',
-                content: m.text
+                role: m.direction === 'OUTBOUND' ? 'assistant' : 'user',
+                content: m.content
             }));
         } catch (e: any) {
             logger.error(`[RedisPersistence] getHistory failed: ${e.message}`);
