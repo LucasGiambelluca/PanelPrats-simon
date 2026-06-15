@@ -37,7 +37,7 @@ export default function AIAgentNode({ data, selected }: any) {
           </label>
           <textarea
             className="w-full bg-slate-900/50 border border-slate-700/50 rounded p-2 text-[11px] text-white min-h-[100px] focus:outline-none focus:border-pink-500/50 transition-colors resize-none leading-relaxed"
-            placeholder="Ej: Sos un empleado de la rotisería el pollo... Tu objetivo es tomar el pedido..."
+            placeholder="Asistente virtual de atención al cliente."
             value={data.system_prompt || ''}
             onChange={(e) => data.onChangeValue?.('system_prompt', e.target.value)}
           />

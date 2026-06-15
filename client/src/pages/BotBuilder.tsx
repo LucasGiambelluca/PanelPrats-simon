@@ -13,6 +13,7 @@ import 'reactflow/dist/style.css';
 import { Save, Trash2, Download, Upload, Menu, X, Plus, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../supabaseClient';
+import { useAccounts } from '../context/AccountContext';
 import Sidebar from '../components/bot-builder/Sidebar';
 import MessageNode from '../components/bot-builder/MessageNode';
 import QuestionNode from '../components/bot-builder/QuestionNode';
@@ -83,6 +84,7 @@ const initialNodes: Node[] = [
 const getId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export default function BotBuilder() {
+  const { activeAccountId } = useAccounts();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -98,13 +100,22 @@ export default function BotBuilder() {
   const [isNodeSelectorOpen, setIsNodeSelectorOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Load flows list on mount
+  // Load flows list on mount / when active account changes (scoped by account_id)
   useEffect(() => {
     fetchFlows();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountId]);
 
   const fetchFlows = async () => {
-    const { data } = await supabase.from('flows').select('id, name, trigger_word, nodes, edges, is_active').order('created_at', { ascending: false });
+    if (!activeAccountId) {
+      setFlows([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('flows')
+      .select('id, name, trigger_word, nodes, edges, is_active')
+      .eq('account_id', activeAccountId)
+      .order('created_at', { ascending: false });
     console.log('🔄 Fetched Flows:', data);
     if (data) setFlows(data);
   };
@@ -240,19 +251,15 @@ export default function BotBuilder() {
             mediaType: type === 'sendMediaNode' ? '' : undefined,
             duration: type === 'timerNode' ? 1000 : undefined,
             showTyping: type === 'timerNode' ? true : undefined,
-            systemPrompt: type === 'groqNode' ? 'Sos un asistente virtual.' : undefined,
+            systemPrompt: type === 'groqNode' ? 'Sos un asistente virtual de atención al cliente.' : undefined,
             prompt: type === 'groqNode' ? 'Analizá este mensaje: {{respuesta}}' : undefined,
-            variable: type === 'questionNode' || type === 'pollNode' || type === 'mediaUploadNode' || type === 'stockCheckNode' || type === 'groqNode' || type === 'intentResolverNode' ? (type === 'mediaUploadNode' ? 'file_url' : type === 'stockCheckNode' ? 'stock_result' : type === 'groqNode' ? 'ai_response' : type === 'intentResolverNode' ? 'intent_clasificado' : 'respuesta') : type === 'arraySwitchNode' ? 'split_words' : undefined,
+            variable: type === 'questionNode' || type === 'pollNode' || type === 'mediaUploadNode' || type === 'groqNode' || type === 'intentResolverNode' ? (type === 'mediaUploadNode' ? 'file_url' : type === 'groqNode' ? 'ai_response' : type === 'intentResolverNode' ? 'intent_clasificado' : 'respuesta') : type === 'arraySwitchNode' ? 'split_words' : undefined,
             temperature: type === 'groqNode' ? 0.7 : undefined,
             silent: type === 'groqNode' ? false : undefined,
-            possible_intents: type === 'intentResolverNode' ? 'delivery, retiro, cancelar, no_entendido' : type === 'aiAgentNode' ? 'pedido,consulta,saludo,soporte,cancelar' : undefined,
+            possible_intents: type === 'intentResolverNode' ? 'consulta, soporte, cancelar, no_entendido' : type === 'aiAgentNode' ? 'consulta,saludo,soporte,cancelar' : undefined,
             max_retries: type === 'intentResolverNode' ? 2 : undefined,
             fallback_message: type === 'intentResolverNode' ? 'No te entendí bien. ¿Podrías expresarlo con otras palabras?' : undefined,
             context_variables: type === 'intentResolverNode' ? [] : undefined,
-            // locationValidatorNode uses default logic from executor
-            failNodeId: type === 'locationValidatorNode' ? '' : undefined,
-            message: type === 'orderValidatorNode' ? '🛒 *Confirma tu pedido:*' : type === 'clearCartNode' ? '🧹 Carrito vaciado.' : type === 'productSearchNode' ? '🔍 Resultados de búsqueda:' : undefined,
-            query: type === 'productSearchNode' ? '' : undefined,
             // Audio Transcriber defaults
             language: type === 'audioTranscriberNode' ? 'es' : undefined,
             output_variable: type === 'audioTranscriberNode' ? 'transcripcion' : type === 'aiAgentNode' ? 'agent_intent' : type === 'mediaTypeDetectorNode' ? 'media_type' : undefined,
@@ -323,6 +330,10 @@ export default function BotBuilder() {
 
   const handleSave = async () => {
     if (!reactFlowInstance) return;
+    if (!activeAccountId) {
+      toast.error('Seleccioná una cuenta de WhatsApp antes de guardar.');
+      return;
+    }
     const flow = reactFlowInstance.toObject();
     
     // Clean up nodes data before saving
@@ -343,6 +354,7 @@ export default function BotBuilder() {
 
     try {
         const payload: any = {
+            account_id: activeAccountId,
             name: flowName,
             trigger_word: trigger,
             nodes: cleanNodes,
@@ -550,9 +562,11 @@ export default function BotBuilder() {
                         </button>
                     )}
 
-                    <button 
+                    <button
                         onClick={handleSave}
-                        className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 transition shadow-md"
+                        disabled={!activeAccountId}
+                        title={!activeAccountId ? 'Seleccioná una cuenta para guardar' : 'Guardar'}
+                        className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 transition shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-600"
                     >
                         <Save size={18} />
                         Guardar
@@ -572,9 +586,10 @@ export default function BotBuilder() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button 
+                    <button
                         onClick={handleSave}
-                        className="p-2 bg-white/20 text-white rounded-lg active:scale-95 transition"
+                        disabled={!activeAccountId}
+                        className="p-2 bg-white/20 text-white rounded-lg active:scale-95 transition disabled:opacity-40"
                     >
                         <Save size={20} />
                     </button>
