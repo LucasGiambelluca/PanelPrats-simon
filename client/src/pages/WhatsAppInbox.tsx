@@ -1,72 +1,30 @@
 import { useState } from 'react';
 import { MessageSquare, Send, UserCheck, Bot, Search } from 'lucide-react';
-import { useAccounts } from '../context/AccountContext';
-import type { WhatsAppConversation, WhatsAppMessage } from '../types';
-
-// Mock conversations
-const MOCK_CONVERSATIONS: WhatsAppConversation[] = [
-  { id: 'c1', account_id: 'acc-1', phone: '5491122334455', contact_name: 'María García', last_message: 'Hola, quería consultar por los servicios', last_message_at: '2026-06-14T18:30:00Z', unread_count: 2, status: 'BOT' },
-  { id: 'c2', account_id: 'acc-1', phone: '5491166778899', contact_name: 'Juan Pérez', last_message: '¿Están abiertos mañana?', last_message_at: '2026-06-14T17:45:00Z', unread_count: 0, status: 'HANDOVER' },
-  { id: 'c3', account_id: 'acc-1', phone: '5491144556677', contact_name: null, last_message: 'Necesito ayuda con mi pedido', last_message_at: '2026-06-14T16:20:00Z', unread_count: 1, status: 'BOT' },
-  { id: 'c4', account_id: 'acc-1', phone: '5491133445566', contact_name: 'Carlos López', last_message: 'Perfecto, muchas gracias!', last_message_at: '2026-06-14T15:00:00Z', unread_count: 0, status: 'BOT' },
-];
-
-const MOCK_MESSAGES: Record<string, WhatsAppMessage[]> = {
-  c1: [
-    { id: 'm1', conversation_id: 'c1', direction: 'INBOUND', content: 'Hola!', media_url: null, message_type: 'text', timestamp: '2026-06-14T18:28:00Z' },
-    { id: 'm2', conversation_id: 'c1', direction: 'OUTBOUND', content: '¡Hola María! 👋 Bienvenida. ¿En qué puedo ayudarte?', media_url: null, message_type: 'text', timestamp: '2026-06-14T18:28:05Z' },
-    { id: 'm3', conversation_id: 'c1', direction: 'INBOUND', content: 'Hola, quería consultar por los servicios', media_url: null, message_type: 'text', timestamp: '2026-06-14T18:30:00Z' },
-  ],
-  c2: [
-    { id: 'm4', conversation_id: 'c2', direction: 'INBOUND', content: 'Buenas tardes', media_url: null, message_type: 'text', timestamp: '2026-06-14T17:40:00Z' },
-    { id: 'm5', conversation_id: 'c2', direction: 'OUTBOUND', content: '¡Hola Juan! Un momento, te atiende un asesor.', media_url: null, message_type: 'text', timestamp: '2026-06-14T17:40:05Z' },
-    { id: 'm6', conversation_id: 'c2', direction: 'INBOUND', content: '¿Están abiertos mañana?', media_url: null, message_type: 'text', timestamp: '2026-06-14T17:45:00Z' },
-  ],
-};
+import type { WhatsAppConversation } from '../types';
+import { useWhatsAppInbox } from '../hooks/useWhatsAppInbox';
 
 function formatTime(ts: string) {
   return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function WhatsAppInbox() {
-  const { activeAccountId } = useAccounts();
-  const [activeConvo, setActiveConvo] = useState<WhatsAppConversation | null>(null);
-  const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
-  const [draft, setDraft] = useState('');
+  const {
+    conversations,
+    activeConvo,
+    messages,
+    draft,
+    setDraft,
+    selectConversation,
+    send,
+    toggleHandover,
+  } = useWhatsAppInbox();
   const [search, setSearch] = useState('');
 
-  const conversations = MOCK_CONVERSATIONS.filter(c => c.account_id === activeAccountId || activeAccountId === 'acc-1');
   const filtered = search
-    ? conversations.filter(c => (c.contact_name || c.phone).toLowerCase().includes(search.toLowerCase()))
+    ? conversations.filter((c: WhatsAppConversation) =>
+        (c.contact_name || c.phone).toLowerCase().includes(search.toLowerCase())
+      )
     : conversations;
-
-  const selectConversation = (c: WhatsAppConversation) => {
-    setActiveConvo(c);
-    setMessages(MOCK_MESSAGES[c.id] || []);
-  };
-
-  const send = () => {
-    if (!activeConvo || !draft.trim()) return;
-    const msg: WhatsAppMessage = {
-      id: `m-${Date.now()}`,
-      conversation_id: activeConvo.id,
-      direction: 'OUTBOUND',
-      content: draft,
-      media_url: null,
-      message_type: 'text',
-      timestamp: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, msg]);
-    setDraft('');
-  };
-
-  const toggleHandover = () => {
-    if (!activeConvo) return;
-    setActiveConvo({
-      ...activeConvo,
-      status: activeConvo.status === 'HANDOVER' ? 'BOT' : 'HANDOVER',
-    });
-  };
 
   return (
     <div className="flex h-screen bg-[#0b0f1a]">
