@@ -11,6 +11,8 @@ export interface Account {
   access_token?: string | null;
   app_secret?: string | null;
   verify_token?: string | null;
+  qr_code?: string | null;
+  reminder_minutes?: number; // anticipación del recordatorio de citas (min)
   created_at: string;
 }
 

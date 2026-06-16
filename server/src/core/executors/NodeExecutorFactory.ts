@@ -25,6 +25,8 @@ import { BufferMemoryExecutor } from './BufferMemoryExecutor';
 import { TextSplitterExecutor } from './TextSplitterExecutor';
 import { AIAgentExecutor } from './AIAgentExecutor'; // omitir si Task 9 = B
 import { AppointmentExecutor } from './AppointmentExecutor';
+import { AppointmentAvailabilityExecutor } from './AppointmentAvailabilityExecutor';
+import { AppointmentProposalsExecutor } from './AppointmentProposalsExecutor';
 
 class NodeExecutorFactory {
   private executors = new Map<string, NodeExecutor>();
@@ -33,6 +35,8 @@ class NodeExecutorFactory {
 
   private registerAll() {
     this.register('appointmentNode', new AppointmentExecutor());
+    this.register('appointmentAvailabilityNode', new AppointmentAvailabilityExecutor());
+    this.register('appointmentProposalsNode', new AppointmentProposalsExecutor());
     this.register('messageNode', new MessageExecutor());
     this.register('questionNode', new QuestionExecutor());
     this.register('conditionNode', new ConditionExecutor());

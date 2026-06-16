@@ -65,7 +65,7 @@ export function metaWebhookRouter(manager: AccountManager): Router {
   // Recepción de eventos.
   r.post('/', async (req, res) => {
     const body = req.body ?? {};
-    const object = body.object; // 'page' (FB) | 'instagram' (IG)
+    const object = body.object; // 'page' (FB) | 'instagram' (IG) | 'whatsapp_business_account'
     const entries: any[] = Array.isArray(body.entry) ? body.entry : [];
 
     // Verificamos firma contra el app_secret de la(s) cuenta(s) involucradas.
@@ -74,7 +74,16 @@ export function metaWebhookRouter(manager: AccountManager): Router {
 
     try {
       for (const entry of entries) {
-        const externalId = entry?.id;
+        let externalId = entry?.id;
+
+        // Para WhatsApp Official, la firma se puede verificar usando el external_id (phone_number_id)
+        if (object === 'whatsapp_business_account') {
+          const phone_number_id = entry.changes?.[0]?.value?.metadata?.phone_number_id;
+          if (phone_number_id) {
+            externalId = phone_number_id;
+          }
+        }
+
         if (!externalId) continue;
 
         const { data } = await supabase
@@ -84,12 +93,16 @@ export function metaWebhookRouter(manager: AccountManager): Router {
           .limit(1);
 
         const appSecret = data?.[0]?.app_secret as string | undefined;
-        if (!verifyMetaSignature(rawBody, appSecret, signature)) {
+        if (appSecret && !verifyMetaSignature(rawBody, appSecret, signature)) {
           logger.warn(`[meta-webhook] firma inválida para external_id=${externalId} (object=${object})`);
           return res.sendStatus(403);
         }
 
-        await manager.handleMetaWebhook(entry);
+        if (object === 'whatsapp_business_account') {
+          await manager.handleWhatsAppWebhook(entry);
+        } else {
+          await manager.handleMetaWebhook(entry);
+        }
       }
     } catch (err: any) {
       // No reventamos: Meta exige 200 rápido; logueamos y seguimos.

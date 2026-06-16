@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { AccountManager } from '../../core/accounts/AccountManager';
-import { messageStore } from '../../services/MessageStore';
 
 export function messagesRouter(manager: AccountManager): Router {
   const r = Router();
@@ -10,7 +9,6 @@ export function messagesRouter(manager: AccountManager): Router {
     const { account_id, phone, text } = req.body;
     try {
       await manager.sendMessage(account_id, phone, text);
-      await messageStore.record({ accountId: account_id, phone, direction: 'OUTBOUND', content: text });
       res.json({ ok: true });
     } catch (e: any) {
       res.status(400).json({ error: e.message });

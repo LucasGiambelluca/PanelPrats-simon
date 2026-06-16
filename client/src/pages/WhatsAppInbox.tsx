@@ -1,12 +1,20 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw,
-  Phone, Clock
+  Phone, Clock, Facebook, Instagram
 } from 'lucide-react';
 import { useAccounts } from '../context/AccountContext';
 import { conversationsApi, messagesApi } from '../lib/api';
 import { toast } from 'sonner';
 import type { WhatsAppConversation, WhatsAppMessage } from '../types';
+
+type Channel = 'whatsapp' | 'facebook' | 'instagram';
+
+const channelConfig = {
+  whatsapp:  { label: 'WhatsApp',  icon: MessageSquare, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  facebook:  { label: 'Facebook',  icon: Facebook,      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  instagram: { label: 'Instagram', icon: Instagram,     color: 'text-pink-400 bg-pink-500/10 border-pink-400/20' },
+};
 
 function formatTime(ts: string) {
   return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
@@ -59,6 +67,8 @@ export default function WhatsAppInbox() {
   const pollConvoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const activeConvoId = activeConvo?.id;
+
   // Load conversations
   const loadConversations = useCallback(async () => {
     if (!activeAccountId) return;
@@ -66,14 +76,14 @@ export default function WhatsAppInbox() {
       const data = await conversationsApi.list(activeAccountId);
       setConversations(data);
       // Update active convo status if it changed
-      if (activeConvo) {
-        const updated = data.find(c => c.id === activeConvo.id);
+      if (activeConvoId) {
+        const updated = data.find(c => c.id === activeConvoId);
         if (updated) setActiveConvo(updated);
       }
     } catch (err) {
       // silent fail for polling
     }
-  }, [activeAccountId, activeConvo]);
+  }, [activeAccountId, activeConvoId]);
 
   useEffect(() => {
     setLoadingConvos(true);
@@ -81,23 +91,23 @@ export default function WhatsAppInbox() {
     if (pollConvoRef.current) clearInterval(pollConvoRef.current);
     pollConvoRef.current = setInterval(loadConversations, 5000);
     return () => { if (pollConvoRef.current) clearInterval(pollConvoRef.current); };
-  }, [activeAccountId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadConversations]);
 
   // Load messages for active convo
   const loadMessages = useCallback(async (showLoader = false) => {
-    if (!activeConvo) return;
+    if (!activeConvoId) return;
     if (showLoader) setLoadingMsgs(true);
     try {
-      const data = await conversationsApi.messages(activeConvo.id);
+      const data = await conversationsApi.messages(activeConvoId);
       setMessages(data);
     } catch (err) {
       // silent fail for polling
     }
     if (showLoader) setLoadingMsgs(false);
-  }, [activeConvo]);
+  }, [activeConvoId]);
 
   useEffect(() => {
-    if (activeConvo) {
+    if (activeConvoId) {
       loadMessages(true);
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
       pollMsgRef.current = setInterval(() => loadMessages(false), 3000);
@@ -105,7 +115,7 @@ export default function WhatsAppInbox() {
       setMessages([]);
     }
     return () => { if (pollMsgRef.current) clearInterval(pollMsgRef.current); };
-  }, [activeConvo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeConvoId, loadMessages]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -123,9 +133,10 @@ export default function WhatsAppInbox() {
     setSending(true);
     setDraft('');
 
-    // Optimistic: add the message locally
+    // Optimistic: add the message locally with a guaranteed unique ID
+    const randomSuffix = Math.random().toString(36).substring(2, 9);
     const optimistic: WhatsAppMessage = {
-      id: `opt-${Date.now()}`,
+      id: `opt-${Date.now()}-${randomSuffix}`,
       conversation_id: activeConvo.id,
       direction: 'OUTBOUND',
       content: text,
@@ -205,7 +216,7 @@ export default function WhatsAppInbox() {
               placeholder="Buscar contacto o número…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 text-white text-xs rounded-xl pl-9 pr-3 py-2.5 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+              className="w-full bg-white/5 border border-white/10 text-white text-xs rounded-xl pl-9 pr-3 py-2.5 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
             />
           </div>
         </div>
@@ -220,19 +231,33 @@ export default function WhatsAppInbox() {
                 onClick={() => selectConversation(c)}
                 className={`w-full text-left px-4 py-3.5 transition-all duration-150 flex items-center gap-3 ${
                   isActive
-                    ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
+                    ? 'bg-[#C6AC98]/10 border-l-2 border-l-[#C6AC98]'
                     : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
                 }`}
               >
-                {/* Avatar */}
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isActive
-                    ? 'bg-indigo-500/20 border border-indigo-500/30'
-                    : 'bg-white/5 border border-white/10'
-                }`}>
-                  <span className={`text-xs font-bold ${isActive ? 'text-indigo-400' : 'text-slate-400'}`}>
-                    {getInitials(c.contact_name || c.phone.slice(-4))}
-                  </span>
+                {/* Avatar with Channel Overlay */}
+                <div className="relative flex-shrink-0">
+                  <div className={`w-11 h-11 rounded-full flex items-center justify-center ${
+                    isActive
+                      ? 'bg-[#C6AC98]/20 border border-[#C6AC98]/30'
+                      : 'bg-white/5 border border-white/10'
+                  }`}>
+                    <span className={`text-xs font-bold ${isActive ? 'text-[#C6AC98]' : 'text-slate-400'}`}>
+                      {getInitials(c.contact_name || c.phone.slice(-4))}
+                    </span>
+                  </div>
+                  {/* Overlapping small channel icon */}
+                  {(() => {
+                    const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                    const chCfg = channelConfig[ch] || channelConfig.whatsapp;
+                    const ChIcon = chCfg.icon;
+                    const chColor = ch === 'whatsapp' ? 'bg-emerald-500 text-white' : ch === 'facebook' ? 'bg-blue-600 text-white' : 'bg-pink-500 text-white';
+                    return (
+                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${chColor} flex items-center justify-center border border-[#111827] shadow-sm`}>
+                        <ChIcon size={10} />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Content */}
@@ -284,14 +309,39 @@ export default function WhatsAppInbox() {
             {/* Chat Header */}
             <div className="px-6 py-3.5 border-b border-white/5 flex items-center justify-between bg-[#111827]/40 backdrop-blur-sm">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center">
-                  <span className="text-indigo-400 font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#304352]/30 to-[#a57b5a]/30 border border-[#C6AC98]/20 flex items-center justify-center relative">
+                  <span className="text-[#C6AC98] font-bold text-sm">
                     {getInitials(activeConvo.contact_name || activeConvo.phone.slice(-4))}
                   </span>
+                  {/* Small overlapping channel icon in active chat header */}
+                  {(() => {
+                    const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                    const chCfg = channelConfig[ch] || channelConfig.whatsapp;
+                    const ChIcon = chCfg.icon;
+                    const chColor = ch === 'whatsapp' ? 'bg-emerald-500 text-white' : ch === 'facebook' ? 'bg-blue-600 text-white' : 'bg-pink-500 text-white';
+                    return (
+                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${chColor} flex items-center justify-center border border-[#111827] shadow-sm`}>
+                        <ChIcon size={8} />
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white text-sm">{activeConvo.contact_name || activeConvo.phone}</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-white text-sm">{activeConvo.contact_name || activeConvo.phone}</h3>
+                    {(() => {
+                      const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                      const chCfg = channelConfig[ch] || channelConfig.whatsapp;
+                      const ChIcon = chCfg.icon;
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${chCfg.color}`}>
+                          <ChIcon size={10} />
+                          {chCfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
                     <Phone size={10} className="text-slate-600" />
                     <span className="text-[11px] text-slate-500 font-mono">{activeConvo.phone}</span>
                     {activeConvo.status === 'HANDOVER' && (
@@ -300,7 +350,7 @@ export default function WhatsAppInbox() {
                       </span>
                     )}
                     {activeConvo.status === 'BOT' && (
-                      <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full px-2 py-0.5 font-bold uppercase">
+                      <span className="text-[9px] bg-[#C6AC98]/10 text-[#C6AC98] border border-[#C6AC98]/20 rounded-full px-2 py-0.5 font-bold uppercase">
                         Bot
                       </span>
                     )}
@@ -312,7 +362,7 @@ export default function WhatsAppInbox() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:-translate-y-0.5 ${
                   activeConvo.status === 'HANDOVER'
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                    : 'bg-[#C6AC98]/10 text-[#C6AC98] border-[#C6AC98]/20 hover:bg-[#C6AC98]/20'
                 }`}
               >
                 {activeConvo.status === 'HANDOVER' ? <Bot size={14} /> : <UserCheck size={14} />}
@@ -328,8 +378,8 @@ export default function WhatsAppInbox() {
                 </div>
               )}
 
-              {messageGroups.map((group, gi) => (
-                <div key={gi}>
+              {messageGroups.map((group) => (
+                <div key={group.date}>
                   {/* Date separator */}
                   <div className="flex items-center justify-center my-4">
                     <span className="bg-white/5 text-slate-500 text-[10px] font-semibold px-3 py-1 rounded-full border border-white/5">
@@ -347,14 +397,14 @@ export default function WhatsAppInbox() {
                         <div
                           className={`max-w-[65%] px-4 py-2.5 text-sm relative group ${
                             m.direction === 'OUTBOUND'
-                              ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-600/10'
+                              ? 'bg-gradient-to-r from-[#304352] to-[#a57b5a] text-white rounded-2xl rounded-br-md shadow-md shadow-[#304352]/10'
                               : 'bg-white/[0.08] text-slate-200 rounded-2xl rounded-bl-md'
                           }`}
                         >
                           <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
                           <div className={`flex items-center gap-1 mt-1 ${m.direction === 'OUTBOUND' ? 'justify-end' : ''}`}>
-                            <Clock size={9} className={m.direction === 'OUTBOUND' ? 'text-indigo-300' : 'text-slate-600'} />
-                            <span className={`text-[9px] ${m.direction === 'OUTBOUND' ? 'text-indigo-300' : 'text-slate-600'}`}>
+                            <Clock size={9} className={m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'} />
+                            <span className={`text-[9px] ${m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'}`}>
                               {formatTime(m.timestamp)}
                             </span>
                           </div>
@@ -379,7 +429,7 @@ export default function WhatsAppInbox() {
                 <div className="flex-1 relative">
                   <input
                     ref={inputRef}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/30 transition-all"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 focus:border-[#C6AC98]/30 transition-all"
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -390,7 +440,7 @@ export default function WhatsAppInbox() {
                 <button
                   onClick={send}
                   disabled={!draft.trim() || sending || !isAccountConnected}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white p-3.5 rounded-2xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.95] disabled:opacity-30 disabled:hover:translate-y-0 shadow-lg shadow-indigo-600/20 flex-shrink-0"
+                  className="bg-gradient-to-r from-[#304352] to-[#a57b5a] hover:from-[#3a5264] hover:to-[#b88c6b] text-white p-3.5 rounded-2xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.95] disabled:opacity-30 disabled:hover:translate-y-0 shadow-lg shadow-[#304352]/20 flex-shrink-0"
                 >
                   <Send size={18} />
                 </button>
@@ -401,16 +451,16 @@ export default function WhatsAppInbox() {
           /* Empty State — No conversation selected */
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center max-w-xs">
-              <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-5">
-                <MessageSquare size={32} className="text-indigo-400/60" />
+              <div className="w-20 h-20 rounded-2xl bg-[#C6AC98]/10 border border-[#C6AC98]/20 flex items-center justify-center mx-auto mb-5">
+                <MessageSquare size={32} className="text-[#C6AC98]/60" />
               </div>
               <h3 className="text-white font-semibold text-lg mb-2">Tu Inbox</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
                 {conversations.length > 0
                   ? 'Seleccioná una conversación de la izquierda para ver los mensajes'
                   : isAccountConnected
-                    ? 'Cuando alguien te escriba al WhatsApp conectado, vas a ver la conversación acá'
-                    : 'Conectá un número desde "Mis Números" para empezar a recibir mensajes'
+                    ? 'Cuando alguien te escriba al canal conectado, vas a ver la conversación acá'
+                    : 'Conectá un número o cuenta desde "Mis Números" para empezar a recibir mensajes'
                 }
               </p>
             </div>

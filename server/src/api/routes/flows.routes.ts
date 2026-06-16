@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../../config/supabase';
 import crypto from 'crypto';
-
-// In-memory store as fallback when Supabase is not configured
-const memoryFlows: Map<string, any> = new Map();
+import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
 
 const isSupabaseConfigured = !!(
   process.env.SUPABASE_URL &&
@@ -17,25 +15,64 @@ export function flowsRouter(): Router {
 
   r.get('/', async (req, res) => {
     const accountId = req.query.account_id as string;
+    const userId = req.query.user_id as string;
+    const isMemoryAccount = accountId ? memoryAccounts.has(accountId) : false;
+    const useSupabase = isSupabaseConfigured && !isMemoryAccount;
 
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('flows').select('*').eq('account_id', accountId).order('created_at', { ascending: false });
-      if (error) return res.status(400).json({ error: error.message });
-      return res.json(data);
+    let dbFlows: any[] = [];
+    if (useSupabase) {
+      try {
+        let query = supabase.from('flows').select('*').order('created_at', { ascending: false });
+        if (accountId && accountId.trim() !== '') {
+          // Flujos de una cuenta puntual.
+          query = query.eq('account_id', accountId);
+        } else if (userId && userId.trim() !== '') {
+          // Todos los flujos del usuario (across cuentas) para poder editarlos desde el bot builder.
+          const { data: accs } = await supabase.from('accounts').select('id').eq('user_id', userId);
+          const ids = (accs || []).map((a: any) => a.id);
+          // Sentinela imposible si el usuario no tiene cuentas → devuelve vacío en vez de TODO.
+          query = query.in('account_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          dbFlows = data;
+        }
+      } catch (err: any) {
+        // ignore and fallback
+      }
     }
 
-    // Fallback: in-memory
-    const list = Array.from(memoryFlows.values()).filter(
-      f => !accountId || f.account_id === accountId
-    ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    res.json(list);
+    // Always fetch and merge matching memory flows
+    const memFlows = Array.from(memoryFlows.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    const filteredMemFlows = accountId && accountId.trim() !== ''
+      ? memFlows.filter(f => f.account_id === accountId)
+      : memFlows;
+
+    // Merge both lists, removing duplicates by ID just in case
+    const merged = [...dbFlows];
+    const seenIds = new Set(merged.map(f => f.id));
+    for (const f of filteredMemFlows) {
+      if (!seenIds.has(f.id)) {
+        merged.push(f);
+      }
+    }
+
+    res.json(merged);
   });
 
   r.get('/:id', async (req, res) => {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('flows').select('*').eq('id', req.params.id).single();
-      if (error) return res.status(404).json({ error: error.message });
-      return res.json(data);
+    const isMemoryFlow = memoryFlows.has(req.params.id);
+    const useSupabase = isSupabaseConfigured && !isMemoryFlow;
+
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('flows').select('*').eq('id', req.params.id).single();
+        if (!error && data) return res.json(data);
+      } catch (err: any) {
+        // fallback
+      }
     }
 
     // Fallback: in-memory
@@ -46,11 +83,17 @@ export function flowsRouter(): Router {
 
   r.post('/', async (req, res) => {
     const { account_id, name, trigger_word, nodes, edges, is_active } = req.body;
+    const isMemoryAccount = account_id ? memoryAccounts.has(account_id) : false;
+    const useSupabase = isSupabaseConfigured && !isMemoryAccount;
 
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('flows').insert({ account_id, name, trigger_word, nodes, edges, is_active }).select('*').single();
-      if (error) return res.status(400).json({ error: error.message });
-      return res.json(data);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('flows').insert({ account_id, name, trigger_word, nodes, edges, is_active }).select('*').single();
+        if (!error && data) return res.json(data);
+        if (error) return res.status(400).json({ error: error.message });
+      } catch (err: any) {
+        // fallback
+      }
     }
 
     // Fallback: in-memory
@@ -73,11 +116,17 @@ export function flowsRouter(): Router {
 
   r.put('/:id', async (req, res) => {
     const { name, trigger_word, nodes, edges, is_active } = req.body;
+    const isMemoryFlow = memoryFlows.has(req.params.id);
+    const useSupabase = isSupabaseConfigured && !isMemoryFlow;
 
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('flows').update({ name, trigger_word, nodes, edges, is_active, updated_at: new Date().toISOString() }).eq('id', req.params.id).select('*').single();
-      if (error) return res.status(400).json({ error: error.message });
-      return res.json(data);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('flows').update({ name, trigger_word, nodes, edges, is_active, updated_at: new Date().toISOString() }).eq('id', req.params.id).select('*').single();
+        if (!error && data) return res.json(data);
+        if (error) return res.status(400).json({ error: error.message });
+      } catch (err: any) {
+        // fallback
+      }
     }
 
     // Fallback: in-memory
@@ -99,10 +148,17 @@ export function flowsRouter(): Router {
   });
 
   r.delete('/:id', async (req, res) => {
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('flows').delete().eq('id', req.params.id);
-      if (error) return res.status(400).json({ error: error.message });
-      return res.json({ ok: true });
+    const isMemoryFlow = memoryFlows.has(req.params.id);
+    const useSupabase = isSupabaseConfigured && !isMemoryFlow;
+
+    if (useSupabase) {
+      try {
+        const { error } = await supabase.from('flows').delete().eq('id', req.params.id);
+        if (!error) return res.json({ ok: true });
+        if (error) return res.status(400).json({ error: error.message });
+      } catch (err: any) {
+        // fallback
+      }
     }
 
     // Fallback: in-memory

@@ -1,0 +1,128 @@
+import type { AccountManager } from '../core/accounts/AccountManager';
+import { AppointmentService } from './AppointmentService';
+import { messageStore } from './MessageStore';
+import { supabase } from '../config/supabase';
+
+/**
+ * ReminderScheduler — recordatorio proactivo de citas por WhatsApp.
+ *
+ * Cada minuto revisa las citas y envía un recordatorio ~20 min antes del turno.
+ * Reglas:
+ *  - Solo si la cuenta está conectada.
+ *  - Solo dentro de la ventana de 24h: debe existir un mensaje ENTRANTE del
+ *    contacto en las últimas 24h (política de WhatsApp para mensajes libres).
+ *  - Idempotente: marca la cita como `reminded` para no repetir.
+ *  - No recuerda citas canceladas ni ya pasadas.
+ */
+export class ReminderScheduler {
+  private timer: NodeJS.Timeout | null = null;
+  private running = false;
+
+  private readonly DEFAULT_MINUTES = 20; // fallback si la cuenta no define reminder_minutes
+  private readonly WINDOW_24H_MS = 24 * 60 * 60 * 1000;
+  private readonly TICK_MS = 60 * 1000; // cada minuto
+
+  constructor(private manager: AccountManager) {}
+
+  start(): void {
+    if (this.timer) return;
+    this.timer = setInterval(() => {
+      this.tick().catch((e) => console.error('[ReminderScheduler] tick error:', e?.message ?? e));
+    }, this.TICK_MS);
+    console.log('⏰ [ReminderScheduler] activo (recordatorios 20 min antes, ventana 24h)');
+  }
+
+  stop(): void {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  private isConnected(accountId: string): boolean {
+    const s = this.manager.getStatus(accountId);
+    return s === 'WORKING' || s === 'connected';
+  }
+
+  /** Mapa account_id → minutos de anticipación configurados (default 20). */
+  private async loadReminderMinutes(): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    try {
+      const { data } = await supabase.from('accounts').select('id, reminder_minutes');
+      for (const row of data ?? []) {
+        const m = Number((row as any).reminder_minutes);
+        map.set((row as any).id, Number.isFinite(m) && m > 0 ? m : this.DEFAULT_MINUTES);
+      }
+    } catch {
+      // si falla, todos caen al default vía el ?? de abajo
+    }
+    return map;
+  }
+
+  async tick(): Promise<void> {
+    if (this.running) return; // evita solapamiento si un tick tarda
+    this.running = true;
+    try {
+      const now = Date.now();
+      const appointments = await AppointmentService.list(); // todas las cuentas
+      const minutesByAccount = await this.loadReminderMinutes();
+
+      for (const a of appointments) {
+        if (a.status === 'cancelada' || a.reminded || !a.start_time) continue;
+
+        const leadMs = (minutesByAccount.get(a.account_id) ?? this.DEFAULT_MINUTES) * 60 * 1000;
+        const startMs = new Date(a.start_time).getTime();
+        const msUntil = startMs - now;
+        // Disparar cuando faltan <= lead (config por cuenta) y la cita no empezó todavía.
+        if (msUntil <= 0 || msUntil > leadMs) continue;
+
+        if (!this.isConnected(a.account_id)) {
+          // Cuenta desconectada: no marcamos, reintenta en el próximo tick.
+          continue;
+        }
+
+        // Ventana de 24h: debe haber un entrante reciente del contacto.
+        const lastIn = await messageStore.getLastInboundAt(a.account_id, a.phone);
+        if (!lastIn || (now - lastIn.getTime()) > this.WINDOW_24H_MS) {
+          console.log(`[ReminderScheduler] cita ${a.id} fuera de ventana 24h (${a.phone}) — no se envía.`);
+          // Marcamos para no reevaluar cada minuto una cita inelegible.
+          await AppointmentService.update(a.id, { reminded: true }).catch(() => {});
+          continue;
+        }
+
+        const hora = new Date(a.start_time).toLocaleTimeString('es-AR', {
+          hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires',
+        });
+        const nombre = a.nombre ? `, ${a.nombre}` : '';
+        const texto = `⏰ ¡Hola${nombre}! Te recordamos tu *cita* de hoy a las *${hora} hs*. ¡Te esperamos! 🟢`;
+
+        try {
+          await this.manager.sendMessage(a.account_id, a.phone, texto);
+          await AppointmentService.update(a.id, { reminded: true });
+          console.log(`[ReminderScheduler] recordatorio enviado a ${a.phone} (cita ${a.id} ${hora}hs)`);
+        } catch (err: any) {
+          console.error(`[ReminderScheduler] error enviando recordatorio cita ${a.id}:`, err?.message ?? err);
+          // No marcamos: reintenta el próximo tick (sigue dentro de la ventana de 20').
+        }
+      }
+
+      // --- No-show: al cierre del día (hora AR), las citas no marcadas pasan a 'no_asistio' ---
+      // (Modo semi: solo marca; el recontacto lo hace el operador desde el inbox.)
+      for (const a of appointments) {
+        if (!a.start_time) continue;
+        if (a.status !== 'pendiente' && a.status !== 'confirmada') continue;
+        if (now > this.endOfDayArMs(new Date(a.start_time).getTime())) {
+          await AppointmentService.update(a.id, { status: 'no_asistio' }).catch(() => {});
+          console.log(`[ReminderScheduler] no-show marcado: cita ${a.id} (${a.nombre || a.phone}) — para recontactar`);
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /** Fin del día (23:59:59) de la fecha dada, en horario Argentina (UTC-3), en ms UTC. */
+  private endOfDayArMs(ms: number): number {
+    const AR_OFFSET = 3 * 60 * 60 * 1000; // UTC-3
+    const local = new Date(ms - AR_OFFSET);
+    local.setUTCHours(23, 59, 59, 999);
+    return local.getTime() + AR_OFFSET;
+  }
+}

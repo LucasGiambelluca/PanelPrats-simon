@@ -10,6 +10,7 @@ interface AccountCtx {
   reload: () => Promise<void>;
   createAccount: (name: string, opts?: CreateAccountOpts) => Promise<void>;
   updateAccount: (id: string, updates: any) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
 }
 
 interface CreateAccountOpts {
@@ -29,6 +30,7 @@ const Ctx = createContext<AccountCtx>({
   reload: async () => {},
   createAccount: async () => {},
   updateAccount: async () => {},
+  deleteAccount: async () => {},
 });
 
 export const useAccounts = () => useContext(Ctx);
@@ -70,10 +72,23 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const deleteAccount = useCallback(async (id: string) => {
+    await accountsApi.delete(id);
+    setAccounts(prev => prev.filter(a => a.id !== id));
+  }, []);
+
   useEffect(() => { reload(); }, [reload]);
 
+  // Mantener la cuenta activa siempre válida: si la actual ya no existe
+  // (p.ej. fue eliminada), pasar a la primera disponible.
+  useEffect(() => {
+    if (activeAccountId && !accounts.some(a => a.id === activeAccountId)) {
+      setActiveAccountId(accounts[0]?.id ?? null);
+    }
+  }, [accounts, activeAccountId]);
+
   return (
-    <Ctx.Provider value={{ accounts, activeAccountId, setActiveAccountId, reload, createAccount, updateAccount }}>
+    <Ctx.Provider value={{ accounts, activeAccountId, setActiveAccountId, reload, createAccount, updateAccount, deleteAccount }}>
       {children}
     </Ctx.Provider>
   );

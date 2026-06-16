@@ -2,9 +2,12 @@ import { Router } from 'express';
 import { supabase } from '../../config/supabase';
 import type { AccountManager } from '../../core/accounts/AccountManager';
 import crypto from 'crypto';
+import fs from 'fs';
+import { authDir } from '../../lib/account-keys';
 
-// In-memory store as fallback when Supabase is not configured
-const memoryAccounts: Map<string, any> = new Map();
+import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
+
+const AUTH_BASE_PATH = process.env.AUTH_BASE_PATH || './auth';
 
 const isSupabaseConfigured = !!(
   process.env.SUPABASE_URL &&
@@ -13,20 +16,31 @@ const isSupabaseConfigured = !!(
   !process.env.SUPABASE_SERVICE_KEY.includes('...')
 );
 
+function isValidUUID(id: string): boolean {
+  if (!id) return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
+
 export function accountsRouter(manager: AccountManager): Router {
   const r = Router();
 
   // Crear cuenta
   r.post('/', async (req, res) => {
-    const { user_id, name, phone_number, channel, external_id, access_token, app_secret, verify_token } = req.body;
+    const { user_id, name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id } = req.body;
     const resolvedChannel = channel || 'whatsapp';
+    const resolvedProvider = provider || 'baileys';
 
-    if (isSupabaseConfigured) {
+    const useSupabase = isSupabaseConfigured && isValidUUID(user_id);
+
+    if (useSupabase) {
       const { data, error } = await supabase
         .from('accounts')
         .insert({
           user_id, name, phone_number, status: 'disconnected',
           channel: resolvedChannel,
+          provider: resolvedProvider,
+          flow_id: flow_id || null,
           external_id: external_id || null,
           access_token: access_token || null,
           app_secret: app_secret || null,
@@ -45,6 +59,8 @@ export function accountsRouter(manager: AccountManager): Router {
       phone_number: phone_number || null,
       status: 'disconnected',
       channel: resolvedChannel,
+      provider: resolvedProvider,
+      flow_id: flow_id || null,
       external_id: external_id || null,
       access_token: access_token || null,
       app_secret: app_secret || null,
@@ -61,7 +77,9 @@ export function accountsRouter(manager: AccountManager): Router {
   r.get('/', async (req, res) => {
     const userId = req.query.user_id as string;
 
-    if (isSupabaseConfigured) {
+    const useSupabase = isSupabaseConfigured && isValidUUID(userId);
+
+    if (useSupabase) {
       const { data, error } = await supabase.from('accounts').select('*').eq('user_id', userId);
       if (error) return res.status(400).json({ error: error.message });
       return res.json(data);
@@ -130,37 +148,76 @@ export function accountsRouter(manager: AccountManager): Router {
 
   // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
   r.put('/:id', async (req, res) => {
-    const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id } = req.body;
+    const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes } = req.body;
     const accountId = req.params.id;
 
-    if (isSupabaseConfigured) {
+    const memAcc = memoryAccounts.get(accountId);
+    const useSupabase = isSupabaseConfigured && !memAcc;
+
+    if (useSupabase) {
+      // Estado actual: para decidir si hace falta reconectar el transporte.
+      const { data: current } = await supabase
+        .from('accounts')
+        .select('channel, provider, external_id, access_token, app_secret, verify_token')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      // Solo actualizar campos provistos (evita nullear columnas en updates parciales).
+      const patch: Record<string, any> = {};
+      if (name !== undefined) patch.name = name;
+      if (phone_number !== undefined) patch.phone_number = phone_number;
+      if (channel !== undefined) patch.channel = channel;
+      if (external_id !== undefined) patch.external_id = external_id;
+      if (access_token !== undefined) patch.access_token = access_token;
+      if (app_secret !== undefined) patch.app_secret = app_secret;
+      if (verify_token !== undefined) patch.verify_token = verify_token;
+      if (provider !== undefined) patch.provider = provider;
+      if (flow_id !== undefined) patch.flow_id = flow_id || null;
+      if (reminder_minutes !== undefined) patch.reminder_minutes = Number(reminder_minutes) || 20;
+
       const { data, error } = await supabase
         .from('accounts')
-        .update({
-          name,
-          phone_number,
-          channel,
-          external_id,
-          access_token,
-          app_secret,
-          verify_token,
-          provider,
-          flow_id: flow_id || null
-        })
+        .update(patch)
         .eq('id', accountId)
         .select('*')
         .single();
       if (error) return res.status(400).json({ error: error.message });
-      
-      // Desconectar para que al reconectar tome la nueva configuración
-      await manager.disconnect(accountId).catch(() => {});
-      
+
+      if (flow_id) {
+        await supabase
+          .from('flows')
+          .update({ account_id: accountId })
+          .eq('id', flow_id);
+      }
+
+      // Reconectar SOLO si cambió el transporte (canal/proveedor/credenciales).
+      // Desconectar por un cambio de flujo tira la sesión de WhatsApp y el bot deja
+      // de contestar: el flujo se resuelve por-mensaje, no necesita reconexión.
+      const transportChanged = !!current && (
+        (channel !== undefined && channel !== current.channel) ||
+        (provider !== undefined && provider !== current.provider) ||
+        (external_id !== undefined && external_id !== current.external_id) ||
+        (access_token !== undefined && access_token !== current.access_token) ||
+        (app_secret !== undefined && app_secret !== current.app_secret) ||
+        (verify_token !== undefined && verify_token !== current.verify_token)
+      );
+      if (transportChanged) {
+        await manager.disconnect(accountId).catch(() => {});
+      }
+
       return res.json(data);
     }
 
     // Fallback: in-memory
-    const memAcc = memoryAccounts.get(accountId);
     if (!memAcc) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+    if (flow_id) {
+      const flow = memoryFlows.get(flow_id);
+      if (flow) {
+        flow.account_id = accountId;
+        memoryFlows.set(flow_id, flow);
+      }
+    }
 
     const updated = {
       ...memAcc,
@@ -179,6 +236,42 @@ export function accountsRouter(manager: AccountManager): Router {
     await manager.disconnect(accountId).catch(() => {});
 
     res.json(updated);
+  });
+
+  // Eliminar cuenta (número). CASCADE en Supabase limpia flows, conversaciones,
+  // mensajes y sesiones de esa cuenta. También cierra el socket y borra la sesión Baileys.
+  r.delete('/:id', async (req, res) => {
+    const accountId = req.params.id;
+    console.log(`[accounts] DELETE recibido para ${accountId}`);
+
+    // 1. Detener y sacar el cliente del manager (cierra socket).
+    await manager.disconnect(accountId).catch(() => {});
+
+    // 2. Memoria (cuenta + sus flows en memoria) si aplica.
+    const memAcc = memoryAccounts.get(accountId);
+    if (memAcc) {
+      memoryAccounts.delete(accountId);
+      for (const [fid, f] of memoryFlows) {
+        if (f.account_id === accountId) memoryFlows.delete(fid);
+      }
+    }
+
+    // 3. Supabase (CASCADE).
+    if (isSupabaseConfigured && !memAcc) {
+      const { error } = await supabase.from('accounts').delete().eq('id', accountId);
+      if (error) return res.status(400).json({ error: error.message });
+    }
+
+    // 4. Best-effort: borrar credenciales Baileys de la cuenta.
+    try {
+      const dir = authDir(AUTH_BASE_PATH, accountId);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    } catch (e: any) {
+      console.warn(`[accounts] no se pudo borrar authDir de ${accountId}: ${e?.message ?? e}`);
+    }
+
+    console.log(`[accounts] DELETE ok para ${accountId}`);
+    res.json({ ok: true });
   });
 
   return r;

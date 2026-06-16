@@ -41,10 +41,33 @@ export class MessageStore {
     if (error) throw error;
   }
 
+  /** Timestamp del último mensaje ENTRANTE de un contacto (para la ventana de 24h). */
+  async getLastInboundAt(accountId: string, phone: string): Promise<Date | null> {
+    try {
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('timestamp')
+        .eq('account_id', accountId)
+        .eq('phone', phone)
+        .eq('direction', 'INBOUND')
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data?.timestamp ? new Date(data.timestamp as string) : null;
+    } catch (err: any) {
+      console.warn(`[MessageStore] getLastInboundAt error (${accountId}/${phone}):`, err?.message ?? err);
+      return null;
+    }
+  }
+
   /** Atajo: upsert conversación + insert mensaje. */
   async record(msg: StoredMessage): Promise<void> {
-    const convId = await this.upsertConversation(msg.accountId, msg.phone, msg.contactName, msg.content);
-    await this.insertMessage(convId, msg);
+    try {
+      const convId = await this.upsertConversation(msg.accountId, msg.phone, msg.contactName, msg.content);
+      await this.insertMessage(convId, msg);
+    } catch (err: any) {
+      console.warn(`[MessageStore] Warning: Failed to record message in database for account ${msg.accountId}:`, err?.message ?? err);
+    }
   }
 }
 

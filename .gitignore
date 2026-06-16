@@ -5,3 +5,8 @@ dist/
 auth/
 *.log
 .DS_Store
+
+# datos locales / debug (no versionar)
+memory_store.json
+scratch_*.ts
+src/scratch_*.ts

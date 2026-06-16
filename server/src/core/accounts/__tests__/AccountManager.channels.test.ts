@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { memoryAccounts } from '../memoryStore';
 
 // Cuenta devuelta por supabase según el id/external_id consultado.
 const accountsById: Record<string, any> = {};
@@ -44,13 +45,14 @@ vi.mock('../../../infrastructure/meta/MetaClient', () => {
   }
   return { MetaClient };
 });
-
+import { MetaClient } from '../../../infrastructure/meta/MetaClient';
 import { AccountManager } from '../AccountManager';
 
 describe('AccountManager omnichannel', () => {
   beforeEach(() => {
     for (const k of Object.keys(accountsById)) delete accountsById[k];
     for (const k of Object.keys(accountsByExternal)) delete accountsByExternal[k];
+    memoryAccounts.clear();
     waSent.length = 0; metaSent.length = 0; metaEvents.length = 0;
   });
 
@@ -62,7 +64,9 @@ describe('AccountManager omnichannel', () => {
   });
 
   it('connect crea MetaClient para canal facebook', async () => {
-    accountsById['fbAcc'] = { id: 'fbAcc', channel: 'facebook', external_id: 'PAGE1', access_token: 'tok' };
+    const acc = { id: 'fbAcc', channel: 'facebook', external_id: 'PAGE1', access_token: 'tok' };
+    accountsById['fbAcc'] = acc;
+    memoryAccounts.set('fbAcc', acc);
     const mgr = new AccountManager({} as any);
     const c = await mgr.connect('fbAcc');
     expect((c as any).constructor.name).toBe('MetaClient');
@@ -71,7 +75,9 @@ describe('AccountManager omnichannel', () => {
   });
 
   it('sendMessage usa Graph API en meta y jid en whatsapp', async () => {
-    accountsById['fbAcc'] = { id: 'fbAcc', channel: 'instagram', external_id: 'IG1', access_token: 'tok' };
+    const acc = { id: 'fbAcc', channel: 'instagram', external_id: 'IG1', access_token: 'tok' };
+    accountsById['fbAcc'] = acc;
+    memoryAccounts.set('fbAcc', acc);
     const mgr = new AccountManager({} as any);
     await mgr.connect('fbAcc');
     await mgr.connect('waAcc');
@@ -84,8 +90,10 @@ describe('AccountManager omnichannel', () => {
   });
 
   it('handleMetaWebhook enruta el entry por external_id al MetaClient', async () => {
-    accountsById['fbAcc'] = { id: 'fbAcc', channel: 'facebook', external_id: 'PAGE7', access_token: 'tok' };
-    accountsByExternal['PAGE7'] = { id: 'fbAcc', channel: 'facebook', external_id: 'PAGE7', access_token: 'tok' };
+    const acc = { id: 'fbAcc', channel: 'facebook', external_id: 'PAGE7', access_token: 'tok' };
+    accountsById['fbAcc'] = acc;
+    accountsByExternal['PAGE7'] = acc;
+    memoryAccounts.set('fbAcc', acc);
     const mgr = new AccountManager({} as any);
 
     const entry = { id: 'PAGE7', messaging: [] };

@@ -1,7 +1,17 @@
 import 'dotenv/config';
 import { FlowEngine } from './core/engine/flow.engine';
 import { AccountManager } from './core/accounts/AccountManager';
+import { ReminderScheduler } from './services/ReminderScheduler';
 import { createApp } from './api/app';
+
+// Red de seguridad: un error no atrapado (en un flujo, un webhook, una librería)
+// NO debe tumbar todo el servidor de bots. Lo logueamos y seguimos vivos.
+process.on('unhandledRejection', (reason: any) => {
+  console.error('⚠️ [unhandledRejection]', reason?.stack || reason);
+});
+process.on('uncaughtException', (err: any) => {
+  console.error('⚠️ [uncaughtException]', err?.stack || err);
+});
 
 async function bootstrap() {
   const PORT = Number(process.env.PORT || 3001);
@@ -14,6 +24,9 @@ async function bootstrap() {
 
   // Reconectar cuentas que estaban conectadas
   await manager.bootstrapExisting().catch((e) => console.error('[bootstrap] reconexión:', e));
+
+  // Recordatorios de citas (20 min antes, dentro de la ventana de 24h)
+  new ReminderScheduler(manager).start();
 }
 
 bootstrap().catch((e) => {

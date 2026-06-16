@@ -49,6 +49,7 @@ export const accountsApi = {
       access_token?: string | null;
       app_secret?: string | null;
       verify_token?: string | null;
+      reminder_minutes?: number;
     }
   ) =>
     api<Account>(`/api/accounts/${id}`, {
@@ -67,6 +68,9 @@ export const accountsApi = {
 
   status: (id: string) =>
     api<{ status: string }>(`/api/accounts/${id}/status`),
+
+  delete: (id: string) =>
+    api<{ ok: boolean }>(`/api/accounts/${id}`, { method: 'DELETE' }),
 };
 
 // ── Flows ───────────────────────────────────────────────────
@@ -75,6 +79,10 @@ import type { Flow } from '../types';
 export const flowsApi = {
   list: (accountId: string) =>
     api<Flow[]>(`/api/flows?account_id=${encodeURIComponent(accountId)}`),
+
+  // Todos los flujos del usuario (across cuentas) — para verlos/editarlos en el bot builder.
+  listByUser: (userId: string) =>
+    api<Flow[]>(`/api/flows?user_id=${encodeURIComponent(userId)}`),
 
   get: (id: string) =>
     api<Flow>(`/api/flows/${id}`),
@@ -122,9 +130,11 @@ export interface Appointment {
   nombre: string;
   telefono: string;
   resumen: string;
-  status: 'pendiente' | 'confirmada' | 'cancelada';
+  status: 'pendiente' | 'confirmada' | 'cancelada' | 'asistio' | 'no_asistio' | 'cerrado';
   created_at: string;
   updated_at: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export const appointmentsApi = {

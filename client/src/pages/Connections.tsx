@@ -94,7 +94,7 @@ export default function Connections() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0b0f1a]">
         <div className="text-center">
-          <RefreshCw className="animate-spin text-indigo-400 mx-auto mb-4" size={36} />
+          <RefreshCw className="animate-spin text-[#C6AC98] mx-auto mb-4" size={36} />
           <p className="text-slate-400 text-sm">Cargando configuraciones...</p>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function Connections() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#304352] to-[#a57b5a] flex items-center justify-center shadow-lg shadow-[#304352]/20">
               <Settings size={22} className="text-white" />
             </div>
             <div>
@@ -133,7 +133,7 @@ export default function Connections() {
             {/* Supabase & DB section */}
             <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl p-6">
               <h2 className="text-white font-bold text-base mb-5 flex items-center gap-2">
-                <Database size={18} className="text-indigo-400" />
+                <Database size={18} className="text-[#C6AC98]" />
                 Base de Datos y Supabase
               </h2>
               
@@ -145,7 +145,7 @@ export default function Connections() {
                     value={configs.SUPABASE_URL}
                     onChange={(e) => handleChange('SUPABASE_URL', e.target.value)}
                     placeholder="https://tu-proyecto.supabase.co"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
                   />
                 </div>
 
@@ -158,7 +158,7 @@ export default function Connections() {
                       value={configs.SUPABASE_SERVICE_KEY}
                       onChange={(e) => handleChange('SUPABASE_SERVICE_KEY', e.target.value)}
                       placeholder="eyJhbGciOi..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-mono"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5">
@@ -175,7 +175,7 @@ export default function Connections() {
                       value={configs.DATABASE_URL}
                       onChange={(e) => handleChange('DATABASE_URL', e.target.value)}
                       placeholder="postgresql://postgres:password@db.supabase.co:5432/postgres"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-mono"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5">
@@ -188,7 +188,7 @@ export default function Connections() {
             {/* APIs & Services */}
             <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl p-6">
               <h2 className="text-white font-bold text-base mb-5 flex items-center gap-2">
-                <Server size={18} className="text-indigo-400" />
+                <Server size={18} className="text-[#C6AC98]" />
                 Servicios Externos e Infraestructura
               </h2>
               
@@ -201,7 +201,7 @@ export default function Connections() {
                       value={configs.REDIS_URL}
                       onChange={(e) => handleChange('REDIS_URL', e.target.value)}
                       placeholder="redis://127.0.0.1:6379"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
                     />
                   </div>
                   <div>
@@ -211,7 +211,7 @@ export default function Connections() {
                       value={configs.AUTH_BASE_PATH}
                       onChange={(e) => handleChange('AUTH_BASE_PATH', e.target.value)}
                       placeholder="./auth"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
                     />
                   </div>
                 </div>
@@ -224,7 +224,7 @@ export default function Connections() {
                       value={configs.GROQ_API_KEY}
                       onChange={(e) => handleChange('GROQ_API_KEY', e.target.value)}
                       placeholder="gsk_..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-mono"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
                     />
                   </div>
                   <div>
@@ -234,7 +234,7 @@ export default function Connections() {
                       value={configs.GEMINI_API_KEY}
                       onChange={(e) => handleChange('GEMINI_API_KEY', e.target.value)}
                       placeholder="AIzaSy..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-mono"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
                     />
                   </div>
                 </div>
@@ -247,7 +247,7 @@ export default function Connections() {
                       value={configs.PORT}
                       onChange={(e) => handleChange('PORT', e.target.value)}
                       placeholder="3001"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
                     />
                   </div>
                   <div>
@@ -257,7 +257,7 @@ export default function Connections() {
                       value={configs.CORS_ORIGIN}
                       onChange={(e) => handleChange('CORS_ORIGIN', e.target.value)}
                       placeholder="http://localhost:5173"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
                     />
                   </div>
                 </div>
@@ -269,7 +269,7 @@ export default function Connections() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-600/20 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
+                className="flex items-center gap-2 bg-gradient-to-r from-[#304352] to-[#a57b5a] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-[#304352]/20 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
               >
                 <Save size={16} />
                 {saving ? 'Guardando…' : 'Guardar en .env'}
@@ -282,11 +282,11 @@ export default function Connections() {
           <div className="space-y-6">
             
             {/* Sync Database Operations */}
-            <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="bg-gradient-to-br from-[#304352]/25 to-[#a57b5a]/15 border border-[#C6AC98]/20 rounded-2xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-[#C6AC98]/5 rounded-full blur-2xl pointer-events-none" />
               
               <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-                <Database size={16} className="text-indigo-400" />
+                <Database size={16} className="text-[#C6AC98]" />
                 Base de Datos
               </h3>
               
@@ -297,7 +297,7 @@ export default function Connections() {
               <button
                 onClick={handleSyncDb}
                 disabled={syncing}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold py-3.5 px-4 rounded-xl border border-indigo-500/20 transition-all duration-200 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-[#C6AC98]/10 hover:bg-[#C6AC98]/20 text-[#C6AC98] text-xs font-bold py-3.5 px-4 rounded-xl border border-[#C6AC98]/20 transition-all duration-200 disabled:opacity-50"
               >
                 {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Database size={14} />}
                 {syncing ? 'Sincronizando…' : 'Sincronizar tablas'}

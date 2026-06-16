@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, HelpCircle, GitFork, BarChart2, Store, ArrowRightCircle, UploadCloud, FileText, PauseCircle, Clock, ChevronLeft, ChevronRight, AlertTriangle, Image, Search, Brain, Mic, Bot, Zap, Database, Scissors, Spline, MousePointerClick, CalendarPlus } from 'lucide-react';
+import { MessageSquare, HelpCircle, GitFork, BarChart2, Store, ArrowRightCircle, UploadCloud, FileText, PauseCircle, Clock, ChevronLeft, ChevronRight, AlertTriangle, Image, Search, Brain, Mic, Bot, Zap, Database, Scissors, Spline, MousePointerClick, CalendarPlus, Sliders } from 'lucide-react';
 
 export const nodeItems = [
   { type: 'webhookNode', icon: Zap, label: 'Hook / Inicio', desc: 'Gatillo de entrada.', bg: 'bg-amber-100', text: 'text-amber-600' },
@@ -19,6 +19,8 @@ export const nodeItems = [
   { type: 'timerNode', icon: Clock, label: 'Timer / Espera', desc: 'Pausa el flujo.', bg: 'bg-blue-100', text: 'text-blue-600' },
   { type: 'reportNode', icon: AlertTriangle, label: 'Reporte', desc: 'Crea un registro.', bg: 'bg-red-100', text: 'text-red-600' },
   { type: 'appointmentNode', icon: CalendarPlus, label: 'Agendar Cita', desc: 'Guarda nombre, teléfono y resumen.', bg: 'bg-teal-100', text: 'text-teal-600' },
+  { type: 'appointmentAvailabilityNode', icon: CalendarPlus, label: 'Consultar Cita', desc: 'Verifica disponibilidad horaria.', bg: 'bg-emerald-100', text: 'text-emerald-600' },
+  { type: 'appointmentProposalsNode', icon: Sliders, label: 'Sugerir Horarios', desc: 'Ofrece turnos libres cercanos.', bg: 'bg-emerald-100', text: 'text-emerald-600' },
   { type: 'handoverNode', icon: HelpCircle, label: 'Asesor Humano', desc: 'Pausa el bot y avisa.', bg: 'bg-rose-100', text: 'text-rose-600' },
   { type: 'businessHoursNode', icon: Store, label: 'Horario Atención', desc: 'Detecta si está en horario.', bg: 'bg-orange-100', text: 'text-orange-600' },
   { type: 'sendMediaNode', icon: Image, label: 'Enviar Multimedia', desc: 'Envía imagen o PDF.', bg: 'bg-indigo-100', text: 'text-indigo-600' },

@@ -14,6 +14,7 @@ import { Save, Trash2, Download, Upload, Menu, X, Plus, ChevronLeft } from 'luci
 import { toast } from 'sonner';
 import { flowsApi } from '../lib/api';
 import { useAccounts } from '../context/AccountContext';
+import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/bot-builder/Sidebar';
 import MessageNode from '../components/bot-builder/MessageNode';
 import QuestionNode from '../components/bot-builder/QuestionNode';
@@ -26,6 +27,8 @@ import ThreadNode from '../components/bot-builder/ThreadNode';
 import TimerNode from '../components/bot-builder/TimerNode';
 import ReportNode from '../components/bot-builder/ReportNode';
 import AppointmentNode from '../components/bot-builder/AppointmentNode';
+import AppointmentAvailabilityNode from '../components/bot-builder/AppointmentAvailabilityNode';
+import AppointmentProposalsNode from '../components/bot-builder/AppointmentProposalsNode';
 import HandoverNode from '../components/bot-builder/HandoverNode';
 import BusinessHoursNode from '../components/bot-builder/BusinessHoursNode';
 import SendMediaNode from '../components/bot-builder/SendMediaNode';
@@ -55,6 +58,8 @@ const nodeTypes = {
   timerNode: TimerNode,
   reportNode: ReportNode,
   appointmentNode: AppointmentNode,
+  appointmentAvailabilityNode: AppointmentAvailabilityNode,
+  appointmentProposalsNode: AppointmentProposalsNode,
   handoverNode: HandoverNode,
   businessHoursNode: BusinessHoursNode,
   sendMediaNode: SendMediaNode,
@@ -87,6 +92,7 @@ const getId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9
 
 export default function BotBuilder() {
   const { activeAccountId } = useAccounts();
+  const { user } = useAuth();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -102,19 +108,20 @@ export default function BotBuilder() {
   const [isNodeSelectorOpen, setIsNodeSelectorOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Load flows list on mount / when active account changes (scoped by account_id)
+  // Lista TODOS los flujos del usuario (across cuentas) para poder editarlos.
+  // Se refresca también al cambiar de cuenta activa (p.ej. tras crear un flujo nuevo).
   useEffect(() => {
     fetchFlows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountId]);
+  }, [user?.id, activeAccountId]);
 
   const fetchFlows = async () => {
-    if (!activeAccountId) {
+    if (!user?.id) {
       setFlows([]);
       return;
     }
     try {
-      const data = await flowsApi.list(activeAccountId);
+      const data = await flowsApi.listByUser(user.id);
       setFlows(data);
     } catch (err) {
       console.error('[BotBuilder] Error fetching flows:', err);
@@ -258,6 +265,20 @@ export default function BotBuilder() {
             temperature: type === 'groqNode' ? 0.7 : undefined,
             silent: type === 'groqNode' ? false : undefined,
             possible_intents: type === 'intentResolverNode' ? 'consulta, soporte, cancelar, no_entendido' : type === 'aiAgentNode' ? 'consulta,saludo,soporte,cancelar' : undefined,
+            // AppointmentNode defaults
+            nombreVar: type === 'appointmentNode' ? 'nombre' : undefined,
+            telefonoVar: type === 'appointmentNode' ? 'telefono' : undefined,
+            resumenVar: type === 'appointmentNode' ? 'resumen' : undefined,
+            dateVar: type === 'appointmentNode' || type === 'appointmentAvailabilityNode' ? 'fecha' : undefined,
+            startHourVar: type === 'appointmentNode' || type === 'appointmentAvailabilityNode' ? 'hora_inicio' : undefined,
+            endHourVar: type === 'appointmentNode' || type === 'appointmentAvailabilityNode' ? 'hora_fin' : undefined,
+            // AppointmentProposalsNode defaults
+            allowedDays: type === 'appointmentProposalsNode' ? [1, 2, 3, 4, 5] : undefined,
+            startHour: type === 'appointmentProposalsNode' ? '09:00' : undefined,
+            endHour: type === 'appointmentProposalsNode' ? '18:00' : undefined,
+            slotDuration: type === 'appointmentProposalsNode' ? 60 : undefined,
+            maxProposals: type === 'appointmentProposalsNode' ? 3 : undefined,
+            outputVariable: type === 'appointmentProposalsNode' ? 'horarios_disponibles' : undefined,
             max_retries: type === 'intentResolverNode' ? 2 : undefined,
             fallback_message: type === 'intentResolverNode' ? 'No te entendí bien. ¿Podrías expresarlo con otras palabras?' : undefined,
             context_variables: type === 'intentResolverNode' ? [] : undefined,

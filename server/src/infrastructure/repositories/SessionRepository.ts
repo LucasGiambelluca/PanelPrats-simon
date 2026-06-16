@@ -1,5 +1,13 @@
 import { supabase } from '../../config/database';
 import { Session, SessionContext } from '../../core/domain/Session';
+import { memoryAccounts } from '../../core/accounts/memoryStore';
+
+const isSupabaseConfigured = !!(
+  process.env.SUPABASE_URL &&
+  process.env.SUPABASE_SERVICE_KEY &&
+  !process.env.SUPABASE_URL.includes('TUPROYECTO') &&
+  !process.env.SUPABASE_SERVICE_KEY.includes('...')
+);
 
 /**
  * SessionRepository — portado desde StockSystem (Plan 2, Task 8).
@@ -13,12 +21,30 @@ import { Session, SessionContext } from '../../core/domain/Session';
 export class SessionRepository {
   private readonly TABLE = 'flow_executions';
   private readonly HISTORY_TABLE = 'flow_executions_history';
+  private static memorySessions = new Map<string, any>();
+
+  private useMemory(accountId: string): boolean {
+    if (process.env.NODE_ENV === 'test') {
+      return memoryAccounts.has(accountId);
+    }
+    return !isSupabaseConfigured || memoryAccounts.has(accountId);
+  }
 
   /**
    * Find an active session without creating one
    */
   async findActiveSession(accountId: string, sessionId: string): Promise<Session | null> {
     const finalSessionId = sessionId.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    
+    if (this.useMemory(accountId)) {
+      const key = `${accountId}:${finalSessionId}`;
+      const sessionData = SessionRepository.memorySessions.get(key);
+      if (sessionData && ['active', 'waiting_input'].includes(sessionData.status)) {
+        return Session.fromJSON(sessionData);
+      }
+      return null;
+    }
+
     const { data } = await supabase
       .from(this.TABLE)
       .select('*')
@@ -110,6 +136,14 @@ export class SessionRepository {
       0 // initial version
     );
 
+    const finalSessionId = sessionId.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    if (this.useMemory(accountId)) {
+      const key = `${accountId}:${finalSessionId}`;
+      const sessionJson = { ...session.toJSON(), id: session.id || finalSessionId, account_id: accountId, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      SessionRepository.memorySessions.set(key, sessionJson);
+      return Session.fromJSON(sessionJson);
+    }
+
     const { data: created, error } = await supabase
       .from(this.TABLE)
       .insert({ ...session.toJSON(), account_id: accountId })
@@ -138,6 +172,24 @@ export class SessionRepository {
 
     // Normalize: ensure we don't have suffix in session_id if it's 1to1
     const finalSessionId = session.id.replace('@s.whatsapp.net', '').replace('@c.us', '');
+
+    if (this.useMemory(accountId)) {
+      const key = `${accountId}:${finalSessionId}`;
+      const existing = SessionRepository.memorySessions.get(key);
+      if (existing && existing.version !== currentVersion) {
+        throw new Error(`CONCURRENCY_CONFLICT: Session ${session.id} was modified by another process (version mismatch).`);
+      }
+      const updateData = {
+          ...session.toJSON(),
+          account_id: accountId,
+          session_id: finalSessionId,
+          version: nextVersion,
+          updated_at: new Date().toISOString()
+      };
+      SessionRepository.memorySessions.set(key, updateData);
+      session.version = nextVersion;
+      return;
+    }
 
     const updateData = {
         ...session.toJSON(),
@@ -180,6 +232,18 @@ export class SessionRepository {
    */
   async archive(accountId: string, sessionId: string, reason: string): Promise<void> {
     const finalSessionId = sessionId.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    if (this.useMemory(accountId)) {
+      const key = `${accountId}:${finalSessionId}`;
+      const session = SessionRepository.memorySessions.get(key);
+      if (session && ['active', 'waiting_input'].includes(session.status)) {
+        session.status = 'archived';
+        session.archived_reason = reason;
+        session.updated_at = new Date().toISOString();
+        SessionRepository.memorySessions.set(key, session);
+      }
+      return;
+    }
+
     const { data: sessions } = await supabase
       .from(this.TABLE)
       .select('*')
@@ -231,6 +295,20 @@ export class SessionRepository {
    * Force reset for a specific user - Now extremely fast
    */
   async forceReset(accountId: string, phoneNumber: string): Promise<number> {
+    if (this.useMemory(accountId)) {
+      let count = 0;
+      for (const [key, session] of SessionRepository.memorySessions.entries()) {
+        if (key.startsWith(`${accountId}:`) && session.phone === phoneNumber && ['active', 'waiting_input'].includes(session.status)) {
+          session.status = 'archived';
+          session.archived_reason = 'user_reset';
+          session.updated_at = new Date().toISOString();
+          SessionRepository.memorySessions.set(key, session);
+          count++;
+        }
+      }
+      return count;
+    }
+
     const { data: sessions, error } = await supabase
       .from(this.TABLE)
       .select('*')
@@ -249,6 +327,27 @@ export class SessionRepository {
    */
   async updateContext(accountId: string, sessionId: string, newVariables: any): Promise<void> {
     const finalSessionId = sessionId.replace('@s.whatsapp.net', '').replace('@c.us', '');
+
+    if (this.useMemory(accountId)) {
+      const key = `${accountId}:${finalSessionId}`;
+      const existing = SessionRepository.memorySessions.get(key);
+      if (!existing) return;
+      const currentContext = existing.context || { variables: { global: {} } };
+      const updatedContext = {
+        ...currentContext,
+        variables: {
+          ...currentContext.variables,
+          global: {
+            ...currentContext.variables?.global,
+            ...newVariables
+          }
+        }
+      };
+      existing.context = updatedContext;
+      existing.updated_at = new Date().toISOString();
+      SessionRepository.memorySessions.set(key, existing);
+      return;
+    }
 
     // 1. Get current session
     const { data: existing } = await supabase

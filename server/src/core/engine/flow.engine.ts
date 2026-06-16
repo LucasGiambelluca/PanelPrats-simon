@@ -11,6 +11,14 @@ import { Session } from '../domain/Session';
 import { redisPersistence } from '../../infrastructure/persistence/RedisPersistenceService';
 import { PhoneUtils } from '../../utils/phoneUtils';
 import { ConfigurationService } from '../../services/ConfigurationService';
+import { memoryAccounts, memoryFlows } from '../accounts/memoryStore';
+
+const isSupabaseConfigured = !!(
+  process.env.SUPABASE_URL &&
+  process.env.SUPABASE_SERVICE_KEY &&
+  !process.env.SUPABASE_URL.includes('TUPROYECTO') &&
+  !process.env.SUPABASE_SERVICE_KEY.includes('...')
+);
 
 export class FlowEngine {
     private db: any;
@@ -90,14 +98,23 @@ export class FlowEngine {
         }
 
         // 1. RUN INITIAL CHECKS IN PARALLEL (only if not pre-fetched)
-        const [fetchedSession, handoverStatus, matchedFlowResult] = await Promise.all([
+        const isMemoryAccount = memoryAccounts.has(accountId);
+        const flowIdFromAccount = isMemoryAccount ? memoryAccounts.get(accountId)?.flow_id || null : null;
+
+        const [fetchedSession, handoverStatus, matchedFlowResult, accountData] = await Promise.all([
             this.sessionRepository.findActiveSession(accountId, sessionId),
-            this.db.from('whatsapp_conversations').select('status').eq('account_id', accountId).eq('phone', cleanPhone).maybeSingle(),
-            this.findFlowByTrigger(accountId, normalizedMsg)
+            (isSupabaseConfigured && !isMemoryAccount)
+                // Promise.resolve adopta el thenable de PostgrestBuilder => Promise real con .catch
+                ? Promise.resolve(this.db.from('whatsapp_conversations').select('status').eq('account_id', accountId).eq('phone', cleanPhone).maybeSingle()).catch(() => ({ data: { status: 'BOT' } }))
+                : Promise.resolve({ data: { status: 'BOT' } }),
+            this.findFlowByTrigger(accountId, normalizedMsg),
+            (isSupabaseConfigured && !isMemoryAccount)
+                ? Promise.resolve(this.db.from('accounts').select('flow_id').eq('id', accountId).maybeSingle()).catch(() => ({ data: null }))
+                : Promise.resolve({ data: { flow_id: flowIdFromAccount } })
         ]);
 
         let session: Session | null = fetchedSession;
-        const conversation = handoverStatus.data;
+        const conversation = handoverStatus ? handoverStatus.data : null;
         const { flow: matchedFlow, isWildcard } = matchedFlowResult;
 
         let isGlobalTrigger = !!matchedFlow;
@@ -147,6 +164,8 @@ export class FlowEngine {
                     flow = await this.getFlowDefinition(accountId, flowId);
                 } else if (isGlobalTrigger) {
                     flow = matchedFlow;
+                } else if (accountData?.data?.flow_id) {
+                    flow = await this.getFlowDefinition(accountId, accountData.data.flow_id);
                 }
 
                 if (!flow) {
@@ -234,13 +253,20 @@ export class FlowEngine {
                 accumulatedMessages.push(...chainMessages);
             }
 
-            await this.sessionRepository.update(accountId, session);
-            await redisPersistence.setCheckpoint(accountId, cleanPhone, {
-                currentNodeId: session.currentNodeId,
-                status: session.status,
-                variables: session.getAllVariablesForCurrentFlow(),
-                flowId: session.getContext().metadata.flowId
-            });
+            // Persistencia best-effort: si falla (p.ej. columna faltante / hiccup de DB),
+            // logueamos pero NO descartamos los mensajes ya generados. Reemplazar una
+            // respuesta válida por "Ocurrió un error" es peor que perder el checkpoint.
+            try {
+                await this.sessionRepository.update(accountId, session);
+                await redisPersistence.setCheckpoint(accountId, cleanPhone, {
+                    currentNodeId: session.currentNodeId,
+                    status: session.status,
+                    variables: session.getAllVariablesForCurrentFlow(),
+                    flowId: session.getContext().metadata.flowId
+                });
+            } catch (persistErr: any) {
+                logger.error(`[FlowEngine] Persistencia de sesión falló (respuesta igual se envía)`, { error: persistErr?.message });
+            }
 
             return { currentStateDefinition: { message_template: accumulatedMessages } };
 
@@ -558,16 +584,32 @@ export class FlowEngine {
             return { data: cached.data };
         }
 
-        const { data, error } = await this.db
-            .from('flows')
-            .select('id, name, trigger_word, is_active, nodes')
-            .eq('account_id', accountId)
-            .eq('is_active', true);
+        const isMemoryAccount = memoryAccounts.has(accountId);
+        const useSupabase = isSupabaseConfigured && !isMemoryAccount;
 
-        if (data) {
-            FlowEngine.flowListCache.set(accountId, { data, timestamp: now });
+        let activeFlows: any[] = [];
+
+        if (useSupabase) {
+            try {
+                const { data } = await this.db
+                    .from('flows')
+                    .select('id, name, trigger_word, is_active, nodes')
+                    .eq('account_id', accountId)
+                    .eq('is_active', true);
+                if (data) activeFlows = data;
+            } catch (err) {
+                // fallback
+            }
         }
-        return { data: data || [] };
+
+        if (activeFlows.length === 0) {
+            activeFlows = Array.from(memoryFlows.values()).filter(
+                f => f.account_id === accountId && f.is_active
+            );
+        }
+
+        FlowEngine.flowListCache.set(accountId, { data: activeFlows, timestamp: now });
+        return { data: activeFlows };
     }
 
     private async getFlowDefinition(accountId: string, flowId: string): Promise<FlowDefinition | null> {
@@ -580,16 +622,32 @@ export class FlowEngine {
             return cached.definition;
         }
 
-        const { data: flow, error } = await this.db
-            .from('flows')
-            .select('*')
-            .eq('account_id', accountId)
-            .eq('id', flowId)
-            .maybeSingle();
+        const isMemoryAccount = memoryAccounts.has(accountId) || memoryFlows.has(flowId);
+        const useSupabase = isSupabaseConfigured && !isMemoryAccount;
 
-        if (error || !flow) return null;
+        let flow = null;
 
-        FlowEngine.flowCache.set(cacheKey, { definition: flow, timestamp: now });
+        if (useSupabase) {
+            try {
+                const { data } = await this.db
+                    .from('flows')
+                    .select('*')
+                    .eq('account_id', accountId)
+                    .eq('id', flowId)
+                    .maybeSingle();
+                if (data) flow = data;
+            } catch (err) {
+                // fallback
+            }
+        }
+
+        if (!flow) {
+            flow = memoryFlows.get(flowId) || null;
+        }
+
+        if (flow) {
+            FlowEngine.flowCache.set(cacheKey, { definition: flow, timestamp: now });
+        }
         return flow;
     }
 
@@ -639,24 +697,59 @@ export class FlowEngine {
         const cleanPhone = PhoneUtils.normalize(phone);
         const sessionId = `1to1:${cleanPhone}`;
 
-        // 1. Get execution
-        const { data: execution } = await this.db
-            .from('flow_executions')
-            .select('*')
-            .eq('account_id', accountId)
-            .eq('session_id', sessionId)
-            .in('status', ['active', 'waiting_input'])
-            .maybeSingle();
+        const isMemoryAccount = memoryAccounts.has(accountId);
+        let execution = null;
+
+        if (isSupabaseConfigured && !isMemoryAccount) {
+            try {
+                const { data } = await this.db
+                    .from('flow_executions')
+                    .select('*')
+                    .eq('account_id', accountId)
+                    .eq('session_id', sessionId)
+                    .in('status', ['active', 'waiting_input'])
+                    .maybeSingle();
+                execution = data;
+            } catch (err) {
+                // fallback
+            }
+        }
+
+        if (!execution) {
+            try {
+                const session = await this.sessionRepository.findActiveSession(accountId, sessionId);
+                if (session) {
+                    execution = {
+                        flow_id: session.getContext().metadata.flowId,
+                        current_node_id: session.currentNodeId
+                    };
+                }
+            } catch (err) {
+                // fallback
+            }
+        }
 
         if (!execution || !execution.flow_id) return null;
 
         // 2. Get Flow & Node
-        const { data: flow } = await this.db
-            .from('flows')
-            .select('nodes')
-            .eq('account_id', accountId)
-            .eq('id', execution.flow_id)
-            .single();
+        let flow = null;
+        if (isSupabaseConfigured && !isMemoryAccount && !memoryFlows.has(execution.flow_id)) {
+            try {
+                const { data } = await this.db
+                    .from('flows')
+                    .select('nodes')
+                    .eq('account_id', accountId)
+                    .eq('id', execution.flow_id)
+                    .single();
+                flow = data;
+            } catch (err) {
+                // fallback
+            }
+        }
+
+        if (!flow) {
+            flow = memoryFlows.get(execution.flow_id) || null;
+        }
 
         if (!flow) return null;
 
@@ -699,6 +792,11 @@ export class FlowEngine {
     }
 
     private async logStepToDB(accountId: string, session: Session, node: any, result: any, duration: number): Promise<void> {
+        const isMemoryAccount = memoryAccounts.has(accountId);
+        if (!isSupabaseConfigured || isMemoryAccount) {
+            logger.info(`[FlowEngine] Step executed (log to console instead of DB): ${node.id} (${node.type})`);
+            return;
+        }
         try {
             await this.db.from('flow_logs').insert({
                 account_id: accountId,

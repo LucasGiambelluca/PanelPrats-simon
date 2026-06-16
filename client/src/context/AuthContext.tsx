@@ -5,9 +5,13 @@ import { supabase } from '../supabaseClient';
 // DEV MODE: skip real auth when no Supabase credentials are configured
 const IS_DEV_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === '';
 
+// UUID real persistido en Supabase auth.users. Permite que el modo dev (auto-login)
+// genere un user_id válido => las cuentas/flows/chats persisten en Supabase (no en memoria)
+// y satisfacen la FK accounts.user_id -> auth.users(id).
+// Para auth real multiusuario: setear VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY en .env.
 const MOCK_USER = {
-  id: 'dev-user-001',
-  email: 'dev@panel.local',
+  id: '03f6b5d7-febe-4af9-909b-70fba81e26af',
+  email: 'rsgroupenter@gmail.com',
   aud: 'authenticated',
   role: 'authenticated',
   app_metadata: {},

@@ -5,7 +5,9 @@ import qrcode from 'qrcode';
 import { PhoneUtils } from '../../utils/phoneUtils';
 import { logger } from '../../utils/logger';
 import { supabase } from '../../config/supabase';
+import { memoryAccounts } from '../../core/accounts/memoryStore';
 import fs from 'fs';
+import path from 'path';
 import { authDir } from '../../lib/account-keys';
 import { default as storageService } from '../../services/storageService';
 import { Mutex } from 'async-mutex';
@@ -76,19 +78,44 @@ export class WhatsAppClient {
         return this.qrCodeData;
     }
 
-    /** Persiste estado (+ QR opcional) de la cuenta en la tabla `accounts`. */
-    private async persistAccountStatus(status: AccountStatus, qrCode: string | null = null): Promise<void> {
-        try {
-            await supabase
-                .from('accounts')
-                .update({ status, qr_code: qrCode })
-                .eq('id', this.accountId);
-        } catch (e: any) {
-            logger.warn(`[WhatsAppClient:${this.accountId}] No se pudo persistir estado '${status}': ${e?.message ?? e}`);
+    private async persistAccountStatus(status: AccountStatus, qrCode: string | null = null, phoneNumber: string | null = null): Promise<void> {
+        // Always update in-memory store if it exists there
+        const memAcc = memoryAccounts.get(this.accountId);
+        if (memAcc) {
+            memAcc.status = status === 'qr' ? 'qr' : status === 'connected' ? 'connected' : 'disconnected';
+            memAcc.qr_code = qrCode;
+            if (phoneNumber) {
+                memAcc.phone_number = phoneNumber;
+            }
+            memoryAccounts.set(this.accountId, memAcc);
+            console.log(`[WhatsAppClient:${this.accountId}] Updated memoryAccount status to: ${memAcc.status}`);
+        }
+
+        const isSupabaseConfigured = !!(
+            process.env.SUPABASE_URL &&
+            process.env.SUPABASE_SERVICE_KEY &&
+            !process.env.SUPABASE_URL.includes('TUPROYECTO') &&
+            !process.env.SUPABASE_SERVICE_KEY.includes('...')
+        );
+
+        if (isSupabaseConfigured) {
+            try {
+                const updates: any = { status, qr_code: qrCode };
+                if (phoneNumber) {
+                    updates.phone_number = phoneNumber;
+                }
+                await supabase
+                    .from('accounts')
+                    .update(updates)
+                    .eq('id', this.accountId);
+            } catch (e: any) {
+                logger.warn(`[WhatsAppClient:${this.accountId}] No se pudo persistir estado '${status}' en Supabase: ${e?.message ?? e}`);
+            }
         }
     }
 
-    public async start() {
+    public async start(isRestart = false) {
+        this.reconnectAttempts = 0;
         const AUTH_DIR = this.authDirPath;
 
         // Guard: do not restart if session clearing failed (prevents infinite loop)
@@ -98,11 +125,40 @@ export class WhatsAppClient {
             return;
         }
 
+        // Clean up unregistered/corrupt session files to prevent linking issues (only on initial user-requested connection)
+        if (!isRestart) {
+            const credsFile = path.join(AUTH_DIR, 'creds.json');
+            let isRegistered = false;
+            if (fs.existsSync(credsFile)) {
+                try {
+                    const creds = JSON.parse(fs.readFileSync(credsFile, 'utf-8'));
+                    isRegistered = !!creds.registered;
+                } catch (e) {
+                    console.error(`[WhatsAppClient:${this.accountId}] Error reading creds.json:`, e);
+                }
+                if (!isRegistered) {
+                    console.log(`🧹 [WhatsAppClient:${this.accountId}] Session is not registered. Clearing old auth files for a clean pairing session.`);
+                    try {
+                        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+                    } catch (err: any) {
+                        console.error(`[WhatsAppClient:${this.accountId}] Failed to clear unregistered session directory:`, err.message);
+                    }
+                }
+            }
+        }
+
         if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
         console.log(`📁 [${this.accountId}] Auth dir: ${AUTH_DIR}`);
 
         const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-        const { version } = await fetchLatestBaileysVersion();
+        
+        let version: [number, number, number] = [6, 7, 0];
+        try {
+            const fetched = await fetchLatestBaileysVersion();
+            version = fetched.version;
+        } catch (err: any) {
+            console.warn(`[WhatsAppClient:${this.accountId}] Falló al obtener la última versión de Baileys, usando fallback [6, 7, 0]: ${err.message}`);
+        }
 
         console.log(`Starting WhatsApp Bot v${version.join('.')} for account ${this.accountId}`);
 
@@ -110,7 +166,7 @@ export class WhatsAppClient {
             version,
             auth: state,
             logger: pino({ level: 'silent' }) as any,
-            browser: ['Mac OS', 'Chrome', '121.0.6167.159'],
+            browser: ['Windows', 'Chrome', '122.0.0.0'],
             syncFullHistory: false
         });
 
@@ -185,24 +241,24 @@ export class WhatsAppClient {
                 if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                     console.error('❌ Logged out from WhatsApp. Session is invalid.');
                     this.clearSession(); // Remove corrupt/invalid session
-
+ 
                     if (process.env.PAIRING_PHONE_NUMBER) {
                         console.log('⏳ Esperando 10 segundos antes de solicitar un nuevo código (Para evitar bloqueos de WhatsApp)...');
-                        setTimeout(() => this.start(), 10000);
+                        setTimeout(() => this.start(true), 10000);
                     } else {
                         console.log('🔄 Restarting to request new QR code...');
-                        this.start(); // Auto-restart to generate new QR
+                        this.start(true); // Auto-restart to generate new QR
                     }
                 } else if (statusCode === DisconnectReason.restartRequired) {
                     console.log('🔄 Restart required. Reconnecting immediately...');
-                    this.start();
+                    this.start(true);
                 } else if (statusCode === DisconnectReason.connectionReplaced) {
                     console.error('❌ Connection replaced (opened in another tab/device). Stopping.');
                     // Do not auto-reconnect if replaced, unless explicitly commanded
                 } else if (statusCode === DisconnectReason.badSession) {
                     console.error('❌ Bad session file. Deleting session and requesting new scan.');
                     this.clearSession();
-                    this.start();
+                    this.start(true);
                 } else if (statusCode === DisconnectReason.connectionClosed || statusCode === DisconnectReason.connectionLost || statusCode === DisconnectReason.timedOut) {
                     this.reconnectAttempts++;
                     console.log(`⚠️ Connection lost/timed out. Attempt: ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
@@ -210,7 +266,7 @@ export class WhatsAppClient {
                         // Exponential backoff: 3s, 6s, 12s, 24s... Max 30s
                         const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1500, 30000);
                         console.log(`⏳ Reconnecting in ${delay/1000}s...`);
-                        setTimeout(() => this.start(), delay);
+                        setTimeout(() => this.start(true), delay);
                     } else {
                         console.error('🚨 Max reconnection attempts reached. Manual intervention required.');
                     }
@@ -218,7 +274,7 @@ export class WhatsAppClient {
                     // Unknown reason, attempt normal reconnect with backoff
                     this.reconnectAttempts++;
                     if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                        setTimeout(() => this.start(), 5000);
+                        setTimeout(() => this.start(true), 5000);
                     }
                 }
             } else if (connection === 'open') {
@@ -226,25 +282,39 @@ export class WhatsAppClient {
                 this.status = 'WORKING';
                 this.qrCodeData = null;
                 this.reconnectAttempts = 0; // Reset on successful connection
-                await this.persistAccountStatus('connected', null);
 
-                // Sync phone number (genérico/seguro: stub que solo registra)
                 const botJid = this.sock?.user?.id;
+                let rawNumber: string | null = null;
                 if (botJid) {
-                    const rawNumber = botJid.split(':')[0].split('@')[0];
-                    ConfigurationService.syncBotPhoneNumber(rawNumber).catch(console.error);
+                    const cleanNumber = botJid.split(':')[0].split('@')[0];
+                    rawNumber = cleanNumber;
+                    ConfigurationService.syncBotPhoneNumber(cleanNumber).catch(console.error);
                 }
+
+                await this.persistAccountStatus('connected', null, rawNumber);
             }
         });
 
         // Event: Message Upsert
         this.sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
+            console.log(`📩 [WhatsAppClient:${this.accountId}] [messages.upsert] Event type: ${type}, messages:`, messages?.map((m: any) => ({
+                fromMe: m.key?.fromMe,
+                remoteJid: m.key?.remoteJid,
+                hasMessage: !!m.message
+            })));
+
             if (type !== 'notify') return;
 
             const PID = process.pid;
             for (const msg of messages) {
-                if (!msg.message) continue;
-                if (msg.key.fromMe) continue;
+                if (!msg.message) {
+                    console.log(`[WhatsAppClient:${this.accountId}] Skipped msg: no message payload.`);
+                    continue;
+                }
+                if (msg.key.fromMe) {
+                    console.log(`[WhatsAppClient:${this.accountId}] Skipped msg: fromMe is true (sent from bot itself).`);
+                    continue;
+                }
                 if (msg.key.remoteJid === 'status@broadcast') continue;
 
                 const remoteJid = msg.key.remoteJid || '';

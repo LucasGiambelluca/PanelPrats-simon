@@ -1,19 +1,25 @@
 import { memo, useEffect, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { ArrowRightCircle, Trash2 } from 'lucide-react';
-import { supabase } from '../../supabaseClient';
+import { flowsApi } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default memo(({ data, isConnectable }: any) => {
   const [flows, setFlows] = useState<any[]>([]);
+  const { user } = useAuth();
 
   useEffect(() => {
-      // Fetch available flows for the dropdown
       const fetchFlows = async () => {
-          const { data } = await supabase.from('flows').select('id, name').eq('is_active', true);
-          if (data) setFlows(data);
+          if (!user?.id) return;
+          try {
+              const res = await flowsApi.listByUser(user.id);
+              if (res) setFlows(res);
+          } catch (err) {
+              console.error('[FlowLinkNode] Error fetching flows:', err);
+          }
       };
       fetchFlows();
-  }, []);
+  }, [user?.id]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 w-64">

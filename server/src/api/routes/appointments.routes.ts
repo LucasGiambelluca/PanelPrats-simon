@@ -18,14 +18,16 @@ export function appointmentsRouter(): Router {
   // Crear cita
   r.post('/', async (req, res) => {
     try {
-      const { account_id, phone, nombre, telefono, resumen, status } = req.body;
+      const { account_id, phone, nombre, telefono, resumen, status, start_time, end_time } = req.body;
       const newApp = await AppointmentService.create({
         account_id,
         phone: phone || telefono,
         nombre,
         telefono,
         resumen,
-        status: status || 'pendiente'
+        status: status || 'pendiente',
+        start_time,
+        end_time
       });
       res.json(newApp);
     } catch (err: any) {

@@ -22,6 +22,10 @@ export class SessionQueue extends EventEmitter {
   ) {
     super();
     this.timeoutMs = timeoutMs;
+    // EventEmitter lanza si se emite 'error' sin listener (ERR_UNHANDLED_ERROR),
+    // lo que tumbaría el proceso ante cualquier job fallido. El rechazo del job
+    // ya se propaga vía job.reject; este listener solo evita el crash.
+    this.on('error', () => {});
   }
 
   /**

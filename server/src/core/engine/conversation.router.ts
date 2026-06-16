@@ -29,23 +29,28 @@ export class ConversationRouter {
       return [];
     }
 
-    // Saludo → forzar palabra 'hola' para que matchee el flujo de menú
-    if (GREETING_WORDS.includes(t)) {
-      return await this.engine.processMessage(accountId, phone, 'hola', baseCtx);
-    }
-
-    // Si hay sesión esperando input y NO es un breaker global → al motor tal cual
-    // Default → al motor (resuelve por trigger / wildcard)
-    return await this.engine.processMessage(accountId, phone, text, baseCtx);
+    // Al motor con el texto REAL: el matching de trigger (exacto/parcial/wildcard)
+    // resuelve qué flujo corre. No reescribir saludos a 'hola' — eso hacía que
+    // "Menu" (u otros triggers) nunca llegaran a su flujo y cayeran siempre al wildcard.
+    const result = await this.engine.processMessage(accountId, phone, text, baseCtx);
+    const template = result?.currentStateDefinition?.message_template;
+    if (Array.isArray(template)) return template;
+    if (typeof template === 'string') return [template];
+    return [];
   }
 
   private async getConversationStatus(accountId: string, phone: string): Promise<string | null> {
-    const { data } = await supabase
-      .from('whatsapp_conversations')
-      .select('status')
-      .eq('account_id', accountId)
-      .eq('phone', phone)
-      .maybeSingle();
-    return (data?.status as string) ?? null;
+    try {
+      const { data } = await supabase
+        .from('whatsapp_conversations')
+        .select('status')
+        .eq('account_id', accountId)
+        .eq('phone', phone)
+        .maybeSingle();
+      return (data?.status as string) ?? null;
+    } catch (e: any) {
+      console.warn(`[ConversationRouter] error fetching conversation status for phone ${phone}:`, e?.message || e);
+      return null;
+    }
   }
 }

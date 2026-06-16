@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Plus, Wifi, WifiOff, QrCode, Loader2, Smartphone,
   RefreshCw, X, CheckCircle, Signal, PhoneOff,
-  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle
+  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle, Trash2
 } from 'lucide-react';
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
@@ -25,7 +25,8 @@ const statusConfig: Record<string, { color: string; dotColor: string; icon: any;
 };
 
 export default function Accounts() {
-  const { accounts, createAccount, updateAccount, reload } = useAccounts();
+  const { accounts, createAccount, updateAccount, deleteAccount, reload } = useAccounts();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [channel, setChannel] = useState<Channel>('whatsapp');
   
@@ -44,6 +45,7 @@ export default function Accounts() {
   const [editName, setEditName] = useState('');
   const [editProvider, setEditProvider] = useState<'baileys' | 'official'>('baileys');
   const [editFlowId, setEditFlowId] = useState<string | null>(null);
+  const [editReminderMinutes, setEditReminderMinutes] = useState<number>(20);
   const [editExternalId, setEditExternalId] = useState('');
   const [editAccessToken, setEditAccessToken] = useState('');
   const [editAppSecret, setEditAppSecret] = useState('');
@@ -51,11 +53,12 @@ export default function Accounts() {
   const [saving, setSaving] = useState(false);
 
   // Flows listing state
-  const [flowsByAccount, setFlowsByAccount] = useState<Record<string, Flow[]>>({});
+  const [allFlows, setAllFlows] = useState<Flow[]>([]);
 
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [connectStatus, setConnectStatus] = useState<string>('');
+  const [hasAutoPolled, setHasAutoPolled] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -65,25 +68,20 @@ export default function Accounts() {
   // Cleanup on unmount
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  // Load flows for all accounts
+  // Load all flows
   const loadFlows = useCallback(async () => {
-    const temp: Record<string, Flow[]> = {};
-    for (const acc of accounts) {
-      try {
-        const list = await flowsApi.list(acc.id);
-        temp[acc.id] = list;
-      } catch (err) {
-        console.error(`Error listing flows for account ${acc.id}:`, err);
-      }
+    try {
+      const list = await flowsApi.list('');
+      setAllFlows(list);
+    } catch (err) {
+      console.error('Error listing flows:', err);
     }
-    setFlowsByAccount(temp);
-  }, [accounts]);
+  }, []);
 
   useEffect(() => {
-    if (accounts.length > 0) {
-      loadFlows();
-    }
+    loadFlows();
   }, [accounts, loadFlows]);
+
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -123,6 +121,7 @@ export default function Accounts() {
     setEditName(acc.name);
     setEditProvider(acc.provider || 'baileys');
     setEditFlowId(acc.flow_id || null);
+    setEditReminderMinutes(acc.reminder_minutes ?? 20);
     setEditExternalId(acc.external_id || '');
     setEditAccessToken(acc.access_token || '');
     setEditAppSecret(acc.app_secret || '');
@@ -137,6 +136,7 @@ export default function Accounts() {
         name: editName.trim(),
         provider: editProvider,
         flow_id: editFlowId || null,
+        reminder_minutes: editReminderMinutes,
         external_id: editExternalId.trim() || null,
         access_token: editAccessToken.trim() || null,
         app_secret: editAppSecret.trim() || null,
@@ -171,6 +171,23 @@ export default function Accounts() {
     }
   }, [stopPolling, reload]);
 
+  // Auto-start polling if an account is in 'qr' status on page load
+  useEffect(() => {
+    if (accounts.length > 0 && !hasAutoPolled) {
+      const qrAccount = accounts.find(a => a.status === 'qr' && a.provider !== 'official' && (!a.channel || a.channel === 'whatsapp'));
+      if (qrAccount) {
+        setConnectingId(qrAccount.id);
+        setConnectStatus('qr');
+        if (qrAccount.qr_code) {
+          setQrDataUrl(qrAccount.qr_code);
+        }
+        pollRef.current = setInterval(() => pollQr(qrAccount.id), 2000);
+        pollQr(qrAccount.id);
+      }
+      setHasAutoPolled(true);
+    }
+  }, [accounts, hasAutoPolled, pollQr]);
+
   const handleConnect = async (accountId: string) => {
     setConnectingId(accountId);
     setQrDataUrl(null);
@@ -195,6 +212,28 @@ export default function Accounts() {
     } catch (err: any) {
       toast.error(err.message);
     }
+  };
+
+  const doDelete = async (a: Account) => {
+    setDeletingId(a.id);
+    try {
+      await deleteAccount(a.id);
+      toast.success(`Línea "${a.name}" eliminada`);
+    } catch (err: any) {
+      toast.error('Error al eliminar: ' + (err.message || 'desconocido'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Confirmación vía toast (sonner) en vez de window.confirm, que el navegador
+  // puede bloquear tras varios diálogos ("no permitir más cuadros de diálogo").
+  const handleDelete = (a: Account) => {
+    toast(`¿Eliminar "${a.name}"? Borra sus flujos, conversaciones y mensajes.`, {
+      duration: 10000,
+      action: { label: 'Eliminar', onClick: () => doDelete(a) },
+      cancel: { label: 'Cancelar', onClick: () => {} },
+    });
   };
 
   const closeQrPanel = () => {
@@ -356,8 +395,7 @@ export default function Accounts() {
             const isConnecting = connectingId === a.id;
             const isMeta = !!a.channel && a.channel !== 'whatsapp';
             const isOfficial = a.provider === 'official';
-            const accFlows = flowsByAccount[a.id] || [];
-            const activeFlow = accFlows.find(f => f.id === a.flow_id);
+            const activeFlow = allFlows.find(f => f.id === a.flow_id);
 
             return (
               <div
@@ -372,7 +410,7 @@ export default function Accounts() {
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#C6AC98]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 {/* Card Main Area */}
-                <div className="p-5 flex flex-col h-full justify-between">
+                <div className={`p-5 flex flex-col ${isConnecting ? '' : 'h-full'} justify-between`}>
                   <div>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -437,6 +475,15 @@ export default function Accounts() {
                       title="Configurar línea y flujo"
                     >
                       <Settings2 size={15} />
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(a)}
+                      disabled={deletingId === a.id}
+                      className="flex items-center justify-center p-2.5 bg-red-500/[0.06] hover:bg-red-500/15 text-red-400 rounded-xl border border-red-500/20 transition-all disabled:opacity-50"
+                      title="Eliminar línea"
+                    >
+                      {deletingId === a.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                     </button>
 
                     {a.status === 'connected' ? (
@@ -526,10 +573,10 @@ export default function Accounts() {
                             <CheckCircle size={56} className="text-emerald-400 animate-bounce" />
                             <p className="text-emerald-400 font-bold text-sm">¡Conectado!</p>
                           </div>
-                        ) : qrDataUrl ? (
+                        ) : (qrDataUrl || a.qr_code) ? (
                           <div className="w-60 h-60 bg-white rounded-2xl p-3 shadow-lg shadow-white/5 relative overflow-hidden flex items-center justify-center border border-white/10">
                             <img
-                              src={qrDataUrl.startsWith('data:') ? qrDataUrl : `data:image/png;base64,${qrDataUrl}`}
+                              src={(qrDataUrl || a.qr_code)!.startsWith('data:') ? (qrDataUrl || a.qr_code)! : `data:image/png;base64,${qrDataUrl || a.qr_code}`}
                               alt="QR Code"
                               className="w-full h-full object-contain rounded-xl"
                             />
@@ -661,7 +708,7 @@ export default function Accounts() {
                   onChange={(e) => setEditFlowId(e.target.value || null)}
                 >
                   <option value="" className="bg-[#0b0f1a] text-slate-500">Ninguno (usa iniciador inteligente / wildcard)</option>
-                  {(flowsByAccount[editingAccount.id] || [])
+                  {allFlows
                     .filter(f => f.is_active)
                     .map(f => (
                       <option key={f.id} value={f.id} className="bg-[#0b0f1a] text-white">
@@ -672,6 +719,22 @@ export default function Accounts() {
                 </select>
                 <p className="text-[10px] text-brand-textMuted mt-1">
                   Cuando la línea reciba un mensaje que inicie conversación, ejecutará este flujo directamente.
+                </p>
+              </div>
+
+              {/* Recordatorio de citas: anticipación */}
+              <div className="space-y-1">
+                <label className="text-xs text-brand-textMuted font-bold uppercase tracking-wider block">Recordatorio de citas (anticipación)</label>
+                <select
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/30 appearance-none cursor-pointer"
+                  value={editReminderMinutes}
+                  onChange={(e) => setEditReminderMinutes(Number(e.target.value))}
+                >
+                  <option value={20} className="bg-[#0b0f1a] text-white">20 minutos antes</option>
+                  <option value={60} className="bg-[#0b0f1a] text-white">60 minutos antes</option>
+                </select>
+                <p className="text-[10px] text-brand-textMuted mt-1">
+                  Se envía solo si el cliente escribió en las últimas 24h (ventana de WhatsApp).
                 </p>
               </div>
 

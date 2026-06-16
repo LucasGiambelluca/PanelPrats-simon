@@ -4,6 +4,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -28,9 +30,10 @@ export interface AICompletionOptions {
 export class AIService {
     private static GEMINI_MODEL = 'gemini-pro';
     private static GROQ_MODEL = 'llama-3.3-70b-versatile';
+    private static OPENAI_MODEL = 'gpt-4o-mini';
 
     static isAvailable(): boolean {
-        return !!GROQ_API_KEY || !!GEMINI_API_KEY;
+        return !!OPENAI_API_KEY || !!GROQ_API_KEY || !!GEMINI_API_KEY;
     }
 
     /**
@@ -39,7 +42,39 @@ export class AIService {
     static async complete(options: AICompletionOptions): Promise<string> {
         const { systemPrompt, userMessage, history = [], jsonMode = false, maxTokens = 1024, temperature = 0.1 } = options;
 
-        // Try Groq FIRST (Ultra fast & Reliable)
+        const apiMessagesBase = [
+            { role: 'system', content: systemPrompt },
+            ...history.map(h => ({ role: h.role, content: h.content })),
+            { role: 'user', content: userMessage },
+        ];
+        const wantsJson = jsonMode || systemPrompt.includes('JSON');
+
+        // Try OpenAI FIRST si hay key (formato OpenAI estándar).
+        if (OPENAI_API_KEY) {
+            try {
+                // Key/model inyectados desde el nodo solo si parecen de OpenAI.
+                const apiKey = options.apiKey?.startsWith('sk-') ? options.apiKey : OPENAI_API_KEY;
+                const model = options.model?.includes('gpt') ? options.model : AIService.OPENAI_MODEL;
+
+                const response = await axios.post(
+                    OPENAI_API_URL,
+                    {
+                        model,
+                        messages: apiMessagesBase,
+                        max_tokens: maxTokens,
+                        temperature,
+                        ...(wantsJson ? { response_format: { type: 'json_object' } } : {}),
+                    },
+                    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 20000 }
+                );
+                return response.data?.choices?.[0]?.message?.content || '';
+            } catch (err: any) {
+                const msg = err.response?.data?.error?.message || err.message;
+                logger.warn(`[AI] OpenAI failed, probando siguiente proveedor`, { error: msg });
+            }
+        }
+
+        // Try Groq (Ultra fast & Reliable)
         if (GROQ_API_KEY) {
             try {
                 const apiMessages = [
