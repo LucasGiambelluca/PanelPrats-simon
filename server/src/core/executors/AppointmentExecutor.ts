@@ -1,5 +1,19 @@
 import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
 import { AppointmentService } from '../../services/AppointmentService';
+import { supabase } from '../../config/supabase';
+import { notify } from '../../services/NotifierService';
+
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+function fechaLegible(iso?: string): string {
+  if (!iso) return 'a coordinar';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'a coordinar';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${DIAS[d.getDay()]} ${dd}/${mm} ${hh}:${mi} hs`;
+}
 
 /**
  * AppointmentExecutor — Agenda una cita: guarda nombre, teléfono y resumen
@@ -74,6 +88,33 @@ export class AppointmentExecutor implements NodeExecutor {
                 end_time,
                 oficina,
             });
+
+            // ── Notificación a la operadora (línea del estudio) ───────────────────
+            // Avisa al número de la línea (o a notify_phone si está configurado) con el
+            // resumen + link wa.me al cliente, para que la operadora videollame a mano
+            // desde la app de WhatsApp (no se puede iniciar video por API).
+            try {
+                const { data: acc } = await supabase
+                    .from('accounts')
+                    .select('phone_number, name')
+                    .eq('id', context.accountId)
+                    .maybeSingle();
+                const notifyTo = String(nodeData.notifyVar ? resolveVar(context, nodeData.notifyVar, 'notify_phone') : '')
+                    || String((acc as any)?.phone_number || '').replace(/\D/g, '');
+                const leadDigits = String(telefono || '').replace(/\D/g, '');
+                if (notifyTo && leadDigits) {
+                    const msg =
+                        `📅 *Nueva cita agendada*\n` +
+                        `Cliente: ${nombre || '—'}\n` +
+                        `🗓️ ${fechaLegible(start_time)}` + (oficina ? ` · ${oficina}` : '') + `\n` +
+                        (resumen ? `Tema: ${resumen}\n` : '') +
+                        `👉 Llamar al cliente: https://wa.me/${leadDigits}` +
+                        ((acc as any)?.name ? `\nLínea: ${(acc as any).name}` : '');
+                    await notify(context.accountId, notifyTo, msg);
+                }
+            } catch (e: any) {
+                console.warn('[AppointmentExecutor] notificación no enviada:', e?.message || e);
+            }
 
             // Interpolar {{variables}} en el mensaje de confirmación (ej {{nombre}}).
             const confirmText = (nodeData.text || '✅ ¡Listo! Tu cita quedó agendada. Te contactamos a la brevedad.')

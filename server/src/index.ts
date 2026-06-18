@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { FlowEngine } from './core/engine/flow.engine';
 import { AccountManager } from './core/accounts/AccountManager';
 import { ReminderScheduler } from './services/ReminderScheduler';
+import { setNotificationSender } from './services/NotifierService';
 import { createApp } from './api/app';
 
 // Red de seguridad: un error no atrapado (en un flujo, un webhook, una librería)
@@ -18,6 +19,9 @@ async function bootstrap() {
 
   const engine = new FlowEngine();
   const manager = new AccountManager(engine);
+
+  // Permite que executors (ej agendamiento) notifiquen por la línea de una cuenta.
+  setNotificationSender((accountId, to, text) => manager.sendMessage(accountId, to, text));
 
   const app = createApp(manager);
   app.listen(PORT, '0.0.0.0', () => console.log(`🚀 server en :${PORT}`));
