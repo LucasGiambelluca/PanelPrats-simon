@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Appointment, callsApi } from '../lib/api';
-import { toast } from 'sonner';
-import { Video, Phone, MessageCircle, X, Bell, Clock } from 'lucide-react';
+import { Appointment } from '../lib/api';
+import CallActions from './CallActions';
+import { X, Bell, Clock } from 'lucide-react';
 
 interface Props {
   appointments: Appointment[];
@@ -27,7 +27,6 @@ export default function CallReminderModal({ appointments, provider }: Props) {
   const [due, setDue] = useState<Appointment | null>(null);
   const [now, setNow] = useState<Date>(new Date());
   const dismissed = useRef<Set<string>>(new Set()); // ids ya mostrados/cerrados en esta sesión
-  const [calling, setCalling] = useState(false);
 
   // Tick cada 20s para detectar citas que arrancan.
   useEffect(() => {
@@ -51,35 +50,10 @@ export default function CallReminderModal({ appointments, provider }: Props) {
 
   const phoneDigits = onlyDigits(due.telefono || due.phone);
   const oficina = (due.oficina || '').trim();
-  const isVideo = /video|llamada/i.test(oficina) || !oficina;
 
   const close = () => {
     if (due) dismissed.current.add(due.id);
     setDue(null);
-  };
-
-  const openWhatsApp = () => {
-    if (!phoneDigits) { toast.error('La cita no tiene teléfono'); return; }
-    window.open(`https://wa.me/${phoneDigits}`, '_blank');
-  };
-
-  const openMeet = () => {
-    window.open('https://meet.google.com/new', '_blank');
-    toast.info('Se abrió una sala de Google Meet. Compartí el enlace con el cliente.');
-  };
-
-  const voiceCall = async () => {
-    if (provider !== 'official') return;
-    setCalling(true);
-    try {
-      const res = await callsApi.voice(due.account_id, phoneDigits);
-      if (res.status === 'initiated') toast.success('Llamada de voz iniciada.');
-      else toast.warning(res.message || 'No se pudo iniciar la llamada.');
-    } catch (e: any) {
-      toast.error('Error al iniciar la llamada: ' + (e.message || ''));
-    } finally {
-      setCalling(false);
-    }
   };
 
   return (
@@ -104,26 +78,10 @@ export default function CallReminderModal({ appointments, provider }: Props) {
           {due.resumen && <p className="text-sm text-slate-600">{due.resumen}</p>}
           <p className="text-xs text-slate-400">Tel: {phoneDigits || '—'}</p>
 
-          <div className="grid grid-cols-1 gap-2 pt-1">
-            <button onClick={openWhatsApp}
-              className="flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-semibold py-3 rounded-xl transition-colors">
-              <MessageCircle size={18} /> Abrir WhatsApp {isVideo ? '(videollamada)' : ''}
-            </button>
-
-            <button onClick={openMeet}
-              className="flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1666d0] text-white font-semibold py-3 rounded-xl transition-colors">
-              <Video size={18} /> Iniciar Google Meet
-            </button>
-
-            <button onClick={voiceCall} disabled={provider !== 'official' || calling}
-              title={provider !== 'official' ? 'Requiere la API oficial de WhatsApp (Meta) con Calling habilitado' : ''}
-              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              <Phone size={18} /> {calling ? 'Llamando…' : 'Llamada de voz (API oficial)'}
-            </button>
-            {provider !== 'official' && (
-              <p className="text-[11px] text-slate-400 text-center -mt-1">La llamada de voz requiere API oficial de Meta con Calling habilitado.</p>
-            )}
-          </div>
+          <CallActions
+            target={{ account_id: due.account_id, phone: due.phone, telefono: due.telefono, nombre: due.nombre }}
+            provider={provider}
+          />
 
           <button onClick={close} className="w-full text-sm text-slate-500 hover:text-slate-700 pt-1">Cerrar</button>
         </div>

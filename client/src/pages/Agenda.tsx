@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAccounts } from '../context/AccountContext';
 import { appointmentsApi, Appointment } from '../lib/api';
 import CallReminderModal from '../components/CallReminderModal';
+import CallActions from '../components/CallActions';
 import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
@@ -1493,6 +1494,22 @@ export default function Agenda() {
                   placeholder="Detalles sobre la consulta del cliente..."
                 />
               </div>
+
+              {/* Llamar / Videollamar (solo en citas existentes) */}
+              {selectedApp && (
+                <div className="space-y-2">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                  }`}>
+                    <Phone size={10} />
+                    <span>Llamar / Videollamar</span>
+                  </label>
+                  <CallActions
+                    target={{ account_id: selectedApp.account_id, phone: selectedApp.phone, telefono: selectedApp.telefono, nombre: selectedApp.nombre }}
+                    provider={accounts.find(a => a.id === selectedApp.account_id)?.provider}
+                  />
+                </div>
+              )}
 
               {/* Modal Actions */}
               <div className={`flex items-center justify-between border-t pt-4 mt-6 ${
