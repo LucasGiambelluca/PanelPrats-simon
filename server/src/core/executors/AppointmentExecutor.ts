@@ -73,8 +73,15 @@ export class AppointmentExecutor implements NodeExecutor {
                 end_time,
             });
 
+            // Interpolar {{variables}} en el mensaje de confirmación (ej {{nombre}}).
+            const confirmText = (nodeData.text || '✅ ¡Listo! Tu cita quedó agendada. Te contactamos a la brevedad.')
+                .replace(/\{\{\s*(\w+)\s*\}\}/g, (_: string, v: string) => {
+                    const val = (context as any)[v];
+                    return val === undefined || val === null ? '' : String(val);
+                });
+
             return {
-                messages: [nodeData.text || '✅ ¡Listo! Tu cita quedó agendada. Te contactamos a la brevedad.'],
+                messages: [confirmText],
                 wait_for_input: false,
             };
         } catch (e: any) {
