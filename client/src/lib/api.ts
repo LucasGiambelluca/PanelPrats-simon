@@ -126,6 +126,15 @@ export const messagesApi = {
     }),
 };
 
+// ── Llamadas (voz por API oficial de WhatsApp/Meta) ────────
+export const callsApi = {
+  voice: (accountId: string, phone: string) =>
+    api<{ status: 'initiated' | 'not_configured' | 'error'; message?: string }>('/api/calls/voice', {
+      method: 'POST',
+      body: JSON.stringify({ account_id: accountId, phone }),
+    }),
+};
+
 // ── Appointments & Agenda ──────────────────────────────────
 export interface Appointment {
   id: string;
@@ -139,6 +148,7 @@ export interface Appointment {
   updated_at: string;
   start_time?: string;
   end_time?: string;
+  oficina?: string; // modalidad/oficina (Videollamada, Presencial CABA…)
 }
 
 export const appointmentsApi = {

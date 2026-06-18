@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAccounts } from '../context/AccountContext';
 import { appointmentsApi, Appointment } from '../lib/api';
+import CallReminderModal from '../components/CallReminderModal';
 import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
@@ -1539,6 +1540,12 @@ export default function Agenda() {
           </div>
         </div>
       )}
+
+      {/* Popup recordatorio de cita + botones de llamada */}
+      <CallReminderModal
+        appointments={appointments}
+        provider={accounts.find(a => a.id === activeAccountId)?.provider}
+      />
 
     </div>
   );
