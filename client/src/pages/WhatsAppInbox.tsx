@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw,
-  Phone, Clock, Facebook, Instagram
+  Phone, Clock, Facebook, Instagram, Layers
 } from 'lucide-react';
 import { useAccounts } from '../context/AccountContext';
 import { conversationsApi, messagesApi } from '../lib/api';
@@ -62,6 +62,7 @@ export default function WhatsAppInbox() {
   const [loadingConvos, setLoadingConvos] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
+  const [allLines, setAllLines] = useState(false); // ver chats de TODAS las líneas
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollConvoRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -71,9 +72,17 @@ export default function WhatsAppInbox() {
 
   // Load conversations
   const loadConversations = useCallback(async () => {
-    if (!activeAccountId) return;
     try {
-      const data = await conversationsApi.list(activeAccountId);
+      let data: WhatsAppConversation[];
+      if (allLines) {
+        // Todas las líneas: merge de conversaciones de cada cuenta del usuario.
+        const lists = await Promise.all(accounts.map(a => conversationsApi.list(a.id).catch(() => [] as WhatsAppConversation[])));
+        data = lists.flat().sort((a, b) =>
+          new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+      } else {
+        if (!activeAccountId) return;
+        data = await conversationsApi.list(activeAccountId);
+      }
       setConversations(data);
       // Update active convo status if it changed
       if (activeConvoId) {
@@ -83,7 +92,7 @@ export default function WhatsAppInbox() {
     } catch (err) {
       // silent fail for polling
     }
-  }, [activeAccountId, activeConvoId]);
+  }, [allLines, accounts, activeAccountId, activeConvoId]);
 
   useEffect(() => {
     setLoadingConvos(true);
@@ -128,7 +137,8 @@ export default function WhatsAppInbox() {
   };
 
   const send = async () => {
-    if (!activeConvo || !draft.trim() || !activeAccountId || sending) return;
+    const acctId = activeConvo?.account_id || activeAccountId;
+    if (!activeConvo || !draft.trim() || !acctId || sending) return;
     const text = draft;
     setSending(true);
     setDraft('');
@@ -147,7 +157,7 @@ export default function WhatsAppInbox() {
     setMessages(prev => [...prev, optimistic]);
 
     try {
-      await messagesApi.send(activeAccountId, activeConvo.phone, text);
+      await messagesApi.send(acctId, activeConvo.phone, text);
       // Reload real messages after a beat
       setTimeout(() => loadMessages(false), 800);
     } catch (err: any) {
@@ -191,7 +201,16 @@ export default function WhatsAppInbox() {
               Mensajes
             </h2>
             <div className="flex items-center gap-1.5">
-              {activeAccount && (
+              <button
+                onClick={() => setAllLines(v => !v)}
+                title={allLines ? 'Mostrando todas las líneas' : 'Mostrar todas las líneas'}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${
+                  allLines ? 'bg-indigo-500/15 text-indigo-300' : 'bg-white/5 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers size={11} /> {allLines ? 'Todas' : 'Esta línea'}
+              </button>
+              {!allLines && activeAccount && (
                 <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ${
                   isAccountConnected
                     ? 'bg-emerald-500/10 text-emerald-400'
@@ -248,7 +267,8 @@ export default function WhatsAppInbox() {
                   </div>
                   {/* Overlapping small channel icon */}
                   {(() => {
-                    const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                    const convoAccount = accounts.find(a => a.id === c.account_id);
+                    const ch = (convoAccount?.channel || activeAccount?.channel || 'whatsapp') as Channel;
                     const chCfg = channelConfig[ch] || channelConfig.whatsapp;
                     const ChIcon = chCfg.icon;
                     const chColor = ch === 'whatsapp' ? 'bg-emerald-500 text-white' : ch === 'facebook' ? 'bg-blue-600 text-white' : 'bg-pink-500 text-white';
@@ -270,6 +290,11 @@ export default function WhatsAppInbox() {
                       {c.last_message_at ? formatTime(c.last_message_at) : ''}
                     </span>
                   </div>
+                  {allLines && (
+                    <span className="inline-flex items-center gap-1 text-[9px] text-indigo-300/80 bg-indigo-500/10 rounded px-1.5 py-0.5 mb-0.5">
+                      <Layers size={9} /> {accounts.find(a => a.id === c.account_id)?.name || 'Línea'}
+                    </span>
+                  )}
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] text-slate-500 truncate pr-2">{c.last_message || '…'}</p>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
