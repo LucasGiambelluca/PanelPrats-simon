@@ -1,5 +1,6 @@
 import { NodeExecutor, NodeExecutionResult, ExecutionContext } from './types';
 import { AIService } from '../../services/AIService';
+import { SupportAgentService } from '../../services/SupportAgentService';
 import { logger } from '../../utils/logger';
 
 export class IntentResolverExecutor implements NodeExecutor {
@@ -68,14 +69,28 @@ Reglas:
             return (context as any)[varName] || '';
         });
 
+        // Resolver la API key: la del nodo, o la config IA de la cuenta (ai_api_key).
+        // Sin esto AIService cae a la key de env (que no tiene saldo).
+        let apiKey = data.apiKey;
+        let model = data.model;
+        if (!apiKey && (context as any).accountId) {
+            try {
+                const { config } = await SupportAgentService.loadAccountContext((context as any).accountId);
+                apiKey = config.apiKey;
+                model = model || config.model;
+            } catch { /* sin config → AIService usa su fallback */ }
+        }
+
         try {
-            logger.info(`[IntentResolverExecutor] Calling Groq Arbitration for intent: "${input}"`);
+            logger.info(`[IntentResolverExecutor] Clasificando intención para: "${input}"`);
 
             let response = await AIService.complete({
                 systemPrompt,
                 userMessage,
                 temperature: 0.2, // Low temperature for deterministic classification
-                maxTokens: 10
+                maxTokens: 10,
+                apiKey,
+                model
             });
 
             response = response.trim().toLowerCase().replace(/[^\w]/g, ''); // Clean result

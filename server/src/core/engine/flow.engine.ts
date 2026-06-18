@@ -140,8 +140,12 @@ export class FlowEngine {
         // --- WILDCARD PROTECTION ---
         // If it's a wildcard match (*) but we have an active session waiting for input,
         // we IGNORE the global trigger to prevent resetting the flow.
-        if (isGlobalTrigger && isWildcard && session && session.status === 'waiting_input') {
-            logger.info(`[FlowEngine] Wildcard trigger matched but session is active at node ${session.currentNodeId}. Ignoring wildcard.`);
+        // Sesión activa esperando input: NO dejar que el trigger (parcial/exacto/wildcard)
+        // de OTRO flujo secuestre la conversación. El mensaje va al nodo actual; si está
+        // off-track, el Supervisor IA lo interpreta/rerutea. Los breakers (hola/menu/
+        // cancelar/reset) ya se interceptaron antes (ShortcutsManager / router).
+        if (isGlobalTrigger && session && session.status === 'waiting_input') {
+            logger.info(`[FlowEngine] Trigger "${normalizedMsg}" matched pero la sesión espera input en ${session.currentNodeId}. Ignorando (lo maneja el nodo/Supervisor).`);
             isGlobalTrigger = false;
         }
 
