@@ -318,8 +318,13 @@ export class WhatsAppClient {
                 if (msg.key.remoteJid === 'status@broadcast') continue;
 
                 const remoteJid = msg.key.remoteJid || '';
-                // Use centralized normalization
-                const phone = PhoneUtils.normalize(remoteJid);
+                // WhatsApp puede entregar el chat como @lid (privacidad). El número REAL
+                // viene en key.senderPn → lo usamos como identidad/teléfono para inbox,
+                // citas y llamadas. El reply sigue saliendo por remoteJid (línea de envío).
+                const senderPn = (msg.key as any).senderPn as string | undefined;
+                const phone = PhoneUtils.normalize(
+                    remoteJid.includes('@lid') && senderPn ? senderPn : remoteJid
+                );
                 const pushName = msg.pushName || 'Usuario';
 
                 let text = '';

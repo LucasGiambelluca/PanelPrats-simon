@@ -1,5 +1,5 @@
 {
-  "description": "Seed/backup de los flujos del estudio PYS (router de entrada con menú + embudos de calificación + agendamiento). Exportado desde Supabase. Los flowId en flowLinkNode son específicos de la cuenta de origen.",
+  "description": "Seed/backup de los flujos del estudio PYS (router con menú + embudos + agendamiento). Exportado desde Supabase.",
   "account_default_flow": "Router de Entrada (detecta motivo)",
   "flows": [
     {
@@ -686,7 +686,8 @@
           "data": {
             "text": "✅ ¡Listo, {{nombre}}! Tu cita ({{oficina}}) quedó agendada. Te contactamos para confirmar los detalles. 🙌",
             "nombreVar": "nombre",
-            "resumenVar": "motivo"
+            "resumenVar": "motivo",
+            "telefonoVar": "phone"
           },
           "type": "appointmentNode",
           "position": {
