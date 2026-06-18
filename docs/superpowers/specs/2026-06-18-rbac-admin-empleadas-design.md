@@ -85,9 +85,10 @@ Single-org: sin columna `org_id`. Toda empleada pertenece implícitamente al ún
 ### Router nuevo `/api/team` — `server/src/api/routes/team.routes.ts` (admin only)
 - `GET /` — lista empleadas (de `profiles` join opcional con email de `auth.users` vía Admin API).
 - `POST /` — crea empleada: `supabase.auth.admin.createUser({ email, password, email_confirm: true })` + insert en `profiles` (role `empleada`, name). Devuelve la empleada creada.
-- `PUT /:id` — actualizar `name` / `active` (desactivar = revocar acceso sin borrar historial).
-- `DELETE /:id` — `supabase.auth.admin.deleteUser(id)` (CASCADE borra profile). Alternativamente solo desactivar; el handler hace delete duro.
+- `PUT /:id` — actualizar `name` / `active`. **Desactivar (`active=false`) es la única forma de revocar acceso**: conserva el historial y bloquea el login (el middleware rechaza empleadas inactivas con 401). No hay borrado de empleadas.
 - `POST /:id/reset-password` — set nueva password vía Admin API (opcional v1; si se omite, el admin recrea).
+
+No se expone `DELETE` de empleadas: revocar = desactivar.
 
 ### Router nuevo `/api/me` — `server/src/api/routes/me.routes.ts`
 - `GET /` — devuelve `{ id, role, name }` desde `req.user`.
@@ -120,7 +121,7 @@ Single-org: sin columna `org_id`. Toda empleada pertenece implícitamente al ún
 ### Página nueva `Equipo` — `client/src/pages/Team.tsx` (admin)
 - Tabla de empleadas (nombre, email, estado activo).
 - Form de alta (email + nombre + password inicial).
-- Acciones: desactivar/activar, eliminar.
+- Acciones: desactivar/activar (sin eliminar — revocar = desactivar).
 - Usa un `teamApi` nuevo en `lib/api.ts`.
 
 ## Modo dev (seguridad)
