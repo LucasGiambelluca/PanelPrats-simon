@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { supabase } from '../config/supabase';
-import { DailyService } from './DailyService';
+import { JitsiService } from './JitsiService';
 
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || 'http://localhost:5173').replace(/\/$/, '');
 const TTL_HORAS = Number(process.env.SALA_TTL_HORAS || 3);
@@ -10,26 +10,26 @@ function sha256(s: string): string {
 }
 
 export interface JoinResult {
-  roomUrl: string;
-  dailyToken: string;
+  roomUrl: string;   // URL completa de la sala Jitsi
+  room: string;      // nombre de la sala (para el External API)
   displayName: string;
 }
 
 export const SalaService = {
   isConfigured(): boolean {
-    return DailyService.isConfigured();
+    return true; // Jitsi público no requiere credenciales
   },
 
-  /** Crea una sala: room en Daily + fila en DB. */
+  /** Crea una sala: nombre Jitsi impredecible + fila en DB. */
   async createSala(opts: { accountId?: string; appointmentId?: string; titulo?: string; createdBy?: string }) {
-    const room = await DailyService.createRoom();
+    const room = JitsiService.newRoom();
     const { data, error } = await supabase
       .from('salas')
       .insert({
         account_id: opts.accountId || null,
         appointment_id: opts.appointmentId || null,
         titulo: opts.titulo || null,
-        daily_room: room.name,
+        daily_room: room.name,   // (columnas reutilizadas: guardan el room/url de Jitsi)
         daily_url: room.url,
         created_by: opts.createdBy || null,
       })
@@ -39,7 +39,7 @@ export const SalaService = {
     return data;
   },
 
-  /** Genera un enlace de invitado para una sala (token opaco, hash en DB). */
+  /** Genera un enlace de invitado (token opaco, hash en DB). */
   async invitar(salaId: string, nombre: string): Promise<{ enlace: string; salaId: string; expiraEn: string }> {
     const { data: sala } = await supabase.from('salas').select('id').eq('id', salaId).maybeSingle();
     if (!sala) throw new Error('Sala no encontrada');
@@ -62,7 +62,7 @@ export const SalaService = {
     };
   },
 
-  /** Valida el token de invitado y devuelve credenciales de Daily (guest). */
+  /** Valida el token de invitado y devuelve la sala Jitsi. */
   async join(salaId: string, inviteToken: string): Promise<JoinResult> {
     const hash = sha256(inviteToken || '');
     const { data: inv } = await supabase
@@ -77,33 +77,17 @@ export const SalaService = {
     const { data: sala } = await supabase.from('salas').select('*').eq('id', salaId).maybeSingle();
     if (!sala || sala.estado !== 'activa') throw new Error('INVALID');
 
-    // exp del token de Daily = lo que reste de validez del enlace (mínimo 5 min).
-    const remainingSec = Math.max(300, Math.floor((new Date(inv.expires_at).getTime() - Date.now()) / 1000));
-    const dailyToken = await DailyService.createMeetingToken({
-      roomName: sala.daily_room,
-      userName: inv.nombre,
-      isOwner: false,
-      expSeconds: remainingSec,
-    });
-
-    // Auditoría: registrar primer uso (no es single-use: permite reconexión).
     if (!inv.used_at) {
       await supabase.from('invitaciones').update({ used_at: new Date().toISOString() }).eq('id', inv.id);
     }
 
-    return { roomUrl: sala.daily_url, dailyToken, displayName: inv.nombre };
+    return { roomUrl: sala.daily_url, room: sala.daily_room, displayName: inv.nombre };
   },
 
-  /** Token de operador (owner) para entrar desde el panel. */
+  /** Entrada del operador (desde el panel). */
   async hostToken(salaId: string, nombre = 'Operador'): Promise<JoinResult> {
     const { data: sala } = await supabase.from('salas').select('*').eq('id', salaId).maybeSingle();
     if (!sala) throw new Error('Sala no encontrada');
-    const dailyToken = await DailyService.createMeetingToken({
-      roomName: sala.daily_room,
-      userName: nombre,
-      isOwner: true,
-      expSeconds: TTL_HORAS * 3600,
-    });
-    return { roomUrl: sala.daily_url, dailyToken, displayName: nombre };
+    return { roomUrl: sala.daily_url, room: sala.daily_room, displayName: nombre };
   },
 };

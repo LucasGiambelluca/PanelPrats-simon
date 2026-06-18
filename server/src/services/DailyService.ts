@@ -53,7 +53,6 @@ export const DailyService = {
           user_name: opts.userName,
           is_owner: !!opts.isOwner,
           exp,
-          eject_at_token_exp: true,
         },
       },
       { headers: headers(), timeout: 15000 }

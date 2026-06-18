@@ -1,8 +1,14 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Sin VITE_API_URL → relativo: el front llama /api y vite lo proxyea al backend
+// (mismo origen). Así sirve tanto en local como detrás de un túnel (un solo túnel).
+const BASE = import.meta.env.VITE_API_URL ?? '';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true', // evita la interstitial de ngrok en las llamadas API
+      ...(init?.headers || {}),
+    },
     ...init,
   });
   if (!res.ok) {
@@ -136,7 +142,7 @@ export const callsApi = {
 };
 
 // ── Salas de videollamada (Daily) ──────────────────────────
-export interface JoinResult { roomUrl: string; dailyToken: string; displayName: string; }
+export interface JoinResult { roomUrl: string; room: string; displayName: string; }
 export const salasApi = {
   create: (body: { account_id?: string; appointment_id?: string; titulo?: string; created_by?: string }) =>
     api<{ id: string; daily_url: string; daily_room: string }>('/api/salas', { method: 'POST', body: JSON.stringify(body) }),
@@ -209,4 +215,5 @@ export const configApi = {
     }),
 };
 
-export const apiBase = BASE;
+// Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
+export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { callsApi, messagesApi } from '../lib/api';
+import { callsApi, messagesApi, salasApi } from '../lib/api';
 import { toast } from 'sonner';
-import { Video, Phone, MessageCircle, Send } from 'lucide-react';
+import { Video, Phone, MessageCircle, Send, MonitorPlay } from 'lucide-react';
 
 interface CallTarget {
   account_id: string;
@@ -24,8 +24,33 @@ export default function CallActions({ target, provider }: Props) {
   const [calling, setCalling] = useState(false);
   const [meetLink, setMeetLink] = useState('');
   const [sending, setSending] = useState(false);
+  const [startingSala, setStartingSala] = useState(false);
 
   const phoneDigits = onlyDigits(target.telefono || target.phone);
+
+  // Crea una sala de video (Jitsi), manda el link al cliente por WhatsApp y entra como host.
+  const startSala = async () => {
+    setStartingSala(true);
+    try {
+      const sala = await salasApi.create({ account_id: target.account_id, titulo: target.nombre });
+      if (phoneDigits) {
+        const inv = await salasApi.invitar(sala.id, target.nombre || 'Cliente');
+        await messagesApi.send(
+          target.account_id,
+          phoneDigits,
+          `Te esperamos en tu *videollamada* con el estudio 👇 Entrá con este link (1 solo click, sin instalar nada):\n${inv.enlace}`
+        );
+        toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
+      } else {
+        toast.success('Sala creada (la cita no tiene teléfono, no se envió link)');
+      }
+      window.open(`/sala/${sala.id}?host=1`, '_blank');
+    } catch (e: any) {
+      toast.error('No se pudo iniciar la videollamada: ' + (e.message || ''));
+    } finally {
+      setStartingSala(false);
+    }
+  };
 
   const openWhatsApp = () => {
     if (!phoneDigits) { toast.error('La cita no tiene teléfono'); return; }
@@ -71,6 +96,12 @@ export default function CallActions({ target, provider }: Props) {
 
   return (
     <div className="space-y-2">
+      {/* Videollamada por sala (Jitsi): crea sala, manda link al cliente, entra como host */}
+      <button onClick={startSala} disabled={startingSala}
+        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+        <MonitorPlay size={18} /> {startingSala ? 'Creando sala…' : 'Iniciar videollamada + enviar link'}
+      </button>
+
       <button onClick={openWhatsApp}
         className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-semibold py-2.5 rounded-xl transition-colors">
         <MessageCircle size={17} /> Abrir WhatsApp

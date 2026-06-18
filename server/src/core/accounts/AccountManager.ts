@@ -115,8 +115,16 @@ export class AccountManager {
       return;
     }
 
-    // WhatsApp: jid logic + formato/anti-ban
-    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    // WhatsApp: resolver el JID REAL (onWhatsApp) para manejar el "9" de Argentina
+    // y fallar de verdad si el número no está en WhatsApp (en vez de un ok falso).
+    let jid = to;
+    if (!to.includes('@') && typeof (client as any).resolveJid === 'function') {
+      const resolved = await (client as any).resolveJid(to);
+      if (!resolved) throw new Error(`El número ${to} no está registrado en WhatsApp`);
+      jid = resolved;
+    } else if (!to.includes('@')) {
+      jid = `${to}@s.whatsapp.net`;
+    }
     await client.sendFormattedMessage(jid, text);
   }
 

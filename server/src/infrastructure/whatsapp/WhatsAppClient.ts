@@ -437,6 +437,23 @@ export class WhatsAppClient {
         }
     }
 
+    /**
+     * Resuelve el JID real de un número en WhatsApp (maneja el "9" de Argentina:
+     * muchos AR están registrados sin el 9). Devuelve null si no está en WhatsApp.
+     */
+    public async resolveJid(numberOrJid: string): Promise<string | null> {
+        if (!this.sock) return null;
+        if (numberOrJid.includes('@')) return numberOrJid; // ya es jid (lid/grupo) → tal cual
+        const digits = numberOrJid.replace(/\D/g, '');
+        try {
+            const res = await this.sock.onWhatsApp(digits);
+            const hit = Array.isArray(res) ? res.find((r: any) => r?.exists) : null;
+            return hit?.jid || null;
+        } catch {
+            return null;
+        }
+    }
+
     public async sendFormattedMessage(jid: string, response: any) {
         if (!this.sock) return;
 
