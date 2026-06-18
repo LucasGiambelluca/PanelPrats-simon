@@ -28,20 +28,30 @@ import { INTENT_MAP } from './AgentTypes';
 // sobreescribirlo con su propio system_prompt.
 
 const DEFAULT_SYSTEM_PROMPT = `
-Eres un asistente virtual conversacional. Tu objetivo es ayudar al usuario de forma clara y amable.
+Eres un asistente virtual conversacional. Tu objetivo es ayudar al usuario de forma clara y amable.`;
 
-REGLA CRÍTICA: Debes responder ÚNICAMENTE en formato JSON. No incluyas texto antes ni después del bloque JSON.
+// ─── Contrato de intents (OBLIGATORIO) ─────────────────────────────────────────
+// Se anexa SIEMPRE al prompt, incluso si el nodo define su propio system_prompt.
+// Garantiza que el formato JSON y la detección de HANDOFF/FALLBACK no dependan
+// de que el prompt personalizado los mencione.
+const INTENT_CONTRACT = `
+--- CONTRATO DE RESPUESTA (OBLIGATORIO) ---
+Respondé ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después:
+{ "intent": "<INTENT>", "response": "<texto en español para el usuario>" }
 
-ESTRUCTURA DE RESPUESTA:
-{ "intent": "<INTENT>", "response": "<texto para el usuario>" }
+INTENTS POSIBLES:
+- GREETING: el usuario saluda.
+- INQUIRY: consulta información.
+- ORDER: quiere realizar una acción/pedido.
+- CHECKOUT: quiere confirmar/pagar.
+- CANCEL: quiere cancelar.
+- HANDOFF: el usuario pide hablar con una persona, rechaza al bot ("no quiero hablar con robots", "quiero un humano", "pasame con alguien"), está molesto/frustrado, o plantea un tema FUERA de tu alcance que no podés resolver (ej: "quiero jubilarme"). En "response" reconocé brevemente lo que dijo y avisá que lo derivás con una persona.
+- FALLBACK: no entendés el mensaje; pedí amablemente que lo reformule.
 
-INTENTS POSIBLES: GREETING, INQUIRY, ORDER, CHECKOUT, CANCEL, FALLBACK.
-1. Si te saluda, usá intent "GREETING".
-2. Si consulta información, usá intent "INQUIRY".
-3. Si quiere realizar una acción/pedido, usá intent "ORDER".
-4. Si quiere confirmar/pagar, usá intent "CHECKOUT".
-5. Si quiere cancelar, usá intent "CANCEL".
-6. Si no entendés, usá intent "FALLBACK" y pedí aclaración amablemente.`;
+REGLAS:
+1. Si dudás entre FALLBACK y HANDOFF, y el tema está claramente fuera de lo que podés resolver, usá HANDOFF.
+2. "response" siempre breve y amable.
+3. Nunca inventes información que no esté en el contexto provisto.`;
 
 const FALLBACK_RESPONSE: AgentResponse = {
     intent: 'FALLBACK',
@@ -158,6 +168,7 @@ export class AgentNode {
             const basePrompt = customSystemPrompt || DEFAULT_SYSTEM_PROMPT;
             const historyBlock = agentMemory.formatForPrompt(sessionId);
             const fullSystemPrompt = `${basePrompt}
+${INTENT_CONTRACT}
 ${toolsBlock ? `\n--- INFORMACIÓN ACTUAL ---\n${toolsBlock}\n` : ''}
 --- HISTORIAL DE CONVERSACIÓN ---
 ${historyBlock || '(sin historial previo)'}`;
@@ -219,7 +230,8 @@ ${historyBlock || '(sin historial previo)'}`;
             const lowerText = input.text?.toLowerCase() || '';
             let rescuedIntent: IntentType = 'FALLBACK';
 
-            if (lowerText.match(/hola|buen|saludo|que tal/)) rescuedIntent = 'GREETING';
+            if (lowerText.match(/humano|persona|asesor|robot|operador|no quiero hablar/)) rescuedIntent = 'HANDOFF';
+            else if (lowerText.match(/hola|buen|saludo|que tal/)) rescuedIntent = 'GREETING';
             else if (lowerText.match(/pedido|quiero|comprar|ordenar/)) rescuedIntent = 'ORDER';
 
             return {

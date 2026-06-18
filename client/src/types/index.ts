@@ -13,6 +13,11 @@ export interface Account {
   verify_token?: string | null;
   qr_code?: string | null;
   reminder_minutes?: number; // anticipación del recordatorio de citas (min)
+  // Agente IA de soporte global (por cuenta)
+  ai_support_enabled?: boolean;
+  ai_api_key?: string | null;
+  ai_model?: string | null;
+  ai_support_prompt?: string | null;
   created_at: string;
 }
 

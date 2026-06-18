@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Plus, Wifi, WifiOff, QrCode, Loader2, Smartphone,
   RefreshCw, X, CheckCircle, Signal, PhoneOff,
-  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle, Trash2
+  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle, Trash2, Bot
 } from 'lucide-react';
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
@@ -50,6 +50,11 @@ export default function Accounts() {
   const [editAccessToken, setEditAccessToken] = useState('');
   const [editAppSecret, setEditAppSecret] = useState('');
   const [editVerifyToken, setEditVerifyToken] = useState('');
+  // Agente IA de soporte global
+  const [editAiEnabled, setEditAiEnabled] = useState(false);
+  const [editAiApiKey, setEditAiApiKey] = useState('');
+  const [editAiModel, setEditAiModel] = useState('gpt-4o-mini');
+  const [editAiPrompt, setEditAiPrompt] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Flows listing state
@@ -126,6 +131,10 @@ export default function Accounts() {
     setEditAccessToken(acc.access_token || '');
     setEditAppSecret(acc.app_secret || '');
     setEditVerifyToken(acc.verify_token || '');
+    setEditAiEnabled(!!acc.ai_support_enabled);
+    setEditAiApiKey(acc.ai_api_key || '');
+    setEditAiModel(acc.ai_model || 'gpt-4o-mini');
+    setEditAiPrompt(acc.ai_support_prompt || '');
   };
 
   const handleSaveEdit = async () => {
@@ -141,6 +150,10 @@ export default function Accounts() {
         access_token: editAccessToken.trim() || null,
         app_secret: editAppSecret.trim() || null,
         verify_token: editVerifyToken.trim() || null,
+        ai_support_enabled: editAiEnabled,
+        ai_api_key: editAiApiKey.trim() || null,
+        ai_model: editAiModel.trim() || 'gpt-4o-mini',
+        ai_support_prompt: editAiPrompt.trim() || null,
       });
       toast.success('Configuración guardada correctamente');
       setEditingAccount(null);
@@ -736,6 +749,63 @@ export default function Accounts() {
                 <p className="text-[10px] text-brand-textMuted mt-1">
                   Se envía solo si el cliente escribió en las últimas 24h (ventana de WhatsApp).
                 </p>
+              </div>
+
+              {/* Agente IA de soporte global */}
+              <div className="space-y-3 border-t border-white/5 pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot size={15} className="text-[#C6AC98]" />
+                    <label className="text-xs text-brand-textMuted font-bold uppercase tracking-wider">Agente IA de soporte</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditAiEnabled(v => !v)}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${editAiEnabled ? 'bg-[#a57b5a]' : 'bg-white/10'}`}
+                    title={editAiEnabled ? 'Activado' : 'Desactivado'}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${editAiEnabled ? 'translate-x-5' : ''}`} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-brand-textMuted -mt-1">
+                  Cuando un mensaje no encaja en el flujo (off-script o respuesta inesperada), el agente entiende la intención y rutea al flujo correcto, o deriva a un humano.
+                </p>
+
+                {editAiEnabled && (
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-brand-textMuted font-semibold">API Key (OpenAI)</label>
+                        <input
+                          type="password"
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/30"
+                          placeholder="sk-..."
+                          value={editAiApiKey}
+                          onChange={(e) => setEditAiApiKey(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-brand-textMuted font-semibold">Modelo</label>
+                        <input
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/30"
+                          placeholder="gpt-4o-mini"
+                          value={editAiModel}
+                          onChange={(e) => setEditAiModel(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-brand-textMuted font-semibold">Prompt del agente de soporte</label>
+                      <textarea
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm min-h-[70px] placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/30 resize-none leading-relaxed"
+                        placeholder="Ej: Sos el asistente de soporte del estudio. Entendés qué necesita la persona y la derivás al flujo correcto."
+                        value={editAiPrompt}
+                        onChange={(e) => setEditAiPrompt(e.target.value)}
+                      />
+                      <p className="text-[10px] text-brand-textMuted">Si lo dejás vacío, usa un prompt genérico. La key/modelo solo se usan para este ruteo.</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Credentials fields if official / Meta */}

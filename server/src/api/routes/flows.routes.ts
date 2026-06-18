@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../../config/supabase';
 import crypto from 'crypto';
 import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
+import { FlowEngine } from '../../core/engine/flow.engine';
 
 const isSupabaseConfigured = !!(
   process.env.SUPABASE_URL &&
@@ -89,7 +90,7 @@ export function flowsRouter(): Router {
     if (useSupabase) {
       try {
         const { data, error } = await supabase.from('flows').insert({ account_id, name, trigger_word, nodes, edges, is_active }).select('*').single();
-        if (!error && data) return res.json(data);
+        if (!error && data) { FlowEngine.invalidateFlowCache(account_id); return res.json(data); }
         if (error) return res.status(400).json({ error: error.message });
       } catch (err: any) {
         // fallback
@@ -110,6 +111,7 @@ export function flowsRouter(): Router {
       updated_at: new Date().toISOString()
     };
     memoryFlows.set(id, newFlow);
+    FlowEngine.invalidateFlowCache(account_id);
     console.log(`📝 [memory] Flow created: ${name} (${id})`);
     res.json(newFlow);
   });
@@ -122,7 +124,7 @@ export function flowsRouter(): Router {
     if (useSupabase) {
       try {
         const { data, error } = await supabase.from('flows').update({ name, trigger_word, nodes, edges, is_active, updated_at: new Date().toISOString() }).eq('id', req.params.id).select('*').single();
-        if (!error && data) return res.json(data);
+        if (!error && data) { FlowEngine.invalidateFlowCache(data.account_id); return res.json(data); }
         if (error) return res.status(400).json({ error: error.message });
       } catch (err: any) {
         // fallback
@@ -143,6 +145,7 @@ export function flowsRouter(): Router {
       updated_at: new Date().toISOString()
     };
     memoryFlows.set(req.params.id, updatedFlow);
+    FlowEngine.invalidateFlowCache(updatedFlow.account_id);
     console.log(`📝 [memory] Flow updated: ${updatedFlow.name} (${req.params.id})`);
     res.json(updatedFlow);
   });
@@ -154,7 +157,7 @@ export function flowsRouter(): Router {
     if (useSupabase) {
       try {
         const { error } = await supabase.from('flows').delete().eq('id', req.params.id);
-        if (!error) return res.json({ ok: true });
+        if (!error) { FlowEngine.invalidateFlowCache(); return res.json({ ok: true }); }
         if (error) return res.status(400).json({ error: error.message });
       } catch (err: any) {
         // fallback
@@ -166,6 +169,7 @@ export function flowsRouter(): Router {
       return res.status(404).json({ error: 'Flow not found' });
     }
     memoryFlows.delete(req.params.id);
+    FlowEngine.invalidateFlowCache();
     console.log(`🗑️ [memory] Flow deleted: ${req.params.id}`);
     res.json({ ok: true });
   });

@@ -63,7 +63,7 @@ export default function AIAgentNode({ data, selected }: any) {
             <input
               type="text"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500/50"
-              placeholder="gemini-2.0-flash"
+              placeholder="gpt-4o-mini"
               value={data.model || ''}
               onChange={(e) => data.onChangeValue?.('model', e.target.value)}
             />
@@ -131,7 +131,7 @@ export default function AIAgentNode({ data, selected }: any) {
       <div className="mt-4 pt-4 border-t border-fuchsia-100 space-y-2">
         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2 px-1">Salidas por Intención</label>
         <div className="flex flex-wrap gap-1 mb-4">
-          {['PEDIDO', 'CONSULTA', 'SALUDO', 'SOPORTE', 'CANCELAR'].map(intent => (
+          {['PEDIDO', 'CONSULTA', 'SALUDO', 'SOPORTE', 'CANCELAR', 'HUMANO'].map(intent => (
             <span key={intent} className="px-1.5 py-0.5 bg-gray-50 text-[8px] font-bold text-gray-400 rounded uppercase border border-gray-100">
               {intent}
             </span>

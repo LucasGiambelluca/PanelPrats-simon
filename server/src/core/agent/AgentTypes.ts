@@ -7,16 +7,19 @@ export type IntentType =
   | 'INQUIRY'
   | 'GREETING'
   | 'CANCEL'
+  | 'HANDOFF'
   | 'FALLBACK'
   | 'UNKNOWN';
 
 // Mapeo de intents en inglés → español (para conditionResult del flujo)
+// Cada valor debe coincidir con el `id` del handle de salida en AIAgentNode.tsx
 export const INTENT_MAP: Record<IntentType, string> = {
   ORDER:   'pedido',
   CHECKOUT: 'checkout',
   INQUIRY: 'consulta',
   GREETING: 'saludo',
   CANCEL:  'cancelar',
+  HANDOFF: 'humano',
   FALLBACK: 'desconocido',
   UNKNOWN: 'desconocido',
 };

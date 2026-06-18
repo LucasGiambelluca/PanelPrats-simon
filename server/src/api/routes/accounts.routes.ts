@@ -148,7 +148,8 @@ export function accountsRouter(manager: AccountManager): Router {
 
   // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
   r.put('/:id', async (req, res) => {
-    const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes } = req.body;
+    const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes,
+            ai_support_enabled, ai_api_key, ai_model, ai_support_prompt } = req.body;
     const accountId = req.params.id;
 
     const memAcc = memoryAccounts.get(accountId);
@@ -174,6 +175,10 @@ export function accountsRouter(manager: AccountManager): Router {
       if (provider !== undefined) patch.provider = provider;
       if (flow_id !== undefined) patch.flow_id = flow_id || null;
       if (reminder_minutes !== undefined) patch.reminder_minutes = Number(reminder_minutes) || 20;
+      if (ai_support_enabled !== undefined) patch.ai_support_enabled = !!ai_support_enabled;
+      if (ai_api_key !== undefined) patch.ai_api_key = ai_api_key || null;
+      if (ai_model !== undefined) patch.ai_model = ai_model || 'gpt-4o-mini';
+      if (ai_support_prompt !== undefined) patch.ai_support_prompt = ai_support_prompt || null;
 
       const { data, error } = await supabase
         .from('accounts')

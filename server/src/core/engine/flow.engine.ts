@@ -34,6 +34,23 @@ export class FlowEngine {
     private static flowListCache = new Map<string, { data: any[], timestamp: number }>();
     private static CACHE_TTL = 120000; // 2 minutes
 
+    /**
+     * Invalida los caches de flujos. Llamar tras crear/editar/borrar un flujo
+     * (desde flows.routes) para que los cambios se reflejen sin esperar el TTL.
+     * Sin accountId → flush total (las mutaciones por id no siempre traen accountId).
+     */
+    public static invalidateFlowCache(accountId?: string): void {
+        if (!accountId) {
+            FlowEngine.flowCache.clear();
+            FlowEngine.flowListCache.clear();
+            return;
+        }
+        FlowEngine.flowListCache.delete(accountId);
+        for (const key of FlowEngine.flowCache.keys()) {
+            if (key.startsWith(`${accountId}:`)) FlowEngine.flowCache.delete(key);
+        }
+    }
+
     constructor(dbClient?: any, orderServiceInstance?: any, slotServiceInstance?: any) {
         this.db = dbClient || supabase;
         this.orderService = orderServiceInstance;
@@ -125,6 +142,16 @@ export class FlowEngine {
         if (isGlobalTrigger && isWildcard && session && session.status === 'waiting_input') {
             logger.info(`[FlowEngine] Wildcard trigger matched but session is active at node ${session.currentNodeId}. Ignoring wildcard.`);
             isGlobalTrigger = false;
+        }
+
+        // INTERCEPCIÓN PRE-MENÚ: si el único match es un flujo wildcard (catch-all)
+        // y es una entrada fresca NO forzada, no corremos el menú todavía. Devolvemos
+        // una señal para que el router le dé primero la oportunidad al Agente IA de
+        // soporte de rutear directo al flujo correcto. Si no puede, el router reingresa
+        // con options.flowId = este wildcard para correr el menú como fallback.
+        if (isGlobalTrigger && isWildcard && !options.flowId) {
+            logger.info(`[FlowEngine] Wildcard "${normalizedMsg}" → difiriendo al Agente IA de soporte (router).`);
+            return { currentStateDefinition: { message_template: null, _wildcard_pending: true, _wildcardFlowId: matchedFlow!.id } };
         }
 
         if (isGlobalTrigger) {
@@ -355,14 +382,20 @@ export class FlowEngine {
                     session.setVariable(`_poll_selected_handle_${currentNode.id}`, `option-${index}`);
                     logger.info(`[FlowEngine] [INPUT] Resolved poll input "${input}" to "${processedInput}"`);
                 } else {
-                    // INVALID INPUT: Fallback to re-prompt
-                    logger.info(`[FlowEngine] [INPUT] Invalid poll response: "${input}". Re-prompting user.`);
+                    // INVALID INPUT: el usuario respondió algo que no es una opción válida.
+                    // En vez de re-preguntar a ciegas, escapamos al Agente IA de soporte
+                    // global (el router lo resuelve): puede entender la intención y rutear
+                    // a otro flujo, o derivar a humano. Stasheamos el re-prompt como
+                    // fallback por si no hay IA configurada (action='none').
+                    logger.info(`[FlowEngine] [INPUT] Invalid poll response: "${input}". Escapando a Agente IA de soporte.`);
                     const optionLines = options.map((opt: string, i: number) => {
                         const cleanOpt = opt.replace(/^\d+[\s.)-]*\s*/, '');
                         return `*${i + 1}.* ${cleanOpt}`;
                     }).join('\n');
                     const question = currentNode.data?.question || 'Elegí una opción:';
-                    (session as any)._pendingMessages = [`⚠️ No entendí tu respuesta. Por favor, elegí una opción válida:\n\n${question}\n\n${optionLines}\n\n_Respondé con el número de tu elección._`];
+                    const repromptMsg = `⚠️ No entendí tu respuesta. Por favor, elegí una opción válida:\n\n${question}\n\n${optionLines}\n\n_Respondé con el número de tu elección._`;
+                    (session as any)._exitToAI = true;
+                    (session as any)._aiResult = { fallbackMessage: [repromptMsg] };
                     // Do NOT advance — keep waiting_input status
                     session.status = 'waiting_input';
                     session.logInteraction(session.currentNodeId, input);
