@@ -135,6 +135,19 @@ export const callsApi = {
     }),
 };
 
+// ── Salas de videollamada (Daily) ──────────────────────────
+export interface JoinResult { roomUrl: string; dailyToken: string; displayName: string; }
+export const salasApi = {
+  create: (body: { account_id?: string; appointment_id?: string; titulo?: string; created_by?: string }) =>
+    api<{ id: string; daily_url: string; daily_room: string }>('/api/salas', { method: 'POST', body: JSON.stringify(body) }),
+  invitar: (salaId: string, nombre: string) =>
+    api<{ enlace: string; salaId: string; expiraEn: string }>(`/api/salas/${salaId}/invitar`, { method: 'POST', body: JSON.stringify({ nombre }) }),
+  join: (salaId: string, invite: string) =>
+    api<JoinResult>('/api/salas/join', { method: 'POST', body: JSON.stringify({ salaId, invite }) }),
+  hostToken: (salaId: string, nombre?: string) =>
+    api<JoinResult>(`/api/salas/${salaId}/host-token`, { method: 'POST', body: JSON.stringify({ nombre }) }),
+};
+
 // ── Appointments & Agenda ──────────────────────────────────
 export interface Appointment {
   id: string;

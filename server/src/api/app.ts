@@ -8,6 +8,7 @@ import { messagesRouter } from './routes/messages.routes';
 import { configRouter } from './routes/config.routes';
 import { appointmentsRouter } from './routes/appointments.routes';
 import { callsRouter } from './routes/calls.routes';
+import { salasRouter } from './routes/salas.routes';
 import { metaWebhookRouter } from './routes/webhooks.routes';
 
 export function createApp(manager: AccountManager) {
@@ -27,6 +28,7 @@ export function createApp(manager: AccountManager) {
   app.use('/api/config', configRouter());
   app.use('/api/appointments', appointmentsRouter());
   app.use('/api/calls', callsRouter());
+  app.use('/api/salas', salasRouter());
   app.use('/api/webhooks/meta', metaWebhookRouter(manager));
 
   return app;

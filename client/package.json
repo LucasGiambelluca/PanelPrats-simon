@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.87.0",
     "@supabase/supabase-js": "^2.108.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.7",

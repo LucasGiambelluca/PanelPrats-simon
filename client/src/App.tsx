@@ -10,6 +10,7 @@ import WhatsAppInbox from './pages/WhatsAppInbox';
 import BotBuilder from './pages/BotBuilder';
 import Connections from './pages/Connections';
 import Agenda from './pages/Agenda';
+import Sala from './pages/Sala';
 
 function App() {
   return (
@@ -27,6 +28,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Sala de videollamada — PÚBLICA (el invitado entra sin login) */}
+          <Route path="/sala/:salaId" element={<Sala />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={
