@@ -26,9 +26,25 @@ export class ConversationRouter {
       return ['Listo, reiniciamos. Escribí *hola* para empezar de nuevo. 👋'];
     }
 
-    // Handover — si la conversación está tomada por humano, el bot calla (salvo reanudar)
     const status = await this.getConversationStatus(accountId, phone);
-    if (status === 'HANDOVER' && !GREETING_WORDS.includes(t)) {
+
+    // Saludo / "menu" / "inicio" → reiniciar al router de entrada. Limpia la sesión
+    // y, si estaba tomada por humano (HANDOVER), la devuelve al bot. Sin esto, al no
+    // existir ya un wildcard que matchee "hola", el motor dejaba al bot mudo en HANDOVER.
+    if (GREETING_WORDS.includes(t)) {
+      await this.engine.forceReset(accountId, phone);
+      if (status === 'HANDOVER') {
+        try {
+          await supabase.from('whatsapp_conversations')
+            .update({ status: 'BOT', updated_at: new Date().toISOString() })
+            .eq('account_id', accountId).eq('phone', phone);
+        } catch (e: any) {
+          console.warn(`[ConversationRouter] no se pudo limpiar HANDOVER en saludo:`, e?.message || e);
+        }
+      }
+      // continúa al motor: con sesión limpia y sin HANDOVER, corre el router (account.flow_id)
+    } else if (status === 'HANDOVER') {
+      // Tomada por humano y no es saludo → el bot calla.
       return [];
     }
 
