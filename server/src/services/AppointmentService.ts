@@ -14,6 +14,7 @@ export interface Appointment {
   start_time?: string;
   end_time?: string;
   reminded?: boolean; // recordatorio 20' antes ya enviado (idempotencia del scheduler)
+  oficina?: string;   // modalidad/oficina: pool de disponibilidad independiente (Videollamada, CABA, Quilmes, Haedo…)
 }
 
 const isSupabaseConfigured = !!(
@@ -36,6 +37,7 @@ function deserializeAppointment(app: any): Appointment {
         start_time: parsed.start_time || app.created_at,
         end_time: parsed.end_time || new Date(new Date(app.created_at).getTime() + 30 * 60000).toISOString(),
         reminded: !!parsed.reminded,
+        oficina: parsed.oficina || '',
       };
     }
   } catch (e) {
@@ -51,12 +53,13 @@ function deserializeAppointment(app: any): Appointment {
 
 function serializeAppointment(appointment: Omit<Appointment, 'id' | 'created_at' | 'updated_at'>): any {
   // reminded se destructura fuera de `rest` porque NO es columna real: va dentro del JSON.
-  const { start_time, end_time, resumen, reminded, ...rest } = appointment;
+  const { start_time, end_time, resumen, reminded, oficina, ...rest } = appointment;
   const packedResumen = JSON.stringify({
     text: resumen || '',
     start_time: start_time || null,
     end_time: end_time || null,
     reminded: !!reminded,
+    oficina: oficina || '',
   });
   return {
     ...rest,
@@ -141,6 +144,7 @@ export const AppointmentService = {
       start_time: merged.start_time,
       end_time: merged.end_time,
       reminded: merged.reminded,
+      oficina: merged.oficina,
     });
 
     if (isSupabaseConfigured) {

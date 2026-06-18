@@ -33,6 +33,7 @@ export class AppointmentExecutor implements NodeExecutor {
         const nombre = resolveVar(context, nodeData.nombreVar, 'nombre');
         const telefono = resolveVar(context, nodeData.telefonoVar, 'telefono') || context.phone || '';
         const resumen = resolveVar(context, nodeData.resumenVar, 'resumen');
+        const oficina = String(nodeData.oficina || resolveVar(context, nodeData.oficinaVar, 'oficina')).trim();
 
         // Fecha/hora del turno (opcionales): si el flujo las capturó, la cita cae en
         // ese horario en la Agenda; si no, AppointmentService usa created_at.
@@ -71,6 +72,7 @@ export class AppointmentExecutor implements NodeExecutor {
                 status: 'pendiente',
                 start_time,
                 end_time,
+                oficina,
             });
 
             // Interpolar {{variables}} en el mensaje de confirmación (ej {{nombre}}).

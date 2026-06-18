@@ -12,6 +12,10 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
         const slotDurationMin = Number(nodeData.slotDuration) || 60;
         const maxProposals = Number(nodeData.maxProposals) || 3;
         const outputVar = nodeData.outputVariable || 'horarios_disponibles';
+        // Oficina/modalidad: si está definida, la disponibilidad es un pool independiente
+        // (solo cuentan los turnos de ESA oficina para el solapamiento).
+        const oficinaVar = nodeData.oficinaVar || 'oficina';
+        const oficina = String(nodeData.oficina || (context as any)[oficinaVar] || '').trim();
 
         const [startH, startM] = startHourStr.split(':').map(Number);
         const [endH, endM] = endHourStr.split(':').map(Number);
@@ -20,7 +24,10 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
 
         try {
             const appointments = await AppointmentService.list(context.accountId);
-            const activeAppointments = appointments.filter(app => app.status !== 'cancelada' && app.start_time && app.end_time);
+            const activeAppointments = appointments.filter(app =>
+                app.status !== 'cancelada' && app.start_time && app.end_time &&
+                (!oficina || (app.oficina || '') === oficina)
+            );
 
             const proposedSlots: { start: Date; end: Date }[] = [];
             const now = new Date();
