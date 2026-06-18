@@ -1,0 +1,2283 @@
+{
+  "description": "Seed/backup de los flujos del estudio PYS (router de entrada + embudos de calificación + agendamiento). Exportado desde Supabase. Los flowId en flowLinkNode son específicos de la cuenta de origen.",
+  "account_default_flow": "Router de Entrada (detecta motivo)",
+  "flows": [
+    {
+      "name": "Accidente de Tránsito",
+      "trigger_word": "accidentetransito",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "intro",
+          "data": {
+            "text": "🚗 Te ayudo con tu consulta por *accidente de tránsito*. Unas preguntas rápidas."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 90
+          }
+        },
+        {
+          "id": "q_compania",
+          "data": {
+            "question": "¿Cuál es la compañía de seguros del vehículo que te chocó?",
+            "variable": "compania"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 60,
+            "y": 190
+          }
+        },
+        {
+          "id": "c_escudo",
+          "data": {
+            "operator": "contains",
+            "variable": "compania",
+            "expectedValue": "escudo"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 60,
+            "y": 290
+          }
+        },
+        {
+          "id": "c_caledonia",
+          "data": {
+            "operator": "contains",
+            "variable": "compania",
+            "expectedValue": "caledonia"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 60,
+            "y": 370
+          }
+        },
+        {
+          "id": "c_agrosalta",
+          "data": {
+            "operator": "contains",
+            "variable": "compania",
+            "expectedValue": "agrosalta"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 60,
+            "y": 450
+          }
+        },
+        {
+          "id": "c_orbis",
+          "data": {
+            "operator": "contains",
+            "variable": "compania",
+            "expectedValue": "orbis"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 60,
+            "y": 530
+          }
+        },
+        {
+          "id": "c_libra",
+          "data": {
+            "operator": "contains",
+            "variable": "compania",
+            "expectedValue": "libra"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 60,
+            "y": 610
+          }
+        },
+        {
+          "id": "q_datos",
+          "data": {
+            "options": [
+              "Sí, tengo los datos",
+              "No los tengo"
+            ],
+            "question": "¿Contás con los datos de la persona que te chocó? (datos personales, seguro y patente)",
+            "variable": "datos_tercero"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 700
+          }
+        },
+        {
+          "id": "rechazada",
+          "data": {
+            "text": "Lamentablemente no realizamos reclamos contra esa compañía de seguros. De todas formas, gracias por escribirnos 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": -260,
+            "y": 470
+          }
+        },
+        {
+          "id": "sin_datos",
+          "data": {
+            "text": "Para poder avanzar es necesario contar con los datos de la persona que te chocó (datos personales, seguro y patente). Sin esa información no podemos iniciar el reclamo. Cuando los tengas, ¡escribinos! 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": -260,
+            "y": 700
+          }
+        },
+        {
+          "id": "coordinar",
+          "data": {
+            "text": "✅ ¡Perfecto! Tu caso es viable. Coordinemos una *videollamada* para avanzar con tu reclamo 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 360,
+            "y": 800
+          }
+        },
+        {
+          "id": "link_agendar",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 700,
+            "y": 700
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_intro",
+          "source": "start",
+          "target": "intro"
+        },
+        {
+          "id": "e_intro_comp",
+          "source": "intro",
+          "target": "q_compania"
+        },
+        {
+          "id": "e_comp_escudo",
+          "source": "q_compania",
+          "target": "c_escudo"
+        },
+        {
+          "id": "e_escudo_t",
+          "source": "c_escudo",
+          "target": "rechazada",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_escudo_f",
+          "source": "c_escudo",
+          "target": "c_caledonia",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_caledonia_t",
+          "source": "c_caledonia",
+          "target": "rechazada",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_caledonia_f",
+          "source": "c_caledonia",
+          "target": "c_agrosalta",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_agrosalta_t",
+          "source": "c_agrosalta",
+          "target": "rechazada",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_agrosalta_f",
+          "source": "c_agrosalta",
+          "target": "c_orbis",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_orbis_t",
+          "source": "c_orbis",
+          "target": "rechazada",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_orbis_f",
+          "source": "c_orbis",
+          "target": "c_libra",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_libra_t",
+          "source": "c_libra",
+          "target": "rechazada",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_libra_f",
+          "source": "c_libra",
+          "target": "q_datos",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_datos_si",
+          "source": "q_datos",
+          "target": "coordinar",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_datos_no",
+          "source": "q_datos",
+          "target": "sin_datos",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_to_agendar",
+          "source": "coordinar",
+          "target": "link_agendar"
+        }
+      ]
+    },
+    {
+      "name": "Agendamiento Jubilaciones",
+      "trigger_word": "jubilacion",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "style": {
+            "color": "white",
+            "border": "none",
+            "background": "#22c55e",
+            "fontWeight": "bold"
+          },
+          "position": {
+            "x": 250,
+            "y": 0
+          }
+        },
+        {
+          "id": "welcome",
+          "data": {
+            "text": "¡Hola! 👵👴 En el estudio damos una *cita virtual gratuita* de asesoría jubilatoria.\n\nPrimero validamos 3 requisitos rápidos. ¿Empezamos?"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 250,
+            "y": 130
+          }
+        },
+        {
+          "id": "q_edad",
+          "data": {
+            "question": "¿Qué edad tenés? (escribí solo el número, ej: 67)",
+            "variable": "edad"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 250,
+            "y": 260
+          }
+        },
+        {
+          "id": "c_edad",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "64"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 250,
+            "y": 390
+          }
+        },
+        {
+          "id": "reject_edad",
+          "data": {
+            "text": "Para esta cita gratuita necesitás tener *65 años o más*. ¡Gracias por escribirnos! 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 250,
+            "y": 520
+          }
+        },
+        {
+          "id": "q_aportes",
+          "data": {
+            "question": "¿Cuántos *años de aportes* tenés? (solo el número, ej: 32)",
+            "variable": "aportes"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 250,
+            "y": 650
+          }
+        },
+        {
+          "id": "c_aportes",
+          "data": {
+            "operator": "greater_than",
+            "variable": "aportes",
+            "expectedValue": "29"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 250,
+            "y": 780
+          }
+        },
+        {
+          "id": "reject_aportes",
+          "data": {
+            "text": "Para calificar necesitás *30 años o más* de aportes. ¡Gracias por tu consulta! 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 250,
+            "y": 910
+          }
+        },
+        {
+          "id": "q_nac",
+          "data": {
+            "options": [
+              "Sí",
+              "No"
+            ],
+            "question": "¿Tenés *nacionalidad argentina*?",
+            "variable": "nacionalidad"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 250,
+            "y": 1040
+          }
+        },
+        {
+          "id": "reject_nac",
+          "data": {
+            "text": "Esta cita gratuita es para *ciudadanos argentinos*. ¡Gracias por escribirnos! 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 250,
+            "y": 1170
+          }
+        },
+        {
+          "id": "q_nombre",
+          "data": {
+            "question": "¡Genial, calificás para la cita gratuita! ✅\n\n¿A nombre de quién la agendamos?",
+            "variable": "nombre"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 250,
+            "y": 1300
+          }
+        },
+        {
+          "id": "proposals",
+          "data": {
+            "text": "📅 Estos son los próximos horarios disponibles para tu *cita virtual*:\n\n{{horarios}}",
+            "endHour": "18:00",
+            "startHour": "09:00",
+            "allowedDays": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "maxProposals": 3,
+            "slotDuration": 30,
+            "outputVariable": "horarios"
+          },
+          "type": "appointmentProposalsNode",
+          "position": {
+            "x": 250,
+            "y": 1430
+          }
+        },
+        {
+          "id": "q_choice",
+          "data": {
+            "question": "Respondé con el *número* de la opción que preferís (1, 2 o 3):",
+            "variable": "opcion_horario"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 250,
+            "y": 1560
+          }
+        },
+        {
+          "id": "book",
+          "data": {
+            "text": "✅ ¡Listo! Tu *cita virtual* quedó agendada. Te enviamos el link de la videollamada antes del turno. ¡Gracias!",
+            "slotsVar": "horarios_array",
+            "nombreVar": "nombre",
+            "resumenVar": "resumen",
+            "telefonoVar": "",
+            "slotChoiceVar": "opcion_horario"
+          },
+          "type": "appointmentNode",
+          "position": {
+            "x": 250,
+            "y": 1690
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-start-welcome-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "start",
+          "target": "welcome",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-welcome-q_edad-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "welcome",
+          "target": "q_edad",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_edad-c_edad-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_edad",
+          "target": "c_edad",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-c_edad-q_aportes-true",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "c_edad",
+          "target": "q_aportes",
+          "animated": true,
+          "sourceHandle": "true",
+          "targetHandle": null
+        },
+        {
+          "id": "e-c_edad-reject_edad-false",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "c_edad",
+          "target": "reject_edad",
+          "animated": true,
+          "sourceHandle": "false",
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_aportes-c_aportes-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_aportes",
+          "target": "c_aportes",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-c_aportes-q_nac-true",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "c_aportes",
+          "target": "q_nac",
+          "animated": true,
+          "sourceHandle": "true",
+          "targetHandle": null
+        },
+        {
+          "id": "e-c_aportes-reject_aportes-false",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "c_aportes",
+          "target": "reject_aportes",
+          "animated": true,
+          "sourceHandle": "false",
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_nac-q_nombre-option-0",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_nac",
+          "target": "q_nombre",
+          "animated": true,
+          "sourceHandle": "option-0",
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_nac-reject_nac-option-1",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_nac",
+          "target": "reject_nac",
+          "animated": true,
+          "sourceHandle": "option-1",
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_nombre-proposals-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_nombre",
+          "target": "proposals",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-proposals-q_choice-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "proposals",
+          "target": "q_choice",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "e-q_choice-book-d",
+          "style": {
+            "stroke": "#6366f1",
+            "strokeWidth": 2
+          },
+          "source": "q_choice",
+          "target": "book",
+          "animated": true,
+          "sourceHandle": null,
+          "targetHandle": null
+        }
+      ]
+    },
+    {
+      "name": "Agendar Cita",
+      "trigger_word": "agendarcita",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "q_nombre",
+          "data": {
+            "question": "¡Genial! Para agendar tu cita, ¿a nombre de quién la coordinamos?",
+            "variable": "nombre"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 60,
+            "y": 100
+          }
+        },
+        {
+          "id": "proposals",
+          "data": {
+            "text": "📅 Estos son los próximos horarios disponibles:\n\n{{horarios}}",
+            "endHour": "18:00",
+            "startHour": "09:00",
+            "allowedDays": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "maxProposals": 3,
+            "slotDuration": 20,
+            "outputVariable": "horarios"
+          },
+          "type": "appointmentProposalsNode",
+          "position": {
+            "x": 60,
+            "y": 200
+          }
+        },
+        {
+          "id": "q_choice",
+          "data": {
+            "question": "Respondé con el *número* de la opción que preferís (1, 2 o 3):",
+            "variable": "opcion_horario"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 60,
+            "y": 300
+          }
+        },
+        {
+          "id": "book",
+          "data": {
+            "text": "✅ ¡Listo, {{nombre}}! Tu cita ({{oficina}}) quedó agendada. Te contactamos para confirmar los detalles. 🙌",
+            "nombreVar": "nombre",
+            "resumenVar": "motivo"
+          },
+          "type": "appointmentNode",
+          "position": {
+            "x": 60,
+            "y": 400
+          }
+        },
+        {
+          "id": "q_oficina",
+          "data": {
+            "options": [
+              "Videollamada",
+              "Presencial CABA",
+              "Presencial Quilmes",
+              "Presencial Haedo"
+            ],
+            "question": "¿Cómo preferís la cita?",
+            "variable": "oficina"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 150
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_nombre",
+          "source": "start",
+          "target": "q_nombre"
+        },
+        {
+          "id": "e_nombre_prop",
+          "source": "q_nombre",
+          "target": "q_oficina"
+        },
+        {
+          "id": "e_prop_choice",
+          "source": "proposals",
+          "target": "q_choice"
+        },
+        {
+          "id": "e_choice_book",
+          "source": "q_choice",
+          "target": "book"
+        },
+        {
+          "id": "e_oficina_opt0",
+          "source": "q_oficina",
+          "target": "proposals",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_oficina_opt1",
+          "source": "q_oficina",
+          "target": "proposals",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_oficina_opt2",
+          "source": "q_oficina",
+          "target": "proposals",
+          "sourceHandle": "option-2"
+        },
+        {
+          "id": "e_oficina_opt3",
+          "source": "q_oficina",
+          "target": "proposals",
+          "sourceHandle": "option-3"
+        }
+      ]
+    },
+    {
+      "name": "ART / Accidente de Trabajo",
+      "trigger_word": "artaccidente",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "intro",
+          "data": {
+            "text": "🦺 Te ayudo con tu consulta por *accidente laboral (ART)*. Unas preguntas rápidas."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 90
+          }
+        },
+        {
+          "id": "q_plazo",
+          "data": {
+            "options": [
+              "Hace menos de 2 años",
+              "Hace más de 2 años"
+            ],
+            "question": "¿Hace cuánto tiempo fue tu accidente laboral?",
+            "variable": "plazo_art"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 190
+          }
+        },
+        {
+          "id": "q_blanco",
+          "data": {
+            "options": [
+              "Estaba en blanco (registrado)",
+              "Estaba en negro"
+            ],
+            "question": "Cuando ocurrió el accidente, ¿estabas registrado (en blanco) o en negro?",
+            "variable": "en_blanco"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 300
+          }
+        },
+        {
+          "id": "q_lesion",
+          "data": {
+            "question": "¿Qué tipo de accidente y lesión tuviste? Contame brevemente.",
+            "variable": "tipo_lesion"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 60,
+            "y": 410
+          }
+        },
+        {
+          "id": "coordinar",
+          "data": {
+            "text": "✅ ¡Perfecto, estás dentro del plazo legal! Coordinemos la reunión para avanzar con tu reclamo 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 640
+          }
+        },
+        {
+          "id": "empatico",
+          "data": {
+            "text": "Qué lástima, lamento mucho lo que te pasó. Por cómo funciona la ley, los reclamos por accidente solo se pueden hacer si pasaron menos de 2 años. Igualmente, veamos si podemos ayudarte por la vía de un reclamo laboral 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 420,
+            "y": 290
+          }
+        },
+        {
+          "id": "link_laboral",
+          "data": {
+            "label": "→ Laboral / Despido",
+            "flowId": "409c3724-b07c-4e3a-8bae-42263d28658c"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 420,
+            "y": 400
+          }
+        },
+        {
+          "id": "link_agendar",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 700,
+            "y": 700
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_intro",
+          "source": "start",
+          "target": "intro"
+        },
+        {
+          "id": "e_intro_plazo",
+          "source": "intro",
+          "target": "q_plazo"
+        },
+        {
+          "id": "e_plazo_si",
+          "source": "q_plazo",
+          "target": "q_blanco",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_plazo_no",
+          "source": "q_plazo",
+          "target": "empatico",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_empatico_link",
+          "source": "empatico",
+          "target": "link_laboral"
+        },
+        {
+          "id": "e_blanco_a",
+          "source": "q_blanco",
+          "target": "q_lesion",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_blanco_b",
+          "source": "q_blanco",
+          "target": "q_lesion",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_to_agendar",
+          "source": "coordinar",
+          "target": "link_agendar"
+        },
+        {
+          "id": "e_lesion_coord",
+          "source": "q_lesion",
+          "target": "coordinar"
+        }
+      ]
+    },
+    {
+      "name": "Jubilación Hombre",
+      "trigger_word": "jubhombre",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "intro",
+          "data": {
+            "text": "👴 Te ayudo con tu consulta de *jubilación*. Necesito unos datos rápidos para ver si tu caso es viable."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 110
+          }
+        },
+        {
+          "id": "q_nac",
+          "data": {
+            "options": [
+              "Argentino",
+              "Extranjero"
+            ],
+            "question": "¿Sos argentino/a o extranjero/a?",
+            "variable": "nacionalidad"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 220
+          }
+        },
+        {
+          "id": "q_edad_arg",
+          "data": {
+            "question": "¿Qué edad tenés? (escribí el número)",
+            "variable": "edad"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": -260,
+            "y": 340
+          }
+        },
+        {
+          "id": "c_arg_edad",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "62"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": -260,
+            "y": 450
+          }
+        },
+        {
+          "id": "q_arg_insal",
+          "data": {
+            "options": [
+              "Sí",
+              "No"
+            ],
+            "question": "¿Tenés aportes en trabajos insalubres? (ej: construcción, taxi, chofer, etc.)",
+            "variable": "insalubres"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": -460,
+            "y": 560
+          }
+        },
+        {
+          "id": "q_edad_ext",
+          "data": {
+            "question": "¿Qué edad tenés? (escribí el número)",
+            "variable": "edad"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 360,
+            "y": 340
+          }
+        },
+        {
+          "id": "c_ext_edad",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "62"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 360,
+            "y": 450
+          }
+        },
+        {
+          "id": "q_ext_ingreso",
+          "data": {
+            "question": "¿Hace cuántos años ingresaste al país? (según figura en tu DNI)",
+            "variable": "anios_ingreso"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 240,
+            "y": 560
+          }
+        },
+        {
+          "id": "c_ext_ingreso",
+          "data": {
+            "operator": "greater_than",
+            "variable": "anios_ingreso",
+            "expectedValue": "16"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 240,
+            "y": 670
+          }
+        },
+        {
+          "id": "q_ext_insal",
+          "data": {
+            "options": [
+              "Sí",
+              "No"
+            ],
+            "question": "¿Tenés aportes en trabajos insalubres? (ej: construcción, taxi, chofer, etc.)",
+            "variable": "insalubres"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 520,
+            "y": 560
+          }
+        },
+        {
+          "id": "viable",
+          "data": {
+            "text": "✅ ¡Buenas noticias! Por tu situación, tu caso es *viable* para iniciar el trámite jubilatorio. Te coordino una *cita gratuita* 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 800
+          }
+        },
+        {
+          "id": "link_agenda",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 60,
+            "y": 910
+          }
+        },
+        {
+          "id": "noviable",
+          "data": {
+            "text": "Por tu situación no calificás para el trámite directo. Pero podemos hacerte un *análisis previsional completo* y proyectar tu mejor jubilación posible por una consulta de *$29.000*. ¿Querés avanzar con eso?"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 420,
+            "y": 800
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_intro",
+          "source": "start",
+          "target": "intro"
+        },
+        {
+          "id": "e_intro_nac",
+          "source": "intro",
+          "target": "q_nac"
+        },
+        {
+          "id": "e_nac_arg",
+          "source": "q_nac",
+          "target": "q_edad_arg",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_nac_ext",
+          "source": "q_nac",
+          "target": "q_edad_ext",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_argedad_cond",
+          "source": "q_edad_arg",
+          "target": "c_arg_edad"
+        },
+        {
+          "id": "e_argcond_viable",
+          "source": "c_arg_edad",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_argcond_insal",
+          "source": "c_arg_edad",
+          "target": "q_arg_insal",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_arginsal_viable",
+          "source": "q_arg_insal",
+          "target": "viable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_arginsal_noviable",
+          "source": "q_arg_insal",
+          "target": "noviable",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_extedad_cond",
+          "source": "q_edad_ext",
+          "target": "c_ext_edad"
+        },
+        {
+          "id": "e_extcond_ingreso",
+          "source": "c_ext_edad",
+          "target": "q_ext_ingreso",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_extcond_insal",
+          "source": "c_ext_edad",
+          "target": "q_ext_insal",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_extingreso_cond",
+          "source": "q_ext_ingreso",
+          "target": "c_ext_ingreso"
+        },
+        {
+          "id": "e_extingcond_viable",
+          "source": "c_ext_ingreso",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_extingcond_noviable",
+          "source": "c_ext_ingreso",
+          "target": "noviable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_extinsal_viable",
+          "source": "q_ext_insal",
+          "target": "viable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_extinsal_noviable",
+          "source": "q_ext_insal",
+          "target": "noviable",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_viable_link",
+          "source": "viable",
+          "target": "link_agenda"
+        }
+      ]
+    },
+    {
+      "name": "Jubilación Mujer",
+      "trigger_word": "jubmujer",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "intro",
+          "data": {
+            "text": "👵 Te ayudo con tu consulta de *jubilación*. Necesito unos datos rápidos para ver si tu caso es viable."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 100
+          }
+        },
+        {
+          "id": "q_nac",
+          "data": {
+            "options": [
+              "Argentina",
+              "Extranjera"
+            ],
+            "question": "¿Sos argentina o extranjera?",
+            "variable": "nacionalidad"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 200
+          }
+        },
+        {
+          "id": "q_edad_arg",
+          "data": {
+            "question": "¿Qué edad tenés? (escribí el número)",
+            "variable": "edad"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": -320,
+            "y": 320
+          }
+        },
+        {
+          "id": "c_arg_ge60",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "59"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": -320,
+            "y": 420
+          }
+        },
+        {
+          "id": "c_arg_ge58",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "57"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": -520,
+            "y": 520
+          }
+        },
+        {
+          "id": "q_hijos",
+          "data": {
+            "question": "¿Cuántos hijos tenés?",
+            "variable": "hijos"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": -200,
+            "y": 520
+          }
+        },
+        {
+          "id": "q_aportes",
+          "data": {
+            "question": "¿Cuántos años de aportes tenés (relación de dependencia o monotributo) desde 1993?",
+            "variable": "aportes"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": -200,
+            "y": 620
+          }
+        },
+        {
+          "id": "c_aportes",
+          "data": {
+            "operator": "greater_than",
+            "variable": "aportes",
+            "expectedValue": "9 - {{hijos}}"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": -200,
+            "y": 720
+          }
+        },
+        {
+          "id": "q_edad_ext",
+          "data": {
+            "question": "¿Qué edad tenés? (escribí el número)",
+            "variable": "edad"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 360,
+            "y": 320
+          }
+        },
+        {
+          "id": "q_anio",
+          "data": {
+            "question": "¿En qué año ingresaste al país? (escribí el año, ej: 1998)",
+            "variable": "anio_ingreso"
+          },
+          "type": "questionNode",
+          "position": {
+            "x": 360,
+            "y": 420
+          }
+        },
+        {
+          "id": "c_ext_ge63",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "62"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 360,
+            "y": 520
+          }
+        },
+        {
+          "id": "c_ext_ge60",
+          "data": {
+            "operator": "greater_than",
+            "variable": "edad",
+            "expectedValue": "59"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 360,
+            "y": 620
+          }
+        },
+        {
+          "id": "c_A",
+          "data": {
+            "operator": "less_than",
+            "variable": "anio_ingreso",
+            "expectedValue": "2000"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 200,
+            "y": 720
+          }
+        },
+        {
+          "id": "c_B",
+          "data": {
+            "operator": "greater_than",
+            "variable": "anio_ingreso",
+            "expectedValue": "2006"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 420,
+            "y": 720
+          }
+        },
+        {
+          "id": "c_C",
+          "data": {
+            "operator": "less_than",
+            "variable": "anio_ingreso",
+            "expectedValue": "2008"
+          },
+          "type": "conditionNode",
+          "position": {
+            "x": 640,
+            "y": 720
+          }
+        },
+        {
+          "id": "viable",
+          "data": {
+            "text": "✅ ¡Buenas noticias! Por tu situación, tu caso es *viable* para iniciar el trámite jubilatorio. Te coordino una *cita gratuita* 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 860
+          }
+        },
+        {
+          "id": "link_agenda",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 60,
+            "y": 960
+          }
+        },
+        {
+          "id": "noviable",
+          "data": {
+            "text": "Por tu situación no calificás para el trámite directo. Pero podemos hacerte un *análisis previsional completo* y proyectar tu mejor jubilación posible por una consulta de *$29.000*. ¿Querés avanzar con eso?"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 460,
+            "y": 860
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_intro",
+          "source": "start",
+          "target": "intro"
+        },
+        {
+          "id": "e_intro_nac",
+          "source": "intro",
+          "target": "q_nac"
+        },
+        {
+          "id": "e_nac_arg",
+          "source": "q_nac",
+          "target": "q_edad_arg",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_nac_ext",
+          "source": "q_nac",
+          "target": "q_edad_ext",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_argedad_ge60",
+          "source": "q_edad_arg",
+          "target": "c_arg_ge60"
+        },
+        {
+          "id": "e_arg_ge60_t",
+          "source": "c_arg_ge60",
+          "target": "q_hijos",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_arg_ge60_f",
+          "source": "c_arg_ge60",
+          "target": "c_arg_ge58",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_arg_ge58_t",
+          "source": "c_arg_ge58",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_arg_ge58_f",
+          "source": "c_arg_ge58",
+          "target": "noviable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_hijos_aportes",
+          "source": "q_hijos",
+          "target": "q_aportes"
+        },
+        {
+          "id": "e_aportes_cond",
+          "source": "q_aportes",
+          "target": "c_aportes"
+        },
+        {
+          "id": "e_aportes_t",
+          "source": "c_aportes",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_aportes_f",
+          "source": "c_aportes",
+          "target": "noviable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_extedad_anio",
+          "source": "q_edad_ext",
+          "target": "q_anio"
+        },
+        {
+          "id": "e_anio_ge63",
+          "source": "q_anio",
+          "target": "c_ext_ge63"
+        },
+        {
+          "id": "e_ext_ge63_t",
+          "source": "c_ext_ge63",
+          "target": "c_C",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_ext_ge63_f",
+          "source": "c_ext_ge63",
+          "target": "c_ext_ge60",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_ext_ge60_t",
+          "source": "c_ext_ge60",
+          "target": "c_B",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_ext_ge60_f",
+          "source": "c_ext_ge60",
+          "target": "c_A",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_cA_t",
+          "source": "c_A",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_cA_f",
+          "source": "c_A",
+          "target": "noviable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_cB_t",
+          "source": "c_B",
+          "target": "noviable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_cB_f",
+          "source": "c_B",
+          "target": "viable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_cC_t",
+          "source": "c_C",
+          "target": "viable",
+          "sourceHandle": "true"
+        },
+        {
+          "id": "e_cC_f",
+          "source": "c_C",
+          "target": "noviable",
+          "sourceHandle": "false"
+        },
+        {
+          "id": "e_viable_link",
+          "source": "viable",
+          "target": "link_agenda"
+        }
+      ]
+    },
+    {
+      "name": "Laboral / Despido",
+      "trigger_word": "laboraldespido",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "intro",
+          "data": {
+            "text": "👷 Te ayudo con tu consulta *laboral*. Unas preguntas rápidas para ver si podemos avanzar con tu reclamo."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 90
+          }
+        },
+        {
+          "id": "p1",
+          "data": {
+            "options": [
+              "Menos de 9 meses",
+              "Más de 9 meses"
+            ],
+            "question": "¿Hace cuánto tiempo trabajás o trabajaste en ese empleo?",
+            "variable": "antiguedad"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 190
+          }
+        },
+        {
+          "id": "p2",
+          "data": {
+            "options": [
+              "Sigo trabajando ahí",
+              "Ya no trabajo más"
+            ],
+            "question": "¿Seguís trabajando ahí o ya no trabajás más?",
+            "variable": "situacion"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 300
+          }
+        },
+        {
+          "id": "p3",
+          "data": {
+            "options": [
+              "Hace más de 2 años",
+              "Hace menos de 2 años"
+            ],
+            "question": "¿Hace cuánto dejaste de trabajar ahí?",
+            "variable": "plazo"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": -200,
+            "y": 410
+          }
+        },
+        {
+          "id": "p3b",
+          "data": {
+            "options": [
+              "Me despidieron sin causa",
+              "Renuncié / acuerdo / con causa"
+            ],
+            "question": "¿Cómo terminó la relación laboral?",
+            "variable": "motivo_salida"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": -200,
+            "y": 520
+          }
+        },
+        {
+          "id": "p4",
+          "data": {
+            "options": [
+              "Sí, ya tengo abogado",
+              "No"
+            ],
+            "question": "¿Ya iniciaste un reclamo con otro abogado?",
+            "variable": "abogado"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 630
+          }
+        },
+        {
+          "id": "p5",
+          "data": {
+            "options": [
+              "En negro / sin registrar",
+              "Registrado"
+            ],
+            "question": "¿Tu trabajo está registrado o en negro?",
+            "variable": "registro"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 740
+          }
+        },
+        {
+          "id": "p6",
+          "data": {
+            "options": [
+              "Sí, cobro parte en negro",
+              "No"
+            ],
+            "question": "¿Recibís parte de tu sueldo en negro?",
+            "variable": "pagos_negro"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 850
+          }
+        },
+        {
+          "id": "p7",
+          "data": {
+            "options": [
+              "Ingresé antes de lo que figura",
+              "Es la fecha real"
+            ],
+            "question": "¿La fecha de ingreso que figura en tu recibo es la real?",
+            "variable": "fecha_recibo"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 960
+          }
+        },
+        {
+          "id": "potable",
+          "data": {
+            "text": "🔥 ¡Buenísimo! Por lo que me contás, tu caso tiene potencial para un reclamo laboral. Te coordino una cita con un abogado del estudio 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 360,
+            "y": 1080
+          }
+        },
+        {
+          "id": "descartar",
+          "data": {
+            "text": "Por las características de tu situación, no podríamos avanzar con un reclamo laboral en este caso. De todas formas, gracias por escribirnos 🙏"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": -200,
+            "y": 1080
+          }
+        },
+        {
+          "id": "link_agendar",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 700,
+            "y": 700
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_intro",
+          "source": "start",
+          "target": "intro"
+        },
+        {
+          "id": "e_intro_p1",
+          "source": "intro",
+          "target": "p1"
+        },
+        {
+          "id": "e_p1_desc",
+          "source": "p1",
+          "target": "descartar",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p1_p2",
+          "source": "p1",
+          "target": "p2",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p2_p4",
+          "source": "p2",
+          "target": "p4",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p2_p3",
+          "source": "p2",
+          "target": "p3",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p3_desc",
+          "source": "p3",
+          "target": "descartar",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p3_p3b",
+          "source": "p3",
+          "target": "p3b",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p3b_pot",
+          "source": "p3b",
+          "target": "potable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p3b_p4",
+          "source": "p3b",
+          "target": "p4",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p4_desc",
+          "source": "p4",
+          "target": "descartar",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p4_p5",
+          "source": "p4",
+          "target": "p5",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p5_pot",
+          "source": "p5",
+          "target": "potable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p5_p6",
+          "source": "p5",
+          "target": "p6",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p6_pot",
+          "source": "p6",
+          "target": "potable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p6_p7",
+          "source": "p6",
+          "target": "p7",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_p7_pot",
+          "source": "p7",
+          "target": "potable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_p7_desc",
+          "source": "p7",
+          "target": "descartar",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_to_agendar",
+          "source": "potable",
+          "target": "link_agendar"
+        }
+      ]
+    },
+    {
+      "name": "Pensión por Viudez",
+      "trigger_word": "pensionviudez",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "welcome",
+          "data": {
+            "text": "🕊️ Lamento mucho tu pérdida. Te ayudo con la *pensión por viudez*. Te hago unas preguntas rápidas para ver si podemos avanzar."
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 100
+          }
+        },
+        {
+          "id": "q_vinculo",
+          "data": {
+            "options": [
+              "Cónyuge (casados)",
+              "Conviviente / pareja",
+              "Otro"
+            ],
+            "question": "¿Cuál era tu vínculo con la persona fallecida?",
+            "variable": "vinculo"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 210
+          }
+        },
+        {
+          "id": "q_fallecido",
+          "data": {
+            "options": [
+              "Jubilado / Pensionado",
+              "Relación de dependencia",
+              "En negro / autónomo",
+              "No sé"
+            ],
+            "question": "¿Cuál era la situación laboral/previsional de la persona fallecida?",
+            "variable": "fallecido"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 330
+          }
+        },
+        {
+          "id": "viable",
+          "data": {
+            "text": "✅ Por tu situación, *podemos avanzar* con el trámite de pensión por viudez. Te coordino una *cita gratuita* 👇"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": -200,
+            "y": 460
+          }
+        },
+        {
+          "id": "link_book",
+          "data": {
+            "label": "→ Agendar Cita",
+            "flowId": "b91640ee-e16d-44ec-bd93-228ca02909dc"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": -200,
+            "y": 560
+          }
+        },
+        {
+          "id": "noviable_29k",
+          "data": {
+            "text": "Por la situación de la persona fallecida, no podemos confirmar la viabilidad directa. Podemos hacerte un *análisis previsional completo* y ver tus opciones por una consulta de *$29.000*. ¿Querés avanzar con eso?"
+          },
+          "type": "messageNode",
+          "position": {
+            "x": 60,
+            "y": 460
+          }
+        },
+        {
+          "id": "derivar",
+          "data": {
+            "message": "Tu caso requiere una evaluación particular. Te derivo con un asesor del estudio, aguardá un momento por favor 🙌"
+          },
+          "type": "handoverNode",
+          "position": {
+            "x": 320,
+            "y": 330
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_welcome",
+          "source": "start",
+          "target": "welcome"
+        },
+        {
+          "id": "e_welcome_vinc",
+          "source": "welcome",
+          "target": "q_vinculo"
+        },
+        {
+          "id": "e_vinc_conyuge",
+          "source": "q_vinculo",
+          "target": "q_fallecido",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_vinc_conv",
+          "source": "q_vinculo",
+          "target": "q_fallecido",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_vinc_otro",
+          "source": "q_vinculo",
+          "target": "derivar",
+          "sourceHandle": "option-2"
+        },
+        {
+          "id": "e_fall_jub",
+          "source": "q_fallecido",
+          "target": "viable",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_fall_reldep",
+          "source": "q_fallecido",
+          "target": "viable",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_fall_negro",
+          "source": "q_fallecido",
+          "target": "noviable_29k",
+          "sourceHandle": "option-2"
+        },
+        {
+          "id": "e_fall_nose",
+          "source": "q_fallecido",
+          "target": "noviable_29k",
+          "sourceHandle": "option-3"
+        },
+        {
+          "id": "e_viable_link",
+          "source": "viable",
+          "target": "link_book"
+        }
+      ]
+    },
+    {
+      "name": "Router de Entrada (detecta motivo)",
+      "trigger_word": "router",
+      "is_active": true,
+      "nodes": [
+        {
+          "id": "start",
+          "data": {
+            "label": "Inicio"
+          },
+          "type": "input",
+          "position": {
+            "x": 60,
+            "y": 0
+          }
+        },
+        {
+          "id": "classify",
+          "data": {
+            "question": "¡Hola! 👋 Soy el asistente del estudio Prats & Simon. Contame brevemente, ¿en qué necesitás asesoría?",
+            "max_retries": 2,
+            "system_prompt": "Sos un clasificador de un estudio jurídico. Devolvé EXACTAMENTE UNA de estas palabras clave, en minúscula, SIN conjugar y SIN agregar nada más: jubilacion, pension, despido, art, transito, otra.\n\nSignificado:\n- jubilacion → jubilarse, jubilación, ANSES, aportes, retiro, moratoria, edad jubilatoria.\n- pension → pensión por viudez, se me falleció mi esposo/esposa/pareja, soy viudo/a, pensión del cónyuge fallecido.\n- despido → lo despidieron, me echaron, trabajo en negro, liquidación, reclamo laboral (SIN accidente).\n- art → accidente de trabajo, accidente laboral, me lastimé trabajando, ART, enfermedad profesional.\n- transito → accidente de tránsito, choque, me chocaron, siniestro vial.\n- otra → divorcio, familia, alimentos, sucesión, herencia, Veraz, multas, u otro tema.\n\nEjemplos:\n'quiero jubilarme' -> jubilacion\n'falleció mi marido, quiero la pensión' -> pension\n'me chocó un auto' -> transito\n'tuve un accidente en el trabajo' -> art\n'me despidieron sin causa' -> despido\n'necesito un divorcio' -> otra\n\nSi es un saludo o algo ambiguo sin tema, devolvé: no_entendido.\nRecordá: tu respuesta es SOLO la palabra clave, nada más.",
+            "output_variable": "motivo",
+            "fallback_message": "Disculpá, no te entendí. ¿Es por jubilación, un despido, un accidente laboral (ART), un accidente de tránsito, u otro tema?",
+            "possible_intents": "jubilacion,pension,despido,art,transito,otra"
+          },
+          "type": "intentResolverNode",
+          "position": {
+            "x": 60,
+            "y": 110
+          }
+        },
+        {
+          "id": "q_genero",
+          "data": {
+            "options": [
+              "Hombre",
+              "Mujer"
+            ],
+            "question": "Para tu consulta de jubilación, ¿es para un hombre o una mujer?",
+            "variable": "genero"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": -260,
+            "y": 240
+          }
+        },
+        {
+          "id": "link_jubh",
+          "data": {
+            "label": "→ Jubilación Hombre",
+            "flowId": "bf5a2ebb-c1d9-473b-8da2-07207a2fbf9b"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": -380,
+            "y": 360
+          }
+        },
+        {
+          "id": "link_jubm",
+          "data": {
+            "label": "→ Jubilación Mujer",
+            "flowId": "d5abf056-acb4-415c-8a35-b9eea0eae698"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": -180,
+            "y": 360
+          }
+        },
+        {
+          "id": "link_laboral",
+          "data": {
+            "label": "→ Laboral / Despido",
+            "flowId": "409c3724-b07c-4e3a-8bae-42263d28658c"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 40,
+            "y": 240
+          }
+        },
+        {
+          "id": "link_art",
+          "data": {
+            "label": "→ ART",
+            "flowId": "2d5ff5fc-9c47-4efd-8982-54e7828dfd82"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 240,
+            "y": 240
+          }
+        },
+        {
+          "id": "link_transito",
+          "data": {
+            "label": "→ Tránsito",
+            "flowId": "2105e145-11e7-488a-9ac3-95bc5d706d7e"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 440,
+            "y": 240
+          }
+        },
+        {
+          "id": "derivar",
+          "data": {
+            "message": "Para ese tema te derivo con un asesor del estudio, aguardá un momento por favor 🙌"
+          },
+          "type": "handoverNode",
+          "position": {
+            "x": 640,
+            "y": 240
+          }
+        },
+        {
+          "id": "link_pension",
+          "data": {
+            "label": "→ Pensión por Viudez",
+            "flowId": "4ccb6dec-4746-4765-ae15-3e784fd1e82a"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 240,
+            "y": 360
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_start_classify",
+          "source": "start",
+          "target": "classify"
+        },
+        {
+          "id": "e_c_jub",
+          "source": "classify",
+          "target": "q_genero",
+          "sourceHandle": "jubilacion"
+        },
+        {
+          "id": "e_c_desp",
+          "source": "classify",
+          "target": "link_laboral",
+          "sourceHandle": "despido"
+        },
+        {
+          "id": "e_c_art",
+          "source": "classify",
+          "target": "link_art",
+          "sourceHandle": "art"
+        },
+        {
+          "id": "e_c_trans",
+          "source": "classify",
+          "target": "link_transito",
+          "sourceHandle": "transito"
+        },
+        {
+          "id": "e_c_otra",
+          "source": "classify",
+          "target": "derivar",
+          "sourceHandle": "otra"
+        },
+        {
+          "id": "e_c_handover",
+          "source": "classify",
+          "target": "derivar",
+          "sourceHandle": "handover"
+        },
+        {
+          "id": "e_gen_h",
+          "source": "q_genero",
+          "target": "link_jubh",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_gen_m",
+          "source": "q_genero",
+          "target": "link_jubm",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_c_pension",
+          "source": "classify",
+          "target": "link_pension",
+          "sourceHandle": "pension"
+        }
+      ]
+    }
+  ]
+}
