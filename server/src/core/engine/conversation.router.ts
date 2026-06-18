@@ -65,6 +65,20 @@ export class ConversationRouter {
     }
 
     if (def?._no_flow_match || def?._restart_ai) {
+      const ai = def?._aiResult || {};
+
+      // Si el Supervisor IA (mid-flow) YA decidió, lo honramos sin re-llamar a la IA.
+      if (ai.route) {
+        const routed = await this.engine.processMessage(accountId, phone, ai.route, baseCtx);
+        return this.extractMessages(routed?.currentStateDefinition?.message_template);
+      }
+      if (ai.handoff) {
+        await this.setHandover(accountId, phone);
+        return [DEFAULT_HANDOFF_MESSAGE];
+      }
+
+      // Sin decisión previa (off-script al inicio, o poll sin supervisor): el Agente
+      // de soporte global decide a qué flujo rutear o si deriva.
       const decision = await SupportAgentService.resolve({ accountId, text, pushName });
 
       if (decision.action === 'route' && decision.trigger) {
@@ -81,8 +95,8 @@ export class ConversationRouter {
 
       // 'none' (sin IA configurada): mantener comportamiento previo.
       // Si veníamos de un flujo (re-prompt mid-flow), usar ese mensaje de fallback.
-      if (def?._restart_ai && def?._aiResult?.fallbackMessage) {
-        return this.extractMessages(def._aiResult.fallbackMessage);
+      if (def?._restart_ai && ai.fallbackMessage) {
+        return this.extractMessages(ai.fallbackMessage);
       }
       return [];
     }

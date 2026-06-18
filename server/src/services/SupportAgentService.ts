@@ -20,13 +20,13 @@ export interface SupportDecision {
     reason?: string;
 }
 
-interface SupportConfig {
+export interface SupportConfig {
     apiKey?: string;
     model?: string;
     prompt?: string;
 }
 
-interface FlowOption {
+export interface FlowOption {
     id: string;
     name: string;
     trigger: string;     // primer trigger_word del flujo (normalizado para reingreso)
@@ -112,8 +112,9 @@ REGLAS:
 
     /**
      * Carga flujos activos (como menú de ruteo) y la config IA de la cuenta.
+     * Público para que el SupervisorService reuse la misma resolución de config.
      */
-    private static async loadAccountContext(accountId: string): Promise<{ flows: FlowOption[]; config: SupportConfig }> {
+    static async loadAccountContext(accountId: string): Promise<{ flows: FlowOption[]; config: SupportConfig }> {
         const config: SupportConfig = {};
 
         // 1. Config a nivel cuenta (columnas ai_* — migración 0008). Tolerante si no existen.

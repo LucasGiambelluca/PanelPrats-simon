@@ -13,7 +13,23 @@ export class ConditionExecutor implements NodeExecutor {
         let valRaw = String(actualValueRaw || '').replace(/[\*_]/g, '').trim().toLowerCase();
         let valIndex = String(actualValueIndex || '').trim().toLowerCase();
 
-        const val2 = String(expectedValue || '').trim().toLowerCase();
+        // expectedValue admite {{variables}} y aritmética simple. Ej: "9 - {{hijos}}"
+        // permite comparar (aportes > 9 - hijos) ≡ (aportes + hijos ≥ 10).
+        let expectedResolved = String(expectedValue || '');
+        if (expectedResolved.includes('{{')) {
+            expectedResolved = expectedResolved.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, v: string) => {
+                const cv = context[v];
+                return cv === undefined || cv === null ? '0' : String(cv);
+            });
+        }
+        // Si quedó una expresión puramente aritmética, evaluarla de forma acotada.
+        if (/[+\-*/]/.test(expectedResolved) && /^[\d\s+\-*/().]+$/.test(expectedResolved.trim())) {
+            try {
+                const n = Function(`"use strict";return (${expectedResolved.trim()});`)();
+                if (typeof n === 'number' && isFinite(n)) expectedResolved = String(n);
+            } catch { /* dejar el literal si no evalúa */ }
+        }
+        const val2 = expectedResolved.trim().toLowerCase();
 
         // Extract numeric part (e.g. from "1." or "*1.*" or "opción 1")
         const matchesNumeric = (text: string, expected: string) => {

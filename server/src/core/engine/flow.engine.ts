@@ -11,6 +11,7 @@ import { Session } from '../domain/Session';
 import { redisPersistence } from '../../infrastructure/persistence/RedisPersistenceService';
 import { PhoneUtils } from '../../utils/phoneUtils';
 import { ConfigurationService } from '../../services/ConfigurationService';
+import { SupervisorService, SupervisorDecision } from '../../services/SupervisorService';
 import { memoryAccounts, memoryFlows } from '../accounts/memoryStore';
 
 const isSupabaseConfigured = !!(
@@ -304,6 +305,120 @@ export class FlowEngine {
         }
     }
 
+    // ─── Agente IA omnipresente (Supervisor) ──────────────────────────────────
+    // Infiere las opciones esperadas del paso actual "auto desde el nodo":
+    //  - pollNode → sus opciones.
+    //  - questionNode/otro → si el/los nodo(s) siguiente(s) ramifican sobre la
+    //    MISMA variable (switchNode.cases / conditionNode.expectedValue), usa esos
+    //    valores. Si no ramifica → texto libre (sin opciones, no se supervisa).
+    private gatherExpectedOptions(flow: FlowDefinition, node: any): string[] {
+        const stripPrefix = (s: string) => String(s).replace(/^\d+[\s.)-]*\s*/, '').trim();
+        if (node.type === 'pollNode') {
+            return (node.data?.options || []).map(stripPrefix).filter(Boolean);
+        }
+        const variable = (node.data?.variable || '').trim();
+        if (!variable) return [];
+        const edges = flow.edges || [];
+        const nodes = flow.nodes || [];
+        const out: string[] = [];
+        const visited = new Set<string>();
+        let frontier = edges.filter((e: any) => e.source === node.id)
+            .map((e: any) => nodes.find((n: any) => n.id === e.target))
+            .filter(Boolean);
+        let hops = 0;
+        while (frontier.length && hops < 8) {
+            const next: any[] = [];
+            for (const nx of frontier) {
+                if (!nx || visited.has(nx.id)) continue;
+                visited.add(nx.id);
+                const nxVar = (nx.data?.variable || '').trim();
+                if (nx.type === 'switchNode' && nxVar === variable) {
+                    for (const c of (nx.data?.cases || [])) if (c?.value) out.push(String(c.value));
+                } else if (nx.type === 'conditionNode' && nxVar === variable) {
+                    // Solo condiciones de igualdad representan opciones discretas;
+                    // las numéricas (greater_than/less_than) NO son enumerables.
+                    const op = nx.data?.operator || 'equals';
+                    if (nx.data?.expectedValue && (op === 'equals' || op === 'not_equals')) {
+                        out.push(String(nx.data.expectedValue));
+                    }
+                    // Seguir la rama 'false' para juntar la cadena de condiciones.
+                    for (const e of edges.filter((e: any) => e.source === nx.id && String(e.sourceHandle).toLowerCase() === 'false')) {
+                        const t = nodes.find((n: any) => n.id === e.target);
+                        if (t) next.push(t);
+                    }
+                }
+                // Nodos que no son switch/condition cortan el rastreo.
+            }
+            frontier = next;
+            hops++;
+        }
+        return [...new Set(out.map(o => o.trim()).filter(Boolean))];
+    }
+
+    // ¿El paso alimenta una condición numérica sobre su variable, o esa variable se
+    // usa en una expresión {{var}} de una condición aguas abajo? → se trata como número.
+    private stepExpectsNumber(flow: FlowDefinition, node: any): boolean {
+        const variable = (node.data?.variable || '').trim();
+        if (!variable) return false;
+        const edges = flow.edges || [];
+        const nodes = flow.nodes || [];
+        const refRe = new RegExp(`\\{\\{\\s*${variable}\\s*\\}\\}`);
+        const visited = new Set<string>([node.id]);
+        let frontier: string[] = edges.filter((e: any) => e.source === node.id).map((e: any) => e.target);
+        let hops = 0;
+        while (frontier.length && hops < 6) {
+            const next: string[] = [];
+            for (const id of frontier) {
+                if (visited.has(id)) continue;
+                visited.add(id);
+                const nx = nodes.find((n: any) => n.id === id);
+                if (!nx) continue;
+                if (nx.type === 'conditionNode') {
+                    const op = nx.data?.operator;
+                    const ev = String(nx.data?.expectedValue || '');
+                    const sameVarNumeric = (nx.data?.variable || '').trim() === variable && (op === 'greater_than' || op === 'less_than');
+                    if (sameVarNumeric || refRe.test(ev)) return true;
+                }
+                for (const e of edges.filter((e: any) => e.source === id)) next.push(e.target);
+            }
+            frontier = next;
+            hops++;
+        }
+        return false;
+    }
+
+    private optionMatchesDirect(input: string, options: string[]): string | null {
+        const clean = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/[^\w\s]/gi, '').toLowerCase().trim();
+        const ci = clean(input);
+        if (!ci) return null;
+        for (const o of options) {
+            const co = clean(o);
+            if (co && (co === ci || (ci.length > 2 && (co.includes(ci) || ci.includes(co))))) return o;
+        }
+        return null;
+    }
+
+    // Aplica el veredicto del supervisor que NO es 'fill'. Devuelve true si el caller
+    // debe cortar (quedarse en el paso o escapar al router); false si debe continuar.
+    private applySupervisorOutcome(session: Session, decision: SupervisorDecision, repromptMsg: string): boolean {
+        if (decision.action === 'fill') return false;
+        session.status = 'waiting_input';
+        if (decision.action === 'side') {
+            const txt = decision.reply ? `${decision.reply}\n\n${repromptMsg}` : repromptMsg;
+            (session as any)._pendingMessages = [txt];
+            return true;
+        }
+        // switch / human / none → escapar al router (Agente IA de soporte).
+        (session as any)._exitToAI = true;
+        (session as any)._aiResult = {
+            route: decision.action === 'switch' ? decision.trigger : undefined,
+            handoff: decision.action === 'human',
+            fallbackMessage: [repromptMsg],
+        };
+        return true;
+    }
+
     private async handleInput(accountId: string, session: Session, input: string): Promise<void> {
         console.log(`\x1b[41m [FLOW-TRACE] handleInput START | Node: ${session.currentNodeId} | Input: "${input}" | SessionStatus: ${session.status} \x1b[0m`);
         session.status = 'active'; // Mark as active now that we got input
@@ -354,20 +469,20 @@ export class FlowEngine {
                 const numericMatch = input.replace(/[\*_]/g, '').match(/\d+/);
                 let index = numericMatch ? parseInt(numericMatch[0]) - 1 : -1;
 
-                // 1. Direct match (Normalized)
-                const cleanInput = input.replace(/[^\w\sáéíóúüñ]/gi, '').toLowerCase().trim();
+                // 1. Direct match (normalizado + sin acentos, para no gastar IA en
+                //    diferencias triviales como "peaton" vs "Peatón")
+                const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+                    .replace(/[^\w\s]/gi, '').toLowerCase().trim();
+                const cleanInput = fold(input);
 
-                const exactIndex = options.findIndex((o: string) => {
-                    const cleanOpt = o.replace(/[^\w\sáéíóúüñ]/gi, '').toLowerCase().trim();
-                    return cleanOpt === cleanInput;
-                });
+                const exactIndex = options.findIndex((o: string) => fold(o) === cleanInput);
 
                 if (exactIndex !== -1) {
                     index = exactIndex;
                 } else if (cleanInput.length > 1) {
                     // 2. Partial/Fuzzy match
                     const partialIndex = options.findIndex((o: string) => {
-                        const cleanOpt = o.replace(/[^\w\sáéíóúüñ]/gi, '').toLowerCase().trim();
+                        const cleanOpt = fold(o);
                         return cleanOpt.includes(cleanInput) || cleanInput.includes(cleanOpt);
                     });
                     if (partialIndex !== -1) {
@@ -376,30 +491,74 @@ export class FlowEngine {
                     }
                 }
 
-                if (index >= 0 && index < options.length) {
-                    processedInput = options[index];
-                    session.setVariable(`${varName}_index`, (index + 1).toString());
-                    session.setVariable(`_poll_selected_handle_${currentNode.id}`, `option-${index}`);
-                    logger.info(`[FlowEngine] [INPUT] Resolved poll input "${input}" to "${processedInput}"`);
-                } else {
-                    // INVALID INPUT: el usuario respondió algo que no es una opción válida.
-                    // En vez de re-preguntar a ciegas, escapamos al Agente IA de soporte
-                    // global (el router lo resuelve): puede entender la intención y rutear
-                    // a otro flujo, o derivar a humano. Stasheamos el re-prompt como
-                    // fallback por si no hay IA configurada (action='none').
-                    logger.info(`[FlowEngine] [INPUT] Invalid poll response: "${input}". Escapando a Agente IA de soporte.`);
+                // Si el match directo falló, el Supervisor IA interpreta la respuesta
+                // semánticamente contra las opciones (ej "iba manejando" → "Conductor").
+                if (index < 0 || index >= options.length) {
                     const optionLines = options.map((opt: string, i: number) => {
                         const cleanOpt = opt.replace(/^\d+[\s.)-]*\s*/, '');
                         return `*${i + 1}.* ${cleanOpt}`;
                     }).join('\n');
                     const question = currentNode.data?.question || 'Elegí una opción:';
                     const repromptMsg = `⚠️ No entendí tu respuesta. Por favor, elegí una opción válida:\n\n${question}\n\n${optionLines}\n\n_Respondé con el número de tu elección._`;
-                    (session as any)._exitToAI = true;
-                    (session as any)._aiResult = { fallbackMessage: [repromptMsg] };
-                    // Do NOT advance — keep waiting_input status
-                    session.status = 'waiting_input';
-                    session.logInteraction(session.currentNodeId, input);
-                    return; // Exit handleInput early without advancing
+
+                    logger.info(`[FlowEngine] [INPUT] Poll sin match directo: "${input}". Consultando Supervisor IA.`);
+                    const decision = await SupervisorService.interpret({
+                        accountId,
+                        question,
+                        expectedOptions: options.map((o: string) => o.replace(/^\d+[\s.)-]*\s*/, '').trim()),
+                        userInput: input,
+                        pushName: session.getVariable('pushName'),
+                    });
+
+                    if (decision.action === 'fill' && decision.value) {
+                        // El supervisor mapeó a una opción (texto sin prefijo) → ubicar índice real.
+                        const want = decision.value.toLowerCase().trim();
+                        index = options.findIndex((o: string) => o.replace(/^\d+[\s.)-]*\s*/, '').trim().toLowerCase() === want);
+                        logger.info(`[FlowEngine] [INPUT] Supervisor mapeó "${input}" → "${decision.value}" (opción ${index + 1})`);
+                    } else {
+                        this.applySupervisorOutcome(session, decision, repromptMsg);
+                        session.logInteraction(session.currentNodeId, input);
+                        return; // No avanzar: side (re-pregunta) o escape al router (switch/human/none)
+                    }
+                }
+
+                if (index >= 0 && index < options.length) {
+                    processedInput = options[index];
+                    session.setVariable(`${varName}_index`, (index + 1).toString());
+                    session.setVariable(`_poll_selected_handle_${currentNode.id}`, `option-${index}`);
+                    logger.info(`[FlowEngine] [INPUT] Resolved poll input "${input}" to "${processedInput}"`);
+                }
+            } else if (this.stepExpectsNumber(flow, currentNode)) {
+                // El paso espera un número (edad, años, etc.) → extraerlo aunque venga
+                // con palabras ("tengo 67 años" → "67"). Si no hay número, se deja crudo.
+                const m = input.match(/\d{1,4}/);
+                if (m) {
+                    processedInput = m[0];
+                    logger.info(`[FlowEngine] [INPUT] Número extraído de "${input}" → "${processedInput}"`);
+                }
+            } else {
+                // questionNode / genérico: si el paso ramifica sobre su variable
+                // (switch/condition), el Supervisor IA interpreta respuestas dichas
+                // de otra forma (ej rol: "iba manejando" → "Conductor").
+                const expected = this.gatherExpectedOptions(flow, currentNode);
+                if (expected.length > 0 && !this.optionMatchesDirect(input, expected)) {
+                    const question = currentNode.data?.question || currentNode.data?.label || 'el paso anterior';
+                    logger.info(`[FlowEngine] [INPUT] "${input}" sin match en [${expected.join(', ')}]. Supervisor IA.`);
+                    const decision = await SupervisorService.interpret({
+                        accountId,
+                        question: String(question),
+                        expectedOptions: expected,
+                        userInput: input,
+                        pushName: session.getVariable('pushName'),
+                    });
+                    if (decision.action === 'fill' && decision.value) {
+                        processedInput = decision.value;
+                        logger.info(`[FlowEngine] [INPUT] Supervisor mapeó "${input}" → "${decision.value}"`);
+                    } else {
+                        this.applySupervisorOutcome(session, decision, String(question));
+                        session.logInteraction(session.currentNodeId, input);
+                        return;
+                    }
                 }
             }
             session.setVariable(varName, processedInput);
