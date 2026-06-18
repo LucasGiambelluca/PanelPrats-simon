@@ -33,18 +33,26 @@ export default function CallActions({ target, provider }: Props) {
     setStartingSala(true);
     try {
       const sala = await salasApi.create({ account_id: target.account_id, titulo: target.nombre });
-      if (phoneDigits) {
-        const inv = await salasApi.invitar(sala.id, target.nombre || 'Cliente');
-        await messagesApi.send(
-          target.account_id,
-          phoneDigits,
-          `Te esperamos en tu *videollamada* con el estudio 👇 Entrá con este link (1 solo click, sin instalar nada):\n${inv.enlace}`
-        );
-        toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
-      } else {
-        toast.success('Sala creada (la cita no tiene teléfono, no se envió link)');
-      }
+      // Abrir la sala del operador SIEMPRE (no depende del envío al cliente).
       window.open(`/sala/${sala.id}?host=1`, '_blank');
+
+      const inv = await salasApi.invitar(sala.id, target.nombre || 'Cliente');
+      if (phoneDigits) {
+        try {
+          await messagesApi.send(
+            target.account_id,
+            phoneDigits,
+            `Te esperamos en tu *videollamada* con el estudio 👇 Entrá con este link (1 solo click, sin instalar nada):\n${inv.enlace}`
+          );
+          toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
+        } catch (e: any) {
+          await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
+          toast.warning('Sala lista, pero no se pudo enviar por WhatsApp. El link se copió — pasáselo al cliente.');
+        }
+      } else {
+        await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
+        toast.info('Sala lista. Link copiado al portapapeles (la cita no tiene teléfono).');
+      }
     } catch (e: any) {
       toast.error('No se pudo iniciar la videollamada: ' + (e.message || ''));
     } finally {
