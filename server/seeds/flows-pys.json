@@ -1,5 +1,5 @@
 {
-  "description": "Seed/backup de los flujos del estudio PYS (router de entrada + embudos de calificación + agendamiento). Exportado desde Supabase. Los flowId en flowLinkNode son específicos de la cuenta de origen.",
+  "description": "Seed/backup de los flujos del estudio PYS (router de entrada con menú + embudos de calificación + agendamiento). Exportado desde Supabase. Los flowId en flowLinkNode son específicos de la cuenta de origen.",
   "account_default_flow": "Router de Entrada (detecta motivo)",
   "flows": [
     {
@@ -2102,23 +2102,38 @@
           }
         },
         {
-          "id": "classify",
+          "id": "welcome",
           "data": {
-            "question": "¡Hola! 👋 Soy el asistente del estudio Prats & Simon. Contame brevemente, ¿en qué necesitás asesoría?",
-            "max_retries": 2,
-            "system_prompt": "Sos un clasificador de un estudio jurídico. Devolvé EXACTAMENTE UNA de estas palabras clave, en minúscula, SIN conjugar y SIN agregar nada más: jubilacion, pension, despido, art, transito, otra.\n\nSignificado:\n- jubilacion → jubilarse, jubilación, ANSES, aportes, retiro, moratoria, edad jubilatoria.\n- pension → pensión por viudez, se me falleció mi esposo/esposa/pareja, soy viudo/a, pensión del cónyuge fallecido.\n- despido → lo despidieron, me echaron, trabajo en negro, liquidación, reclamo laboral (SIN accidente).\n- art → accidente de trabajo, accidente laboral, me lastimé trabajando, ART, enfermedad profesional.\n- transito → accidente de tránsito, choque, me chocaron, siniestro vial.\n- otra → divorcio, familia, alimentos, sucesión, herencia, Veraz, multas, u otro tema.\n\nEjemplos:\n'quiero jubilarme' -> jubilacion\n'falleció mi marido, quiero la pensión' -> pension\n'me chocó un auto' -> transito\n'tuve un accidente en el trabajo' -> art\n'me despidieron sin causa' -> despido\n'necesito un divorcio' -> otra\n\nSi es un saludo o algo ambiguo sin tema, devolvé: no_entendido.\nRecordá: tu respuesta es SOLO la palabra clave, nada más.",
-            "output_variable": "motivo",
-            "fallback_message": "Disculpá, no te entendí. ¿Es por jubilación, un despido, un accidente laboral (ART), un accidente de tránsito, u otro tema?",
-            "possible_intents": "jubilacion,pension,despido,art,transito,otra"
+            "text": "¡Hola! 👋 Soy el asistente virtual del estudio *Prats & Simon*. Estoy para ayudarte."
           },
-          "type": "intentResolverNode",
+          "type": "messageNode",
           "position": {
             "x": 60,
-            "y": 110
+            "y": 100
           }
         },
         {
-          "id": "q_genero",
+          "id": "menu",
+          "data": {
+            "options": [
+              "Jubilación",
+              "Pensión por viudez",
+              "Despido / Trabajo en negro",
+              "Accidente de trabajo (ART)",
+              "Accidente de tránsito",
+              "Otra consulta"
+            ],
+            "question": "¿En qué tema necesitás asesoría? Elegí una opción o contame con tus palabras 👇",
+            "variable": "motivo"
+          },
+          "type": "pollNode",
+          "position": {
+            "x": 60,
+            "y": 210
+          }
+        },
+        {
+          "id": "genero",
           "data": {
             "options": [
               "Hombre",
@@ -2129,8 +2144,8 @@
           },
           "type": "pollNode",
           "position": {
-            "x": -260,
-            "y": 240
+            "x": -320,
+            "y": 340
           }
         },
         {
@@ -2141,8 +2156,8 @@
           },
           "type": "flowLinkNode",
           "position": {
-            "x": -380,
-            "y": 360
+            "x": -440,
+            "y": 450
           }
         },
         {
@@ -2153,55 +2168,8 @@
           },
           "type": "flowLinkNode",
           "position": {
-            "x": -180,
-            "y": 360
-          }
-        },
-        {
-          "id": "link_laboral",
-          "data": {
-            "label": "→ Laboral / Despido",
-            "flowId": "409c3724-b07c-4e3a-8bae-42263d28658c"
-          },
-          "type": "flowLinkNode",
-          "position": {
-            "x": 40,
-            "y": 240
-          }
-        },
-        {
-          "id": "link_art",
-          "data": {
-            "label": "→ ART",
-            "flowId": "2d5ff5fc-9c47-4efd-8982-54e7828dfd82"
-          },
-          "type": "flowLinkNode",
-          "position": {
-            "x": 240,
-            "y": 240
-          }
-        },
-        {
-          "id": "link_transito",
-          "data": {
-            "label": "→ Tránsito",
-            "flowId": "2105e145-11e7-488a-9ac3-95bc5d706d7e"
-          },
-          "type": "flowLinkNode",
-          "position": {
-            "x": 440,
-            "y": 240
-          }
-        },
-        {
-          "id": "derivar",
-          "data": {
-            "message": "Para ese tema te derivo con un asesor del estudio, aguardá un momento por favor 🙌"
-          },
-          "type": "handoverNode",
-          "position": {
-            "x": 640,
-            "y": 240
+            "x": -240,
+            "y": 450
           }
         },
         {
@@ -2212,70 +2180,116 @@
           },
           "type": "flowLinkNode",
           "position": {
-            "x": 240,
-            "y": 360
+            "x": -40,
+            "y": 340
+          }
+        },
+        {
+          "id": "link_laboral",
+          "data": {
+            "label": "→ Laboral / Despido",
+            "flowId": "409c3724-b07c-4e3a-8bae-42263d28658c"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 160,
+            "y": 340
+          }
+        },
+        {
+          "id": "link_art",
+          "data": {
+            "label": "→ ART",
+            "flowId": "2d5ff5fc-9c47-4efd-8982-54e7828dfd82"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 360,
+            "y": 340
+          }
+        },
+        {
+          "id": "link_transito",
+          "data": {
+            "label": "→ Tránsito",
+            "flowId": "2105e145-11e7-488a-9ac3-95bc5d706d7e"
+          },
+          "type": "flowLinkNode",
+          "position": {
+            "x": 560,
+            "y": 340
+          }
+        },
+        {
+          "id": "derivar",
+          "data": {
+            "message": "Para ese tema te derivo con un asesor del estudio, aguardá un momento por favor 🙌"
+          },
+          "type": "handoverNode",
+          "position": {
+            "x": 760,
+            "y": 340
           }
         }
       ],
       "edges": [
         {
-          "id": "e_start_classify",
+          "id": "e_start_welcome",
           "source": "start",
-          "target": "classify"
+          "target": "welcome"
         },
         {
-          "id": "e_c_jub",
-          "source": "classify",
-          "target": "q_genero",
-          "sourceHandle": "jubilacion"
+          "id": "e_welcome_menu",
+          "source": "welcome",
+          "target": "menu"
         },
         {
-          "id": "e_c_desp",
-          "source": "classify",
+          "id": "e_m_jub",
+          "source": "menu",
+          "target": "genero",
+          "sourceHandle": "option-0"
+        },
+        {
+          "id": "e_m_pension",
+          "source": "menu",
+          "target": "link_pension",
+          "sourceHandle": "option-1"
+        },
+        {
+          "id": "e_m_desp",
+          "source": "menu",
           "target": "link_laboral",
-          "sourceHandle": "despido"
+          "sourceHandle": "option-2"
         },
         {
-          "id": "e_c_art",
-          "source": "classify",
+          "id": "e_m_art",
+          "source": "menu",
           "target": "link_art",
-          "sourceHandle": "art"
+          "sourceHandle": "option-3"
         },
         {
-          "id": "e_c_trans",
-          "source": "classify",
+          "id": "e_m_trans",
+          "source": "menu",
           "target": "link_transito",
-          "sourceHandle": "transito"
+          "sourceHandle": "option-4"
         },
         {
-          "id": "e_c_otra",
-          "source": "classify",
+          "id": "e_m_otra",
+          "source": "menu",
           "target": "derivar",
-          "sourceHandle": "otra"
-        },
-        {
-          "id": "e_c_handover",
-          "source": "classify",
-          "target": "derivar",
-          "sourceHandle": "handover"
+          "sourceHandle": "option-5"
         },
         {
           "id": "e_gen_h",
-          "source": "q_genero",
+          "source": "genero",
           "target": "link_jubh",
           "sourceHandle": "option-0"
         },
         {
           "id": "e_gen_m",
-          "source": "q_genero",
+          "source": "genero",
           "target": "link_jubm",
           "sourceHandle": "option-1"
-        },
-        {
-          "id": "e_c_pension",
-          "source": "classify",
-          "target": "link_pension",
-          "sourceHandle": "pension"
         }
       ]
     }
