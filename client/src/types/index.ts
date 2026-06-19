@@ -54,3 +54,14 @@ export interface WhatsAppMessage {
   message_type: string;
   timestamp: string;
 }
+
+export type Role = 'admin' | 'empleada';
+
+export interface Profile {
+  id: string;
+  role: Role;
+  name: string | null;
+  active: boolean;
+  email?: string | null;
+  created_at?: string;
+}

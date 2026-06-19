@@ -1,16 +1,26 @@
-// Sin VITE_API_URL → relativo: el front llama /api y vite lo proxyea al backend
-// (mismo origen). Así sirve tanto en local como detrás de un túnel (un solo túnel).
-const BASE = import.meta.env.VITE_API_URL ?? '';
+import { supabase } from '../supabaseClient';
+
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const IS_DEV = !import.meta.env.VITE_SUPABASE_URL;
+
+async function authHeader(): Promise<Record<string, string>> {
+  if (IS_DEV) return { Authorization: 'Bearer dev-token' };
+  const { data } = await supabase.auth.getSession();
+  const t = data.session?.access_token;
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const auth = await authHeader();
   const res = await fetch(`${BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true', // evita la interstitial de ngrok en las llamadas API
-      ...(init?.headers || {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...auth, ...(init?.headers || {}) },
     ...init,
   });
+  if (res.status === 401) {
+    if (!IS_DEV) { await supabase.auth.signOut(); window.location.href = '/login'; }
+    throw new Error('Sesión expirada');
+  }
+  if (res.status === 403) throw new Error('No tenés permiso para esta acción');
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `API ${path} → ${res.status}`);
@@ -213,6 +223,25 @@ export const configApi = {
     api<{ success: boolean; message: string }>('/api/config/restart', {
       method: 'POST',
     }),
+};
+
+// ── Auth / rol ───────────────────────────────────────────────
+import type { Profile, Role } from '../types';
+
+export const meApi = {
+  get: () => api<{ id: string; role: Role; name: string | null }>('/api/me'),
+};
+
+export const teamApi = {
+  list: () => api<Profile[]>('/api/team'),
+  create: (email: string, password: string, name: string) =>
+    api<Profile>('/api/team', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
+  setActive: (id: string, active: boolean) =>
+    api<Profile>(`/api/team/${id}`, { method: 'PUT', body: JSON.stringify({ active }) }),
+  rename: (id: string, name: string) =>
+    api<Profile>(`/api/team/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  resetPassword: (id: string, password: string) =>
+    api<{ ok: boolean }>(`/api/team/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
 };
 
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
