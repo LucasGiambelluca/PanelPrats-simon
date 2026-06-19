@@ -42,7 +42,7 @@ const CHECKS = {
   '0008_account_ai_support': {
     accounts: ['ai_support_enabled', 'ai_api_key', 'ai_model', 'ai_support_prompt'],
   },
-  '0009_profiles': { profiles: ['id', 'role', 'name', 'active'] },
+  '0010_profiles': { profiles: ['id', 'role', 'name', 'active'] },
 };
 
 // Devuelve 'ok' | 'missing-col' | 'missing-table' | 'error'.

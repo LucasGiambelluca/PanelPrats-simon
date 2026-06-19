@@ -1,4 +1,4 @@
--- 0009: roles por usuario (admin / empleada). Single-org. Idempotente.
+-- 0010: roles por usuario (admin / empleada). Single-org. Idempotente.
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role text NOT NULL DEFAULT 'empleada' CHECK (role IN ('admin','empleada')),
