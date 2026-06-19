@@ -16,7 +16,6 @@ export function flowsRouter(): Router {
 
   r.get('/', async (req, res) => {
     const accountId = req.query.account_id as string;
-    const userId = req.query.user_id as string;
     const isMemoryAccount = accountId ? memoryAccounts.has(accountId) : false;
     const useSupabase = isSupabaseConfigured && !isMemoryAccount;
 
@@ -27,13 +26,9 @@ export function flowsRouter(): Router {
         if (accountId && accountId.trim() !== '') {
           // Flujos de una cuenta puntual.
           query = query.eq('account_id', accountId);
-        } else if (userId && userId.trim() !== '') {
-          // Todos los flujos del usuario (across cuentas) para poder editarlos desde el bot builder.
-          const { data: accs } = await supabase.from('accounts').select('id').eq('user_id', userId);
-          const ids = (accs || []).map((a: any) => a.id);
-          // Sentinela imposible si el usuario no tiene cuentas → devuelve vacío en vez de TODO.
-          query = query.in('account_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
         }
+        // Sin account_id => TODOS los flujos del estudio (single-org). La ruta es
+        // admin-only; el user_id ya no filtra (un admin puede no ser dueño de las cuentas).
         const { data, error } = await query;
         if (!error && data) {
           dbFlows = data;
