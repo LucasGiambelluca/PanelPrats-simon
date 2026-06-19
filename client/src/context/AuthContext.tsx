@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
+import { meApi } from '../lib/api';
+import type { Role } from '../types';
 
 // DEV MODE: skip real auth when no Supabase credentials are configured
 const IS_DEV_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === '';
@@ -30,6 +32,7 @@ const MOCK_SESSION = {
 interface AuthContextType {
   session: Session | null;
   user: User | null;
+  role: Role | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ data: { user: User | null; session: Session | null }; error: any }>;
   signOut: () => Promise<void>;
@@ -38,6 +41,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
+  role: null,
   loading: true,
   signIn: async () => ({ data: { user: null, session: null }, error: null }),
   signOut: async () => {},
@@ -48,6 +52,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,21 +61,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🔓 DEV MODE: Auto-authenticating with mock user');
       setSession(MOCK_SESSION);
       setUser(MOCK_USER);
+      setRole('admin');
       setLoading(false);
       return;
     }
 
+    const resolveRole = async (s: Session | null) => {
+      if (!s) { setRole(null); return; }
+      try { const me = await meApi.get(); setRole(me.role); } catch { setRole(null); }
+    };
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      await resolveRole(session);
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      await resolveRole(session);
       setLoading(false);
     });
 
@@ -98,6 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const value = {
     session,
     user,
+    role,
     loading,
     signIn,
     signOut,
