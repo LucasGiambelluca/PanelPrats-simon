@@ -21,7 +21,7 @@ async function bootstrap() {
   const manager = new AccountManager(engine);
 
   // Permite que executors (ej agendamiento) notifiquen por la línea de una cuenta.
-  setNotificationSender((accountId, to, text) => manager.sendMessage(accountId, to, text));
+  setNotificationSender(async (accountId, to, text) => { await manager.sendMessage(accountId, to, text); });
 
   const app = createApp(manager);
   app.listen(PORT, '0.0.0.0', () => console.log(`🚀 server en :${PORT}`));

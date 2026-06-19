@@ -106,28 +106,32 @@ export class AccountManager {
     return this.clients.get(accountId)?.getStatus() ?? 'disconnected';
   }
 
-  async sendMessage(accountId: string, to: string, text: string): Promise<void> {
+  async sendMessage(accountId: string, to: string, text: string): Promise<{ resolved: boolean }> {
     const client = this.clients.get(accountId);
     if (!client) throw new Error(`Cuenta ${accountId} no conectada`);
 
     if (client instanceof MetaClient || client instanceof WhatsAppOfficialClient) {
       await client.sendMessage(to, text);
-      return;
+      return { resolved: true };
     }
 
     // WhatsApp: intentar resolver el JID REAL (onWhatsApp) para manejar el "9" de
-    // Argentina. Si onWhatsApp no resuelve (falso-negativo), NO bloqueamos: caemos
-    // al jid literal e intentamos igual (onWhatsApp no es 100% confiable).
+    // Argentina. Si onWhatsApp no resuelve (falso-negativo, o número inválido), NO
+    // bloqueamos: caemos al jid literal e intentamos igual. `resolved` indica si el
+    // número existe en WhatsApp (para feedback honesto en la UI).
     let jid = to;
+    let resolved = !to.includes('@lid'); // un @lid no es número usable
     if (!to.includes('@')) {
       const digits = to.replace(/\D/g, '');
-      let resolved: string | null = null;
+      let resolvedJid: string | null = null;
       if (typeof (client as any).resolveJid === 'function') {
-        try { resolved = await (client as any).resolveJid(to); } catch { /* noop */ }
+        try { resolvedJid = await (client as any).resolveJid(to); } catch { /* noop */ }
       }
-      jid = resolved || `${digits}@s.whatsapp.net`;
+      resolved = !!resolvedJid;
+      jid = resolvedJid || `${digits}@s.whatsapp.net`;
     }
     await client.sendFormattedMessage(jid, text);
+    return { resolved };
   }
 
   /**

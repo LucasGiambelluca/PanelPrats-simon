@@ -8,8 +8,8 @@ export function messagesRouter(manager: AccountManager): Router {
   r.post('/send', async (req, res) => {
     const { account_id, phone, text } = req.body;
     try {
-      await manager.sendMessage(account_id, phone, text);
-      res.json({ ok: true });
+      const r = await manager.sendMessage(account_id, phone, text);
+      res.json({ ok: true, resolved: r?.resolved !== false });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }

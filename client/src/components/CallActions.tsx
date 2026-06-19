@@ -39,12 +39,17 @@ export default function CallActions({ target, provider }: Props) {
       const inv = await salasApi.invitar(sala.id, target.nombre || 'Cliente');
       if (phoneDigits) {
         try {
-          await messagesApi.send(
+          const res = await messagesApi.send(
             target.account_id,
             phoneDigits,
             `Te esperamos en tu *videollamada* con el estudio 👇 Entrá con este link (1 solo click, sin instalar nada):\n${inv.enlace}`
           );
-          toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
+          if (res.resolved === false) {
+            await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
+            toast.warning('El número de la cita no parece de WhatsApp. Link copiado — pasáselo al cliente.');
+          } else {
+            toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
+          }
         } catch (e: any) {
           await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
           toast.warning('Sala lista, pero no se pudo enviar por WhatsApp. El link se copió — pasáselo al cliente.');

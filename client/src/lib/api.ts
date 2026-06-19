@@ -126,7 +126,7 @@ export const conversationsApi = {
 
 export const messagesApi = {
   send: (accountId: string, phone: string, text: string) =>
-    api<{ ok: boolean }>('/api/messages/send', {
+    api<{ ok: boolean; resolved?: boolean }>('/api/messages/send', {
       method: 'POST',
       body: JSON.stringify({ account_id: accountId, phone, text }),
     }),
