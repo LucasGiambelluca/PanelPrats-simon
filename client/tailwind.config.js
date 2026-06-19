@@ -16,6 +16,7 @@ export default {
       },
       fontFamily: {
         sans: ['Raleway', 'Poppins', 'Inter', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Georgia', 'Cambria', 'serif'],
       },
       animation: {
         'shimmer': 'shimmer 2.5s linear infinite',

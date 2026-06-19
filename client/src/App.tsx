@@ -4,8 +4,10 @@ import { AccountProvider } from './context/AccountContext';
 import { Toaster } from 'sonner';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleRoute from './components/RoleRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import NotFound from './pages/NotFound';
 import Accounts from './pages/Accounts';
 import WhatsAppInbox from './pages/WhatsAppInbox';
 import BotBuilder from './pages/BotBuilder';
@@ -16,6 +18,7 @@ import Team from './pages/Team';
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <Toaster
         position="top-right"
@@ -52,9 +55,13 @@ function App() {
               </Route>
             </Route>
           </Route>
+
+          {/* Catch-all: 404 branded */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

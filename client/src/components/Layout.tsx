@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users } from 'lucide-react';
+import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users, Menu, X } from 'lucide-react';
 
 const allNav = [
   { to: '/accounts', label: 'Mis Números', icon: Phone, roles: ['admin'] },
@@ -17,13 +18,32 @@ export default function Layout() {
   const { signOut, role } = useAuth();
   const navItems = allNav.filter(item => role ? (item.roles as readonly string[]).includes(role) : false);
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
 
   return (
     <div className="min-h-screen flex bg-brand-dark text-brand-textLight font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-brand-card/90 backdrop-blur-2xl border-r border-white/5 flex flex-col relative overflow-hidden">
+      {/* Topbar móvil */}
+      <div className="lg:hidden fixed top-0 inset-x-0 z-30 h-14 bg-brand-card/95 backdrop-blur border-b border-white/5 flex items-center justify-between px-4">
+        <button onClick={() => setMobileOpen(true)} aria-label="Abrir menú" className="text-brand-textLight p-1">
+          <Menu size={22} />
+        </button>
+        <img src="/logo.png" alt="Prats & Simon" className="h-7 w-auto brightness-0 invert opacity-90" />
+        <div className="w-8" />
+      </div>
+
+      {/* Backdrop del drawer (móvil) */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* Sidebar — drawer en móvil, fija en desktop */}
+      <aside className={`w-64 bg-brand-card/90 backdrop-blur-2xl border-r border-white/5 flex flex-col relative overflow-hidden fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Cerrar (solo móvil) */}
+        <button onClick={() => setMobileOpen(false)} aria-label="Cerrar menú" className="lg:hidden absolute top-3 right-3 z-20 text-brand-textMuted hover:text-brand-textLight">
+          <X size={20} />
+        </button>
         {/* Modern glowing background light behind the logo */}
         <div className="absolute -top-20 -left-20 w-40 h-40 bg-brand-secondary/10 rounded-full blur-3xl pointer-events-none" />
         
@@ -87,6 +107,7 @@ export default function Layout() {
               <Link
                 key={to}
                 to={to}
+                onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 group relative ${
                   isActive
                     ? 'bg-brand-secondary/10 text-brand-secondary border-l-2 border-brand-accent shadow-sm'
@@ -116,7 +137,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-gradient-to-b from-brand-dark to-[#090b11] relative">
+      <main className="flex-1 overflow-auto bg-gradient-to-b from-brand-dark to-[#090b11] relative pt-14 lg:pt-0 w-full lg:w-auto">
         {/* Ambient background glow decoration in main content */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-brand-secondary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
