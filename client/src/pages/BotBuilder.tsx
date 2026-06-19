@@ -550,7 +550,7 @@ export default function BotBuilder() {
                 <div className="flex items-center gap-4">
                      <label className="flex items-center cursor-pointer relative">
                         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="sr-only peer" />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                        <div className="w-9 h-5 bg-brand-hairline peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-primary"></div>
                         <span className="ml-2 text-xs font-medium text-brand-ink">Activo</span>
                     </label>
 
@@ -581,7 +581,7 @@ export default function BotBuilder() {
                     {currentFlowId && (
                         <button
                             onClick={handleDelete}
-                            className="bg-red-50 text-red-600 px-4 py-2 rounded flex items-center gap-2 hover:bg-red-100 transition shadow-sm border border-red-200"
+                            className="bg-red-50 text-red-600 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-red-100 transition shadow-card border border-red-200"
                         >
                             <Trash2 size={18} />
                             Eliminar
@@ -592,7 +592,7 @@ export default function BotBuilder() {
                         onClick={handleSave}
                         disabled={!activeAccountId}
                         title={!activeAccountId ? 'Seleccioná una cuenta para guardar' : 'Guardar'}
-                        className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 transition shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-600"
+                        className="bg-brand-primary text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-brand-accent transition shadow-card disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
                     >
                         <Save size={18} />
                         Guardar
@@ -601,14 +601,14 @@ export default function BotBuilder() {
             </div>
 
             {/* Header - Mobile */}
-            <div className="lg:hidden h-14 bg-brand-secondary flex items-center justify-between px-4 z-20 shadow-md">
+            <div className="lg:hidden h-14 bg-brand-primary flex items-center justify-between px-4 z-20 shadow-card">
                 <div className="flex items-center gap-3">
                     <button onClick={() => window.history.back()} className="text-white">
                         <ChevronLeft size={24} />
                     </button>
                     <div className="flex flex-col">
                         <span className="text-[10px] text-white/70 uppercase font-bold tracking-wider">Flujo Actual</span>
-                        <h1 className="text-white font-bold text-sm truncate max-w-[150px]">{flowName}</h1>
+                        <h1 className="text-white font-serif font-bold text-sm truncate max-w-[150px]">{flowName}</h1>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -664,7 +664,7 @@ export default function BotBuilder() {
                 {/* FAB - Mobile */}
                 <button 
                     onClick={() => setIsNodeSelectorOpen(true)}
-                    className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-brand-secondary text-white rounded-full shadow-xl flex items-center justify-center z-30 active:scale-90 transition-transform"
+                    className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-brand-primary text-white rounded-full shadow-card flex items-center justify-center z-30 active:scale-90 transition-transform"
                 >
                     <Plus size={28} />
                 </button>
@@ -673,8 +673,8 @@ export default function BotBuilder() {
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 z-[110] bg-black/50 animate-in fade-in duration-300">
                         <div className="absolute inset-y-0 right-0 w-[80%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-                            <div className="p-4 border-b border-brand-hairline flex items-center justify-between bg-brand-panel">
-                                <h3 className="font-bold text-brand-ink">Ajustes de Flujo</h3>
+                            <div className="p-4 border-b border-brand-hairline flex items-center justify-between bg-brand-surface">
+                                <h3 className="font-serif font-bold text-brand-ink">Ajustes de Flujo</h3>
                                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-black/[0.04] rounded-full text-brand-inkmuted">
                                     <X size={24} />
                                 </button>
@@ -702,7 +702,7 @@ export default function BotBuilder() {
                                         <span className="text-sm font-medium text-brand-ink">Estado Activo</span>
                                         <label className="flex items-center cursor-pointer relative">
                                             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                            <div className="w-11 h-6 bg-brand-hairline peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary"></div>
                                         </label>
                                     </div>
                                 </div>
@@ -712,7 +712,7 @@ export default function BotBuilder() {
                                     <div className="grid grid-cols-1 gap-2">
                                         <button
                                             onClick={() => { createNewFlow(); setIsMobileMenuOpen(false); }}
-                                            className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-brand-hairline text-brand-secondary font-medium text-sm hover:bg-brand-secondary/5"
+                                            className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-brand-hairline text-brand-primary font-medium text-sm hover:bg-brand-primary/5"
                                         >
                                             <Plus size={18} /> Nuevo Flujo
                                         </button>
@@ -720,7 +720,7 @@ export default function BotBuilder() {
                                             <button
                                                 key={f.id}
                                                 onClick={() => { loadFlow(f); setIsMobileMenuOpen(false); }}
-                                                className={`flex items-center justify-between p-3 rounded-xl border ${String(f.id) === String(currentFlowId) ? 'bg-brand-secondary/10 border-brand-secondary/20 text-brand-secondary' : 'bg-white border-brand-hairline text-brand-ink'}`}
+                                                className={`flex items-center justify-between p-3 rounded-xl border ${String(f.id) === String(currentFlowId) ? 'bg-brand-primary/10 border-brand-primary/20 text-brand-primary' : 'bg-white border-brand-hairline text-brand-ink'}`}
                                             >
                                                 <span className="text-sm font-medium truncate">{f.name}</span>
                                                 <div className={`w-2 h-2 rounded-full ${f.is_active ? 'bg-green-500' : 'bg-gray-300'}`}></div>

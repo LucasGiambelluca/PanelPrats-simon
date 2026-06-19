@@ -45,8 +45,8 @@ export default function Team() {
     <div className="min-h-screen bg-brand-ivory p-6 lg:p-8 font-sans">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-3 mb-8 border-b border-brand-hairline pb-6">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1a2949] to-[#101820] flex items-center justify-center">
-            <Users size={22} className="text-[#24365a]" />
+          <div className="w-11 h-11 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+            <Users size={22} />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-brand-ink font-serif">Equipo</h1>
@@ -54,21 +54,22 @@ export default function Team() {
           </div>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 mb-8 border border-brand-hairline">
+        <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6 mb-8 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
           <h2 className="text-brand-ink font-serif font-bold text-lg mb-4">Nueva empleada</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Nombre" value={name} onChange={e => setName(e.target.value)} />
             <input className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
             <input type="password" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Contraseña inicial" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
-          <button onClick={create} disabled={creating} className="mt-4 flex items-center gap-2 bg-gradient-to-r from-[#1a2949] to-[#101820] text-white px-6 py-3 rounded-xl font-bold text-sm disabled:opacity-40">
+          <button onClick={create} disabled={creating} className="mt-4 flex items-center gap-2 bg-brand-primary text-white px-6 py-3 rounded-xl font-bold text-sm disabled:opacity-40">
             {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Crear
           </button>
         </div>
 
-        <div className="glass-card rounded-2xl border border-brand-hairline overflow-hidden">
+        <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card overflow-hidden">
           {loading ? (
-            <div className="p-10 flex justify-center"><Loader2 size={24} className="animate-spin text-[#24365a]" /></div>
+            <div className="p-10 flex justify-center"><Loader2 size={24} className="animate-spin text-brand-primary" /></div>
           ) : list.length === 0 ? (
             <p className="p-10 text-center text-brand-inkmuted text-sm">Sin empleadas todavía.</p>
           ) : list.map(p => (

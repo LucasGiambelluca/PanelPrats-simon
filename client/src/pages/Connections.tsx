@@ -108,11 +108,11 @@ export default function Connections() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1a2949] to-[#101820] flex items-center justify-center shadow-lg shadow-[#1a2949]/20">
-              <Settings size={22} className="text-white" />
+            <div className="w-11 h-11 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+              <Settings size={22} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-brand-ink tracking-tight">Conexiones</h1>
+              <h1 className="text-2xl font-bold text-brand-ink font-serif">Conexiones</h1>
               <p className="text-sm text-brand-inkmuted">Configurá las credenciales, bases de datos y servicios externos</p>
             </div>
           </div>
@@ -131,9 +131,12 @@ export default function Connections() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* Supabase & DB section */}
-            <div className="bg-brand-surface border border-brand-hairline rounded-2xl p-6">
-              <h2 className="text-brand-ink font-bold text-base mb-5 flex items-center gap-2">
-                <Database size={18} className="text-brand-secondary" />
+            <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-brand-primary" />
+              <h2 className="font-serif font-bold text-brand-ink text-base mb-5 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+                  <Database size={16} />
+                </span>
                 Base de Datos y Supabase
               </h2>
               
@@ -186,9 +189,11 @@ export default function Connections() {
             </div>
 
             {/* APIs & Services */}
-            <div className="bg-brand-surface border border-brand-hairline rounded-2xl p-6">
-              <h2 className="text-brand-ink font-bold text-base mb-5 flex items-center gap-2">
-                <Server size={18} className="text-brand-secondary" />
+            <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6">
+              <h2 className="font-serif font-bold text-brand-ink text-base mb-5 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+                  <Server size={16} />
+                </span>
                 Servicios Externos e Infraestructura
               </h2>
               
@@ -282,11 +287,13 @@ export default function Connections() {
           <div className="space-y-6">
             
             {/* Sync Database Operations */}
-            <div className="bg-brand-panel border border-brand-hairline rounded-2xl p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-brand-secondary/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
 
-              <h3 className="text-brand-ink font-bold text-sm mb-3 flex items-center gap-2">
-                <Database size={16} className="text-brand-secondary" />
+              <h3 className="font-serif font-bold text-brand-ink text-sm mb-3 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-goldDark flex items-center justify-center">
+                  <Database size={15} />
+                </span>
                 Base de Datos
               </h3>
 
@@ -305,9 +312,11 @@ export default function Connections() {
             </div>
 
             {/* Help / Instructions Box */}
-            <div className="bg-brand-panel border border-brand-hairline rounded-2xl p-6">
-              <h3 className="text-brand-ink font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-                <HelpCircle size={14} className="text-brand-inkmuted" />
+            <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6">
+              <h3 className="font-serif font-bold text-brand-ink text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+                  <HelpCircle size={14} />
+                </span>
                 Guía rápida
               </h3>
 

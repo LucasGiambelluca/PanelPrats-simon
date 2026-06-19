@@ -40,11 +40,11 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className={`${collapsed ? 'w-12' : 'w-52'} hidden lg:flex bg-white border-l border-gray-200 flex-col h-full transition-all duration-200 relative`}>
+    <aside className={`${collapsed ? 'w-12' : 'w-52'} hidden lg:flex bg-brand-surface border-l border-brand-hairline flex-col h-full transition-all duration-200 relative`}>
       {/* Toggle button */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -left-3 top-4 bg-white border border-gray-300 rounded-full w-6 h-6 flex items-center justify-center shadow-sm hover:bg-gray-50 z-10"
+        className="absolute -left-3 top-4 bg-brand-surface border border-brand-hairline text-brand-inkmuted rounded-full w-6 h-6 flex items-center justify-center shadow-card hover:bg-brand-panel hover:text-brand-primary z-10"
       >
         {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
       </button>
@@ -55,7 +55,7 @@ export default function Sidebar() {
           {nodeItems.map(item => (
             <div
               key={item.type}
-              className="p-2 rounded cursor-grab hover:bg-gray-100 transition"
+              className="p-2 rounded-lg cursor-grab hover:bg-brand-panel transition"
               onDragStart={(e) => onDragStart(e, item.type)}
               draggable
               title={item.label}
@@ -67,23 +67,23 @@ export default function Sidebar() {
       ) : (
         /* Expanded */
         <div className="p-3 flex flex-col gap-2 h-full overflow-y-auto">
-          <h2 className="font-bold text-gray-700 text-sm">Nodos</h2>
+          <h2 className="font-serif font-bold text-brand-ink text-sm">Nodos</h2>
           <div className="space-y-1.5">
             {nodeItems.map(item => (
               <div
                 key={item.type}
-                className="bg-white p-2 rounded shadow-sm hover:shadow transition cursor-grab active:cursor-grabbing border border-gray-100 flex items-center gap-2"
+                className="bg-brand-surface p-2 rounded-lg shadow-card hover:shadow transition cursor-grab active:cursor-grabbing border border-brand-hairline flex items-center gap-2"
                 onDragStart={(e) => onDragStart(e, item.type)}
                 draggable
               >
                 <div className={`${item.bg} p-1.5 rounded ${item.text}`}>
                   <item.icon size={14} />
                 </div>
-                <span className="text-xs font-medium text-gray-700">{item.label}</span>
+                <span className="text-xs font-medium text-brand-ink">{item.label}</span>
               </div>
             ))}
           </div>
-          <div className="mt-auto p-2 bg-gray-50 rounded text-[10px] text-gray-500 border border-gray-200 flex gap-1">
+          <div className="mt-auto p-2 bg-brand-panel rounded-lg text-[10px] text-brand-inkmuted border border-brand-hairline flex gap-1">
             <MousePointerClick size={12} />
             <p>Uní los puntos para conectar.</p>
           </div>
