@@ -62,6 +62,7 @@ export default function Agenda() {
 
   // Modal settings
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
@@ -343,10 +344,16 @@ export default function Agenda() {
       toast.error('El teléfono es requerido');
       return;
     }
+    if (submitting) return; // evita doble-submit → citas duplicadas
 
     try {
+      setSubmitting(true);
       const startTimeISO = new Date(`${formData.date}T${formData.startHour}`).toISOString();
       const endTimeISO = new Date(`${formData.date}T${formData.endHour}`).toISOString();
+      if (new Date(endTimeISO).getTime() <= new Date(startTimeISO).getTime()) {
+        toast.error('La hora de fin debe ser posterior a la de inicio');
+        return;
+      }
 
       if (selectedApp) {
         // Edit mode
@@ -379,6 +386,8 @@ export default function Agenda() {
       loadAppointments(true);
     } catch (err: any) {
       toast.error('Error al guardar la cita: ' + err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1542,13 +1551,14 @@ export default function Agenda() {
                   </button>
                   <button
                     type="submit"
-                    className={`px-4 py-2 text-xs font-bold rounded-xl shadow-md transition-all ${
+                    disabled={submitting}
+                    className={`px-4 py-2 text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       theme === 'light'
                         ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white shadow-blue-500/10'
                         : 'bg-brand-secondary hover:bg-brand-accent text-brand-dark shadow-brand-secondary/10'
                     }`}
                   >
-                    {selectedApp ? 'Guardar Cambios' : 'Agendar Cita'}
+                    {submitting ? 'Guardando…' : (selectedApp ? 'Guardar Cambios' : 'Agendar Cita')}
                   </button>
                 </div>
               </div>

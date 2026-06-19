@@ -108,7 +108,11 @@ export class ReminderScheduler {
       for (const a of appointments) {
         if (!a.start_time) continue;
         if (a.status !== 'pendiente' && a.status !== 'confirmada') continue;
-        if (now > this.endOfDayArMs(new Date(a.start_time).getTime())) {
+        const startMs = new Date(a.start_time).getTime();
+        // No auto-marcar citas "backfilled" (creadas DESPUÉS de su horario): son carga
+        // manual del operador sobre algo ya pasado, no un no-show real. Respetar su status.
+        if ((a as any).created_at && new Date((a as any).created_at).getTime() > startMs) continue;
+        if (now > this.endOfDayArMs(startMs)) {
           await AppointmentService.update(a.id, { status: 'no_asistio' }).catch(() => {});
           console.log(`[ReminderScheduler] no-show marcado: cita ${a.id} (${a.nombre || a.phone}) — para recontactar`);
         }

@@ -1,4 +1,11 @@
 import 'dotenv/config';
+
+// Zona horaria del proceso: toda la agenda (slots, horarios laborales, recordatorios)
+// se calcula con new Date()/setHours/getHours en hora LOCAL. En un server cloud (UTC)
+// eso corre las citas varias horas. Fijamos Argentina por defecto para que coincida
+// con el formateo de recordatorios. En el deploy conviene además setear TZ como env.
+process.env.TZ = process.env.TZ || 'America/Argentina/Buenos_Aires';
+
 import { FlowEngine } from './core/engine/flow.engine';
 import { AccountManager } from './core/accounts/AccountManager';
 import { ReminderScheduler } from './services/ReminderScheduler';

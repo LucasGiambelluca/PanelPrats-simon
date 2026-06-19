@@ -139,6 +139,10 @@ export default function WhatsAppInbox() {
   const send = async () => {
     const acctId = activeConvo?.account_id || activeAccountId;
     if (!activeConvo || !draft.trim() || !acctId || sending) return;
+    if (activeConvo.phone.includes('@lid')) {
+      toast.error('Este contacto no tiene un número de WhatsApp utilizable (privacidad). No se puede responder por acá.');
+      return;
+    }
     const text = draft;
     setSending(true);
     setDraft('');
@@ -157,7 +161,10 @@ export default function WhatsAppInbox() {
     setMessages(prev => [...prev, optimistic]);
 
     try {
-      await messagesApi.send(acctId, activeConvo.phone, text);
+      const res = await messagesApi.send(acctId, activeConvo.phone, text);
+      if (res.resolved === false) {
+        toast.warning('Este número no figura en WhatsApp; puede que el mensaje no se entregue.');
+      }
       // Reload real messages after a beat
       setTimeout(() => loadMessages(false), 800);
     } catch (err: any) {

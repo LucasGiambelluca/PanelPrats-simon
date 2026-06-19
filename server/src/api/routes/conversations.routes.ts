@@ -19,9 +19,30 @@ export function conversationsRouter(): Router {
 
   // Handover manual: tomar / liberar
   r.post('/:id/handover', async (req, res) => {
-    const status = req.body.resume ? 'BOT' : 'HANDOVER';
-    const { error } = await supabase.from('whatsapp_conversations').update({ status }).eq('id', req.params.id);
+    const resume = !!req.body.resume;
+    const status = resume ? 'BOT' : 'HANDOVER';
+
+    const { data: conv } = await supabase
+      .from('whatsapp_conversations').select('account_id, phone').eq('id', req.params.id).maybeSingle();
+
+    const { error } = await supabase
+      .from('whatsapp_conversations')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id);
     if (error) return res.status(400).json({ error: error.message });
+
+    // Al DEVOLVER al bot: archivar la sesión que quedó en HANDOVER. Si no, findActiveSession
+    // (busca active/waiting_input) no la encuentra y el bot queda mudo. Archivarla hace que
+    // el próximo mensaje arranque el flujo por defecto limpio → el bot vuelve a responder.
+    if (resume && conv) {
+      await supabase
+        .from('flow_executions')
+        .update({ status: 'archived', archived_reason: 'handover_resumed' })
+        .eq('account_id', conv.account_id)
+        .eq('phone', conv.phone)
+        .eq('status', 'HANDOVER');
+    }
+
     res.json({ status });
   });
 
