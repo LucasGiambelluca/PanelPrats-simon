@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { AccountProvider } from './context/AccountContext';
 import { Toaster } from 'sonner';
 import ProtectedRoute from './components/ProtectedRoute';
+import RoleRoute from './components/RoleRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Accounts from './pages/Accounts';
@@ -11,6 +12,7 @@ import BotBuilder from './pages/BotBuilder';
 import Connections from './pages/Connections';
 import Agenda from './pages/Agenda';
 import Sala from './pages/Sala';
+import Team from './pages/Team';
 
 function App() {
   return (
@@ -37,12 +39,17 @@ function App() {
                 <Layout />
               </AccountProvider>
             }>
-              <Route index element={<Navigate to="/accounts" replace />} />
-              <Route path="/accounts" element={<Accounts />} />
+              <Route index element={<Navigate to="/inbox" replace />} />
+              {/* ambos roles */}
               <Route path="/inbox" element={<WhatsAppInbox />} />
-              <Route path="/builder" element={<BotBuilder />} />
-              <Route path="/connections" element={<Connections />} />
               <Route path="/agenda" element={<Agenda />} />
+              {/* solo admin */}
+              <Route element={<RoleRoute role="admin" />}>
+                <Route path="/accounts" element={<Accounts />} />
+                <Route path="/builder" element={<BotBuilder />} />
+                <Route path="/connections" element={<Connections />} />
+                <Route path="/team" element={<Team />} />
+              </Route>
             </Route>
           </Route>
         </Routes>
