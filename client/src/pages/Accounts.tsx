@@ -485,6 +485,7 @@ export default function Accounts() {
                     <button
                       onClick={() => openEditModal(a)}
                       className="flex items-center justify-center p-2.5 bg-black/[0.03] hover:bg-black/[0.06] text-[#101820] rounded-xl border border-brand-hairline transition-all"
+                      aria-label="Configurar línea y flujo"
                       title="Configurar línea y flujo"
                     >
                       <Settings2 size={15} />
@@ -494,6 +495,7 @@ export default function Accounts() {
                       onClick={() => handleDelete(a)}
                       disabled={deletingId === a.id}
                       className="flex items-center justify-center p-2.5 bg-red-500/[0.06] hover:bg-red-500/15 text-red-600 rounded-xl border border-red-500/20 transition-all disabled:opacity-50"
+                      aria-label="Eliminar línea"
                       title="Eliminar línea"
                     >
                       {deletingId === a.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}

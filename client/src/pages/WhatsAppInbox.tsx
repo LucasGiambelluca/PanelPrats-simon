@@ -32,7 +32,7 @@ function formatDate(ts: string) {
 }
 
 function getInitials(name: string) {
-  return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  return (name || '').trim().split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || '?';
 }
 
 // Group messages by date for separator display

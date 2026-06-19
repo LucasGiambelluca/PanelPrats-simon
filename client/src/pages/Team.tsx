@@ -60,9 +60,9 @@ export default function Team() {
           <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
           <h2 className="text-brand-ink font-serif font-bold text-lg mb-4">Nueva empleada</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Nombre" value={name} onChange={e => setName(e.target.value)} />
-            <input className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-            <input type="password" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Contraseña inicial" value={password} onChange={e => setPassword(e.target.value)} />
+            <input aria-label="Nombre de la empleada" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Nombre" value={name} onChange={e => setName(e.target.value)} />
+            <input aria-label="Email de la empleada" type="email" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+            <input aria-label="Contraseña inicial" type="password" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Contraseña inicial" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
           <button onClick={create} disabled={creating} className="mt-4 flex items-center gap-2 bg-brand-primary text-white px-6 py-3 rounded-xl font-bold text-sm disabled:opacity-40">
             {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Crear

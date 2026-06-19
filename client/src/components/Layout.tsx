@@ -88,7 +88,7 @@ export default function Layout() {
                 activeAccount.status === 'connecting' ? 'bg-blue-400 animate-pulse' :
                 'bg-slate-500'
               }`} />
-              <span className="text-[10px] text-brand-textMuted capitalize font-medium">{activeAccount.status}</span>
+              <span className="text-[10px] text-brand-textMuted font-medium">{activeAccount.status === 'connected' ? 'Conectado' : activeAccount.status === 'qr' ? 'Esperando QR' : activeAccount.status === 'connecting' ? 'Conectando' : 'Desconectado'}</span>
               {activeAccount.phone_number && (
                 <span className="text-[10px] text-brand-gold ml-auto font-mono font-medium">{activeAccount.phone_number}</span>
               )}
