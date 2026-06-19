@@ -115,7 +115,10 @@ export class WhatsAppClient {
     }
 
     public async start(isRestart = false) {
-        this.reconnectAttempts = 0;
+        // En reinicios NO reseteamos el contador: si lo hiciéramos, el guard de
+        // MAX_RECONNECT_ATTEMPTS nunca se alcanzaría → loop infinito de reconexión.
+        // En 'open' se resetea a 0 (conexión exitosa).
+        if (!isRestart) this.reconnectAttempts = 0;
         const AUTH_DIR = this.authDirPath;
 
         // Guard: do not restart if session clearing failed (prevents infinite loop)
@@ -240,7 +243,7 @@ export class WhatsAppClient {
                 // Handle specific disconnect reasons
                 if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                     console.error('❌ Logged out from WhatsApp. Session is invalid.');
-                    this.clearSession(); // Remove corrupt/invalid session
+                    await this.clearSession(); // esperar el borrado ANTES de reiniciar (evita correr start() sobre archivos a medio borrar)
  
                     if (process.env.PAIRING_PHONE_NUMBER) {
                         console.log('⏳ Esperando 10 segundos antes de solicitar un nuevo código (Para evitar bloqueos de WhatsApp)...');
@@ -257,7 +260,7 @@ export class WhatsAppClient {
                     // Do not auto-reconnect if replaced, unless explicitly commanded
                 } else if (statusCode === DisconnectReason.badSession) {
                     console.error('❌ Bad session file. Deleting session and requesting new scan.');
-                    this.clearSession();
+                    await this.clearSession();
                     this.start(true);
                 } else if (statusCode === DisconnectReason.connectionClosed || statusCode === DisconnectReason.connectionLost || statusCode === DisconnectReason.timedOut) {
                     this.reconnectAttempts++;

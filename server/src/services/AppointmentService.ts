@@ -150,7 +150,14 @@ export const AppointmentService = {
         })
         .select('*')
         .single();
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Constraint de exclusión (migración 0012): slot tomado por otra cita
+        // concurrente. Cierra la ventana TOCTOU del chequeo en app (hasOverlap).
+        if (error.code === '23P01' || (error.message || '').includes('appointments_no_overlap')) {
+          throw new Error('SLOT_TAKEN');
+        }
+        throw new Error(error.message);
+      }
       return deserializeAppointment(data);
     }
 
