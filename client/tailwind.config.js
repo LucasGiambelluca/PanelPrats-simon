@@ -5,22 +5,26 @@ export default {
     extend: {
       colors: {
         brand: {
-          primary: '#304352',       // Deep Blue-Grey
-          secondary: '#9c7a55',     // Bronce (oscurecido para contraste sobre marfil)
-          accent: '#a57b5a',        // Warm copper/gold
+          primary: '#2f4256',       // Azul pizarra profundo — SIDEBAR
+          primaryDark: '#26384a',   // azul más oscuro (bordes/hover sidebar)
+          secondary: '#9c7a55',     // Bronce (acento, legible sobre claro y sobre azul)
+          accent: '#b88a5e',        // Cobre/dorado cálido (acento sobre azul)
           dark: '#0b0f1a',          // (legacy) fondo oscuro
           card: '#111827',          // (legacy) card oscuro
-          textLight: '#f6f4f1',     // (legacy) texto claro
-          textMuted: '#94a3b8',     // (legacy) gris
+          textLight: '#f4f1ea',     // texto claro (sobre azul)
+          textMuted: '#a9b6c4',     // gris-azulado claro (texto secundario sobre azul)
 
-          // Tema MARFIL (claro) — contraste cuidado:
-          ivory: '#f5f2ec',         // fondo app (marfil cálido)
-          surface: '#ffffff',       // cards / sidebar
-          panel: '#fbfaf6',         // panel sutil (marfil más claro)
-          ink: '#27303a',           // texto principal (≈11:1 sobre ivory)
-          inkmuted: '#5b6470',      // texto secundario (≈6:1)
-          hairline: '#e7e2d6',      // borde cálido
+          // Contenido — tema MARFIL con jerarquía de superficies:
+          ivory: '#ebe5d9',         // fondo app (marfil cálido, MÁS profundo → las cards elevan)
+          surface: '#ffffff',       // cards (blanco, contrastan sobre ivory)
+          panel: '#f4efe5',         // inset/panel sutil (entre ivory y blanco)
+          ink: '#283039',           // texto principal (≈10:1 sobre marfil)
+          inkmuted: '#5a6573',      // texto secundario (≈5.5:1)
+          hairline: '#ddd4c4',      // borde cálido (visible sobre marfil/blanco)
         }
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(40,48,57,0.04), 0 6px 16px -8px rgba(40,48,57,0.10)',
       },
       fontFamily: {
         sans: ['Raleway', 'Poppins', 'Inter', 'sans-serif'],
