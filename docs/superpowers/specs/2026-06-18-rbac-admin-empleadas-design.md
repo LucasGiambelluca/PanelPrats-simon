@@ -127,7 +127,7 @@ No se expone `DELETE` de empleadas: revocar = desactivar.
 ## Modo dev (seguridad)
 
 - Frontend dev auto-login → admin (igual que hoy).
-- Server: `dev-token` se acepta como admin **solo** si `NODE_ENV !== 'production'`. En el VPS de producción, `NODE_ENV=production` ⇒ `dev-token` → 401. Es el único bypass y queda fuera de prod por diseño.
+- Server: `dev-token` se acepta como admin **solo** si la variable `DEV_AUTH_BYPASS=1` está explícitamente seteada (opt-in). En producción no se setea ⇒ `dev-token` → 401. Es el único bypass y queda fuera de prod por diseño (no depende de que el deploy recuerde setear `NODE_ENV`, que el start script no hacía).
 
 ## Testing
 

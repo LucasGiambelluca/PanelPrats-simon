@@ -965,7 +965,7 @@ Levantar server (`cd server && npm run dev`) y client (`cd client && npm run dev
 
 - [ ] **Step 4: Verificar guard de producción**
 
-Confirmar que el VPS tendrá `NODE_ENV=production` (variable de entorno del deploy). Con eso, `dev-token` → 401.
+Confirmar que el VPS NO tiene `DEV_AUTH_BYPASS` seteada. Sin esa var, `dev-token` → 401 (el bypass es opt-in explícito, no depende de NODE_ENV). En dev local, `DEV_AUTH_BYPASS=1` habilita el auto-login.
 
 - [ ] **Step 5: Commit final (si quedó algo suelto)**
 
@@ -978,6 +978,6 @@ git add -A && git commit -m "chore(rbac): verificación end-to-end RBAC admin/em
 ## Notas de despliegue
 
 - Aplicar `0009_profiles.sql` en Supabase **antes** de desplegar el backend nuevo (si no, `authContext` rechaza a todos por falta de tabla profiles).
-- Setear `NODE_ENV=production` en el VPS (desactiva el bypass `dev-token`).
+- NO setear `DEV_AUTH_BYPASS` en el VPS (el bypass `dev-token` es opt-in; ausente = deshabilitado). En la máquina de desarrollo, setear `DEV_AUTH_BYPASS=1` para que el auto-login dev funcione.
 - Setear `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` en el build del frontend para que use auth real (sin esto corre en modo dev = admin).
 - Las empleadas se crean desde la página Equipo; el admin inicial sale del seed de la migración.
