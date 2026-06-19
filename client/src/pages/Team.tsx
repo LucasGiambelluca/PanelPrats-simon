@@ -45,8 +45,8 @@ export default function Team() {
     <div className="min-h-screen bg-brand-ivory p-6 lg:p-8 font-sans">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-3 mb-8 border-b border-brand-hairline pb-6">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#243150] to-[#2f5fd0] flex items-center justify-center">
-            <Users size={22} className="text-[#3b6fe0]" />
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1e3a8a] to-[#1d4ed8] flex items-center justify-center">
+            <Users size={22} className="text-[#2563eb]" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-brand-ink font-serif">Equipo</h1>
@@ -61,14 +61,14 @@ export default function Team() {
             <input className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
             <input type="password" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink placeholder-slate-400 text-sm" placeholder="Contraseña inicial" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
-          <button onClick={create} disabled={creating} className="mt-4 flex items-center gap-2 bg-gradient-to-r from-[#243150] to-[#2f5fd0] text-white px-6 py-3 rounded-xl font-bold text-sm disabled:opacity-40">
+          <button onClick={create} disabled={creating} className="mt-4 flex items-center gap-2 bg-gradient-to-r from-[#1e3a8a] to-[#1d4ed8] text-white px-6 py-3 rounded-xl font-bold text-sm disabled:opacity-40">
             {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Crear
           </button>
         </div>
 
         <div className="glass-card rounded-2xl border border-brand-hairline overflow-hidden">
           {loading ? (
-            <div className="p-10 flex justify-center"><Loader2 size={24} className="animate-spin text-[#3b6fe0]" /></div>
+            <div className="p-10 flex justify-center"><Loader2 size={24} className="animate-spin text-[#2563eb]" /></div>
           ) : list.length === 0 ? (
             <p className="p-10 text-center text-brand-inkmuted text-sm">Sin empleadas todavía.</p>
           ) : list.map(p => (
