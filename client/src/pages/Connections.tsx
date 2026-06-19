@@ -291,7 +291,7 @@ export default function Connections() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
 
               <h3 className="font-serif font-bold text-brand-ink text-sm mb-3 flex items-center gap-2">
-                <span className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-goldDark flex items-center justify-center">
+                <span className="w-8 h-8 rounded-xl bg-brand-gold/20 text-brand-primary flex items-center justify-center">
                   <Database size={15} />
                 </span>
                 Base de Datos

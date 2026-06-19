@@ -1229,7 +1229,7 @@ export default function Agenda() {
                       <div className={`border-t pt-4 mt-2 ${theme === 'light' ? 'border-brand-hairline' : 'border-white/5'}`}>
                         <div className="flex items-center justify-between mb-4">
                           <span className={`text-[10px] flex items-center gap-1 font-semibold ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>
-                            <Clock size={12} className={theme === 'light' ? 'text-brand-gold' : 'text-brand-secondary/60'} />
+                            <Clock size={12} className={theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/60'} />
                             <span>{new Date(app.start_time || app.created_at).toLocaleDateString()} · {new Date(app.start_time || app.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </span>
                           <span className={`text-[10px] ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>{formatDistanceToNow(new Date(app.created_at))}</span>

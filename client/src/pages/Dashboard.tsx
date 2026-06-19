@@ -20,7 +20,7 @@ function StatCard({ icon: Icon, label, value, hint, gold }: StatProps) {
     <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-5 relative overflow-hidden">
       <div className={`absolute top-0 left-0 right-0 h-1 ${gold ? 'bg-brand-gold' : 'bg-brand-primary'}`} />
       <div className="flex items-center justify-between">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${gold ? 'bg-brand-gold/15 text-brand-goldDark' : 'bg-brand-primary/[0.07] text-brand-primary'}`}>
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${gold ? 'bg-brand-gold/20 text-brand-primary' : 'bg-brand-primary/[0.07] text-brand-primary'}`}>
           <Icon size={20} />
         </div>
         {hint && <span className="text-[11px] font-semibold text-brand-inkmuted">{hint}</span>}
@@ -121,7 +121,7 @@ export default function Dashboard() {
           {/* Bar chart — últimos 7 días */}
           <div className="lg:col-span-2 bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6">
             <div className="flex items-center gap-2 mb-5">
-              <TrendingUp size={18} className="text-brand-gold" />
+              <TrendingUp size={18} className="text-brand-primary" />
               <h3 className="font-serif font-bold text-brand-ink">Citas — últimos 7 días</h3>
             </div>
             <div className="flex items-end justify-between gap-3 h-44">
@@ -133,7 +133,7 @@ export default function Dashboard() {
                     style={{ height: `${Math.max(6, (d.count / maxBar) * 100)}%` }}
                     title={`${d.count} citas`}
                   />
-                  <span className={`text-[11px] ${d.isToday ? 'text-brand-goldDark font-bold' : 'text-brand-inkmuted'}`}>{d.label}</span>
+                  <span className={`text-[11px] ${d.isToday ? 'text-brand-ink font-bold' : 'text-brand-inkmuted'}`}>{d.label}</span>
                 </div>
               ))}
             </div>
@@ -194,7 +194,7 @@ export default function Dashboard() {
                       <p className="text-xs text-brand-inkmuted truncate">{a.resumen || a.oficina || 'Cita'}</p>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-inkmuted whitespace-nowrap">
-                      <Clock size={12} className="text-brand-gold" />
+                      <Clock size={12} className="text-brand-inkmuted" />
                       {d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
