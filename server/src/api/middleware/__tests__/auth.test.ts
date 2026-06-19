@@ -22,7 +22,7 @@ function makeRes() {
 }
 
 describe('authContext', () => {
-  beforeEach(() => { state.user = null; state.userError = null; state.profile = null; delete process.env.NODE_ENV; });
+  beforeEach(() => { state.user = null; state.userError = null; state.profile = null; process.env.NODE_ENV = 'test'; });
 
   it('sin token => 401', async () => {
     const res = makeRes(); let nexted = false;
@@ -39,6 +39,13 @@ describe('authContext', () => {
 
   it('profile inactivo => 401', async () => {
     state.user = { id: 'u1' }; state.profile = { role: 'empleada', name: 'Ana', active: false };
+    const res = makeRes(); let nexted = false;
+    await authContext(makeReq('Bearer x'), res, () => { nexted = true; });
+    expect(res.statusCode).toBe(401); expect(nexted).toBe(false);
+  });
+
+  it('profile con active null/ausente => 401', async () => {
+    state.user = { id: 'u1' }; state.profile = { role: 'empleada', name: 'Ana', active: null };
     const res = makeRes(); let nexted = false;
     await authContext(makeReq('Bearer x'), res, () => { nexted = true; });
     expect(res.statusCode).toBe(401); expect(nexted).toBe(false);

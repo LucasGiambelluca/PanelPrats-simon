@@ -31,7 +31,8 @@ export async function authContext(req: Request, res: Response, next: NextFunctio
 
   const { data: prof } = await supabase
     .from('profiles').select('role, name, active').eq('id', data.user.id).maybeSingle();
-  if (!prof || prof.active === false) return res.status(401).json({ error: 'Sin perfil o inactivo' });
+  // active debe ser explícitamente true; null/undefined NO autentica (evita escalación silenciosa).
+  if (!prof || prof.active !== true) return res.status(401).json({ error: 'Sin perfil o inactivo' });
 
   req.user = { id: data.user.id, role: prof.role as Role, name: prof.name ?? null };
   next();
