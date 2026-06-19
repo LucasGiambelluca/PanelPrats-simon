@@ -262,8 +262,8 @@ export default function Accounts() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8 border-b border-brand-hairline pb-6">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1a2949] to-[#101820] flex items-center justify-center shadow-lg shadow-brand-secondary/10">
-              <Smartphone size={22} className="text-[#24365a]" />
+            <div className="w-11 h-11 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center">
+              <Smartphone size={22} />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-brand-ink tracking-tight font-serif">Gestión de Líneas</h1>
@@ -276,8 +276,8 @@ export default function Accounts() {
         </div>
 
         {/* Create Account Branded Card */}
-        <div className="glass-card rounded-2xl p-6 mb-8 border border-brand-hairline relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#24365a]/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6 mb-8 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
 
           <h2 className="text-brand-ink font-serif font-bold text-lg mb-4">Nueva Línea de Atención</h2>
 
@@ -413,22 +413,22 @@ export default function Accounts() {
             return (
               <div
                 key={a.id}
-                className={`glass-card rounded-2xl overflow-hidden border transition-all duration-300 relative group ${
+                className={`bg-brand-surface rounded-2xl border border-brand-hairline shadow-card overflow-hidden transition-all duration-300 relative group ${
                   isConnecting
-                    ? 'border-brand-secondary/40 shadow-lg shadow-brand-secondary/5 col-span-1 md:col-span-2 lg:col-span-3'
-                    : 'border-brand-hairline hover:border-brand-secondary/30 hover:bg-black/[0.03]'
+                    ? 'border-brand-primary/40 col-span-1 md:col-span-2 lg:col-span-3'
+                    : 'hover:border-brand-primary/30'
                 }`}
               >
                 {/* Decorative gold-glow line on hover */}
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#24365a]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute top-0 left-0 right-0 h-1 bg-brand-primary opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 {/* Card Main Area */}
                 <div className={`p-5 flex flex-col ${isConnecting ? '' : 'h-full'} justify-between`}>
                   <div>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1a2949]/30 to-[#101820]/30 border border-brand-hairline flex items-center justify-center relative">
-                          <Smartphone size={22} className="text-[#101820]" />
+                        <div className="w-12 h-12 rounded-xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center relative">
+                          <Smartphone size={22} />
                           <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-brand-surface ${cfg.dotColor} ${
                             a.status === 'qr' || a.status === 'connecting' ? 'animate-pulse' : ''
                           }`} />
@@ -636,8 +636,8 @@ export default function Accounts() {
 
         {/* Empty state */}
         {accounts.length === 0 && (
-          <div className="text-center py-24 glass-card rounded-2xl border border-brand-hairline">
-            <div className="w-20 h-20 rounded-2xl bg-black/[0.03] border border-brand-hairline flex items-center justify-center mx-auto mb-5 text-[#101820]">
+          <div className="text-center py-24 bg-brand-surface rounded-2xl border border-brand-hairline shadow-card">
+            <div className="w-20 h-20 rounded-2xl bg-brand-primary/[0.07] text-brand-primary flex items-center justify-center mx-auto mb-5">
               <Smartphone size={36} />
             </div>
             <h3 className="text-brand-ink font-serif font-bold text-lg mb-1">No hay líneas configuradas</h3>
@@ -651,8 +651,8 @@ export default function Accounts() {
       {/* Branded Edit Configuration Drawer/Modal */}
       {editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card rounded-2xl border border-brand-hairline max-w-lg w-full overflow-hidden shadow-2xl relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#24365a]/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card max-w-lg w-full overflow-hidden relative">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
 
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-brand-hairline">

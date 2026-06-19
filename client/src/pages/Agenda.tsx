@@ -1161,11 +1161,13 @@ export default function Agenda() {
             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
               {filteredAppointments.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center px-4 select-none">
-                  <div className="w-16 h-16 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center mb-4 text-brand-secondary/40">
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center mb-4 ${
+                    theme === 'light' ? 'bg-brand-primary/[0.07] text-brand-primary' : 'bg-white/[0.02] border border-white/5 text-brand-secondary/40'
+                  }`}>
                     <CalendarIcon size={32} />
                   </div>
-                  <h3 className={`font-bold text-base mb-1 ${theme === 'light' ? 'text-slate-800' : 'text-white'}`}>No hay citas registradas</h3>
-                  <p className="text-brand-textMuted text-xs max-w-sm leading-relaxed">
+                  <h3 className={`font-serif font-bold text-base mb-1 ${theme === 'light' ? 'text-brand-ink' : 'text-white'}`}>No hay citas registradas</h3>
+                  <p className={`text-xs max-w-sm leading-relaxed ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>
                     No se encontraron citas para los criterios de búsqueda y filtros aplicados.
                   </p>
                 </div>
@@ -1177,7 +1179,7 @@ export default function Agenda() {
                       onClick={() => handleEditClick(app)}
                       className={`rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden group cursor-pointer border ${
                         theme === 'light'
-                          ? 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
+                          ? 'bg-brand-surface border-brand-hairline shadow-card hover:shadow-md'
                           : 'glass-card border-white/5'
                       }`}
                     >
@@ -1186,11 +1188,11 @@ export default function Agenda() {
                       <div>
                         <div className="flex items-start justify-between gap-3 mb-4">
                           <div>
-                            <h3 className={`font-bold text-base leading-tight transition-colors duration-300 ${
-                              theme === 'light' ? 'text-slate-800 group-hover:text-blue-600' : 'text-white group-hover:text-brand-secondary'
+                            <h3 className={`font-serif font-bold text-base leading-tight transition-colors duration-300 ${
+                              theme === 'light' ? 'text-brand-ink group-hover:text-brand-primary' : 'text-white group-hover:text-brand-secondary'
                             }`}>{app.nombre}</h3>
-                            <div className="flex items-center gap-1.5 text-brand-textMuted text-xs mt-1.5 font-mono">
-                              <Phone size={12} className={theme === 'light' ? 'text-[#1a73e8]' : 'text-brand-secondary/70'} />
+                            <div className={`flex items-center gap-1.5 text-xs mt-1.5 font-mono ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>
+                              <Phone size={12} className={theme === 'light' ? 'text-brand-primary' : 'text-brand-secondary/70'} />
                               <span>{app.phone}</span>
                             </div>
                           </div>
@@ -1208,29 +1210,29 @@ export default function Agenda() {
                         </div>
 
                         {app.resumen && (
-                          <div className={`border rounded-xl p-3.5 mb-4 shadow-inner ${
-                            theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-brand-dark/40 border-white/5'
+                          <div className={`border rounded-xl p-3.5 mb-4 ${
+                            theme === 'light' ? 'bg-brand-ivory border-brand-hairline' : 'bg-brand-dark/40 border-white/5'
                           }`}>
                             <div className={`flex items-center gap-1.5 mb-1.5 text-[9px] font-bold uppercase tracking-widest ${
-                              theme === 'light' ? 'text-slate-400' : 'text-brand-secondary/80'
+                              theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                             }`}>
                               <Shield size={10} />
                               <span>Resumen de consulta</span>
                             </div>
                             <p className={`text-xs leading-relaxed font-medium ${
-                              theme === 'light' ? 'text-slate-600' : 'text-brand-textMuted'
+                              theme === 'light' ? 'text-brand-ink' : 'text-brand-textMuted'
                             }`}>{app.resumen}</p>
                           </div>
                         )}
                       </div>
 
-                      <div className={`border-t pt-4 mt-2 ${theme === 'light' ? 'border-slate-100' : 'border-white/5'}`}>
+                      <div className={`border-t pt-4 mt-2 ${theme === 'light' ? 'border-brand-hairline' : 'border-white/5'}`}>
                         <div className="flex items-center justify-between mb-4">
-                          <span className="text-[10px] text-brand-textMuted flex items-center gap-1 font-semibold">
-                            <Clock size={12} className={theme === 'light' ? 'text-[#1a73e8]' : 'text-brand-secondary/60'} />
+                          <span className={`text-[10px] flex items-center gap-1 font-semibold ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>
+                            <Clock size={12} className={theme === 'light' ? 'text-brand-gold' : 'text-brand-secondary/60'} />
                             <span>{new Date(app.start_time || app.created_at).toLocaleDateString()} · {new Date(app.start_time || app.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </span>
-                          <span className="text-[10px] text-brand-textMuted">{formatDistanceToNow(new Date(app.created_at))}</span>
+                          <span className={`text-[10px] ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>{formatDistanceToNow(new Date(app.created_at))}</span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -1277,7 +1279,7 @@ export default function Agenda() {
                             onClick={() => handleDelete(app.id)}
                             className={`p-2.5 rounded-xl border transition-all duration-300 ${
                               theme === 'light'
-                                ? 'bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 border-slate-200 hover:border-red-200'
+                                ? 'bg-brand-ivory hover:bg-red-50 text-brand-inkmuted hover:text-red-500 border-brand-hairline hover:border-red-200'
                                 : 'bg-white/5 hover:bg-red-500/10 text-brand-textMuted hover:text-red-400 border-white/5 hover:border-red-500/10'
                             }`}
                             title="Eliminar de la agenda"
@@ -1301,33 +1303,36 @@ export default function Agenda() {
       {/* CREATE & EDIT MODAL (Unified Dialog Window) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in select-none">
-          <div className={`w-full max-w-lg border rounded-3xl overflow-hidden shadow-2xl p-6 relative ${
-            theme === 'light' ? 'bg-white border-slate-200' : 'bg-brand-card/95 border-white/10'
+          <div className={`w-full max-w-lg overflow-hidden p-6 relative ${
+            theme === 'light'
+              ? 'bg-brand-surface rounded-2xl border border-brand-hairline shadow-card'
+              : 'bg-brand-card/95 rounded-3xl border border-white/10 shadow-2xl'
           }`}>
+            <div className={`absolute top-0 left-0 right-0 h-1 ${theme === 'light' ? 'bg-brand-primary' : 'hidden'}`} />
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-secondary/5 rounded-full blur-3xl pointer-events-none" />
-            
+
             {/* Modal Header */}
             <div className={`flex items-center justify-between border-b pb-4 mb-4 ${
-              theme === 'light' ? 'border-slate-100' : 'border-white/5'
+              theme === 'light' ? 'border-brand-hairline' : 'border-white/5'
             }`}>
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                   theme === 'light'
-                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                    : 'bg-brand-secondary/15 text-brand-secondary border-brand-secondary/20'
+                    ? 'bg-brand-primary/[0.07] text-brand-primary'
+                    : 'bg-brand-secondary/15 text-brand-secondary border border-brand-secondary/20'
                 }`}>
                   {selectedApp ? <FileText size={18} /> : <Plus size={18} />}
                 </div>
                 <div>
-                  <h2 className={`text-lg font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{selectedApp ? 'Detalles de la Cita' : 'Nueva Cita'}</h2>
-                  <p className={`text-[10px] mt-0.5 ${theme === 'light' ? 'text-slate-500' : 'text-brand-textMuted'}`}>Programar o modificar consulta jurídica</p>
+                  <h2 className={`text-lg font-serif font-bold ${theme === 'light' ? 'text-brand-ink' : 'text-white'}`}>{selectedApp ? 'Detalles de la Cita' : 'Nueva Cita'}</h2>
+                  <p className={`text-[10px] mt-0.5 ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>Programar o modificar consulta jurídica</p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setIsModalOpen(false)}
                 className={`text-xs font-semibold p-1 rounded-lg transition-all ${
-                  theme === 'light' ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-brand-textMuted hover:text-white hover:bg-white/5'
+                  theme === 'light' ? 'text-brand-inkmuted hover:text-brand-ink hover:bg-brand-panel' : 'text-brand-textMuted hover:text-white hover:bg-white/5'
                 }`}
               >
                 Cerrar
@@ -1340,7 +1345,7 @@ export default function Agenda() {
                 {/* Nombre */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <User size={10} />
                     <span>Nombre del Cliente</span>
@@ -1352,7 +1357,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                     placeholder="Ej. Juan Pérez"
@@ -1362,7 +1367,7 @@ export default function Agenda() {
                 {/* Teléfono */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <Phone size={10} />
                     <span>Teléfono / WhatsApp</span>
@@ -1374,7 +1379,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all font-mono ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                     placeholder="Ej. +54911223344"
@@ -1386,7 +1391,7 @@ export default function Agenda() {
                 {/* Fecha */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <CalendarIcon size={10} />
                     <span>Fecha Cita</span>
@@ -1398,7 +1403,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                   />
@@ -1407,7 +1412,7 @@ export default function Agenda() {
                 {/* Hora Inicio */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <Clock size={10} />
                     <span>Hora Inicio</span>
@@ -1419,7 +1424,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, startHour: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                   />
@@ -1428,7 +1433,7 @@ export default function Agenda() {
                 {/* Hora Fin */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <Clock size={10} />
                     <span>Hora Fin</span>
@@ -1440,7 +1445,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, endHour: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                   />
@@ -1451,7 +1456,7 @@ export default function Agenda() {
                 {/* Status */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <Info size={10} />
                     <span>Estado Cita</span>
@@ -1461,7 +1466,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                     className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                   >
@@ -1477,7 +1482,7 @@ export default function Agenda() {
                 {/* Account ID Selector */}
                 <div className="space-y-1">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <User size={10} />
                     <span>Asignar a Cuenta</span>
@@ -1487,7 +1492,7 @@ export default function Agenda() {
                     onChange={(e) => setFormData({ ...formData, account_id: e.target.value })}
                     className={`w-full border rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                         : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                     }`}
                   >
@@ -1504,7 +1509,7 @@ export default function Agenda() {
               {/* Resumen / Descripción */}
               <div className="space-y-1">
                 <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                  theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                  theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                 }`}>
                   <Shield size={10} />
                   <span>Resumen / Notas del Caso</span>
@@ -1514,7 +1519,7 @@ export default function Agenda() {
                   onChange={(e) => setFormData({ ...formData, resumen: e.target.value })}
                   className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all min-h-[80px] ${
                     theme === 'light'
-                      ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:ring-blue-500/50 focus:border-blue-500'
+                      ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
                       : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
                   }`}
                   placeholder="Detalles sobre la consulta del cliente..."
@@ -1525,7 +1530,7 @@ export default function Agenda() {
               {selectedApp && (
                 <div className="space-y-2">
                   <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    theme === 'light' ? 'text-slate-500' : 'text-brand-secondary/80'
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
                   }`}>
                     <Phone size={10} />
                     <span>Llamar / Videollamar</span>
@@ -1539,7 +1544,7 @@ export default function Agenda() {
 
               {/* Modal Actions */}
               <div className={`flex items-center justify-between border-t pt-4 mt-6 ${
-                theme === 'light' ? 'border-slate-100' : 'border-white/5'
+                theme === 'light' ? 'border-brand-hairline' : 'border-white/5'
               }`}>
                 <div>
                   {selectedApp && (
@@ -1560,7 +1565,7 @@ export default function Agenda() {
                     onClick={() => setIsModalOpen(false)}
                     className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
                       theme === 'light'
-                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                        ? 'bg-brand-panel hover:bg-brand-ivory text-brand-ink border-brand-hairline'
                         : 'bg-white/5 hover:bg-white/10 text-brand-textLight border-white/5'
                     }`}
                   >
@@ -1571,7 +1576,7 @@ export default function Agenda() {
                     disabled={submitting}
                     className={`px-4 py-2 text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       theme === 'light'
-                        ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white shadow-blue-500/10'
+                        ? 'bg-brand-primary hover:bg-brand-primary/90 text-white shadow-brand-primary/10'
                         : 'bg-brand-secondary hover:bg-brand-accent text-brand-dark shadow-brand-secondary/10'
                     }`}
                   >
