@@ -35,7 +35,21 @@ function isEnvelope(o: any): boolean {
     ('text' in o || 'start_time' in o || 'oficina' in o || 'reminded' in o);
 }
 
+const plus30 = (iso: string) => new Date(new Date(iso).getTime() + 30 * 60000).toISOString();
+
 function deserializeAppointment(app: any): Appointment {
+  // 1) Esquema 0011: columnas reales pobladas.
+  if (app.start_time) {
+    return {
+      ...app,
+      resumen: app.resumen || '',
+      start_time: app.start_time,
+      end_time: app.end_time || plus30(app.start_time),
+      reminded: !!app.reminded,
+      oficina: app.oficina || '',
+    };
+  }
+  // 2) Legacy (pre-0011): envelope JSON empaquetado en resumen.
   if (app.resumen && (app.resumen.startsWith('{') || app.resumen.startsWith('['))) {
     try {
       const parsed = JSON.parse(app.resumen);
@@ -44,36 +58,23 @@ function deserializeAppointment(app: any): Appointment {
           ...app,
           resumen: parsed.text || '',
           start_time: parsed.start_time || app.created_at,
-          end_time: parsed.end_time || new Date(new Date(app.created_at).getTime() + 30 * 60000).toISOString(),
+          end_time: parsed.end_time || plus30(app.created_at),
           reminded: !!parsed.reminded,
           oficina: parsed.oficina || '',
         };
       }
     } catch {
-      // No es JSON válido → tratar como texto crudo (abajo).
+      // No es JSON válido → texto crudo (abajo).
     }
   }
+  // 3) Texto crudo / cita sin horario.
   return {
     ...app,
-    start_time: app.created_at,
-    end_time: new Date(new Date(app.created_at).getTime() + 30 * 60000).toISOString(),
-    reminded: false,
-  };
-}
-
-function serializeAppointment(appointment: Omit<Appointment, 'id' | 'created_at' | 'updated_at'>): any {
-  // reminded se destructura fuera de `rest` porque NO es columna real: va dentro del JSON.
-  const { start_time, end_time, resumen, reminded, oficina, ...rest } = appointment;
-  const packedResumen = JSON.stringify({
-    text: resumen || '',
-    start_time: start_time || null,
-    end_time: end_time || null,
-    reminded: !!reminded,
-    oficina: oficina || '',
-  });
-  return {
-    ...rest,
-    resumen: packedResumen,
+    resumen: app.resumen || '',
+    start_time: app.start_time || app.created_at,
+    end_time: app.end_time || plus30(app.created_at),
+    reminded: !!app.reminded,
+    oficina: app.oficina || '',
   };
 }
 
@@ -131,12 +132,22 @@ export const AppointmentService = {
     if (await this.hasOverlap(appointment.account_id, appointment.start_time, appointment.end_time, appointment.oficina)) {
       throw new Error('SLOT_TAKEN');
     }
-    const serialized = serializeAppointment(appointment);
 
     if (isSupabaseConfigured) {
       const { data, error } = await supabase
         .from('appointments')
-        .insert({ ...serialized, status: appointment.status || 'pendiente' })
+        .insert({
+          account_id: appointment.account_id,
+          phone: appointment.phone,
+          nombre: appointment.nombre,
+          telefono: appointment.telefono,
+          resumen: appointment.resumen || '',
+          status: appointment.status || 'pendiente',
+          start_time: appointment.start_time || null,
+          end_time: appointment.end_time || null,
+          reminded: !!appointment.reminded,
+          oficina: appointment.oficina || null,
+        })
         .select('*')
         .single();
       if (error) throw new Error(error.message);
@@ -165,25 +176,22 @@ export const AppointmentService = {
       ...updates
     };
 
-    const serialized = serializeAppointment({
-      account_id: merged.account_id,
-      phone: merged.phone,
-      nombre: merged.nombre,
-      telefono: merged.telefono,
-      resumen: merged.resumen,
-      status: merged.status,
-      start_time: merged.start_time,
-      end_time: merged.end_time,
-      reminded: merged.reminded,
-      oficina: merged.oficina,
-    });
-
     if (isSupabaseConfigured) {
-      // NB: la tabla appointments (migración 0002) no tiene columna updated_at,
-      // por eso NO la escribimos (escribirla daría PGRST204 y rompería confirmar/cancelar).
+      // account_id NO se actualiza (la cita no se mueve de cuenta). updated_at existe desde 0011.
       const { data, error } = await supabase
         .from('appointments')
-        .update(serialized)
+        .update({
+          phone: merged.phone,
+          nombre: merged.nombre,
+          telefono: merged.telefono,
+          resumen: merged.resumen || '',
+          status: merged.status,
+          start_time: merged.start_time || null,
+          end_time: merged.end_time || null,
+          reminded: !!merged.reminded,
+          oficina: merged.oficina || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', id)
         .select('*')
         .single();
