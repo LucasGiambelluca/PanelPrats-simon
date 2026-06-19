@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw,
-  Phone, Clock, Facebook, Instagram, Layers
+  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft
 } from 'lucide-react';
 import { useAccounts } from '../context/AccountContext';
 import { conversationsApi, messagesApi } from '../lib/api';
@@ -197,9 +197,9 @@ export default function WhatsAppInbox() {
   const isAccountConnected = activeAccount?.status === 'connected';
 
   return (
-    <div className="flex h-screen bg-[#0b0f1a]">
-      {/* Conversation List */}
-      <div className="w-[340px] border-r border-white/5 flex flex-col bg-[#111827]/50">
+    <div className="flex h-[calc(100dvh-3.5rem)] lg:h-screen bg-[#0b0f1a]">
+      {/* Conversation List — en móvil ocupa todo; se oculta al abrir un chat */}
+      <div className={`w-full lg:w-[340px] border-r border-white/5 flex-col bg-[#111827]/50 ${activeConvo ? 'hidden lg:flex' : 'flex'}`}>
         {/* Header */}
         <div className="p-4 border-b border-white/5">
           <div className="flex items-center justify-between mb-3">
@@ -335,19 +335,23 @@ export default function WhatsAppInbox() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex-col ${activeConvo ? 'flex' : 'hidden lg:flex'}`}>
         {activeConvo ? (
           <>
             {/* Chat Header */}
-            <div className="px-6 py-3.5 border-b border-white/5 flex items-center justify-between bg-[#111827]/40 backdrop-blur-sm">
+            <div className="px-4 lg:px-6 py-3.5 border-b border-white/5 flex items-center justify-between bg-[#111827]/40 backdrop-blur-sm">
               <div className="flex items-center gap-3">
+                <button onClick={() => setActiveConvo(null)} aria-label="Volver" className="lg:hidden text-brand-textMuted hover:text-brand-textLight -ml-1 mr-1">
+                  <ArrowLeft size={20} />
+                </button>
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#304352]/30 to-[#a57b5a]/30 border border-[#C6AC98]/20 flex items-center justify-center relative">
                   <span className="text-[#C6AC98] font-bold text-sm">
                     {getInitials(activeConvo.contact_name || activeConvo.phone.slice(-4))}
                   </span>
                   {/* Small overlapping channel icon in active chat header */}
                   {(() => {
-                    const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                    const convoAccount = accounts.find(a => a.id === activeConvo.account_id) || activeAccount;
+                    const ch = (convoAccount?.channel || 'whatsapp') as Channel;
                     const chCfg = channelConfig[ch] || channelConfig.whatsapp;
                     const ChIcon = chCfg.icon;
                     const chColor = ch === 'whatsapp' ? 'bg-emerald-500 text-white' : ch === 'facebook' ? 'bg-blue-600 text-white' : 'bg-pink-500 text-white';
