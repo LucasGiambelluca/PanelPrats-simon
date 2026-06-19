@@ -84,24 +84,19 @@ export function accountsRouter(manager: AccountManager): Router {
 
   // Listar cuentas de un usuario
   r.get('/', async (req, res) => {
-    const userId = req.query.user_id as string;
-
-    const useSupabase = isSupabaseConfigured && isValidUUID(userId);
+    // Single-org: todas las líneas son del estudio. Admin y empleada ven TODAS
+    // (admin con todos los campos; empleada sin secretos). No se filtra por user_id:
+    // las cuentas pueden pertenecer a distintos admins/seed y aun así son compartidas.
     const role = req.user?.role;
 
-    if (useSupabase) {
-      // Single-org: la empleada ve TODAS las líneas del estudio (sin secretos);
-      // el admin ve las suyas (que son las del estudio) con todos los campos.
-      const query = supabase.from('accounts').select('*');
-      const { data, error } = role === 'empleada' ? await query : await query.eq('user_id', userId);
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('accounts').select('*');
       if (error) return res.status(400).json({ error: error.message });
       return res.json(role === 'empleada' ? (data ?? []).map(slimAccount) : data);
     }
 
-    // Fallback: empleada ve todas las cuentas en memoria; el resto filtra por user.
-    const list = role === 'empleada'
-      ? Array.from(memoryAccounts.values())
-      : Array.from(memoryAccounts.values()).filter(a => !userId || a.user_id === userId);
+    // Fallback en memoria: todas las cuentas.
+    const list = Array.from(memoryAccounts.values());
     // Sync statuses from AccountManager
     for (const a of list) {
       const liveStatus = manager.getStatus(a.id);
