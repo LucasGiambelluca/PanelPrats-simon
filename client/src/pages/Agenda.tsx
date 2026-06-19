@@ -1302,14 +1302,13 @@ export default function Agenda() {
 
       {/* CREATE & EDIT MODAL (Unified Dialog Window) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in select-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in select-none">
           <div className={`w-full max-w-lg overflow-hidden p-6 relative ${
             theme === 'light'
               ? 'bg-brand-surface rounded-2xl border border-brand-hairline shadow-card'
-              : 'bg-brand-card/95 rounded-3xl border border-white/10 shadow-2xl'
+              : 'bg-brand-card rounded-2xl border border-white/10 shadow-2xl'
           }`}>
             <div className={`absolute top-0 left-0 right-0 h-1 ${theme === 'light' ? 'bg-brand-primary' : 'hidden'}`} />
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-secondary/5 rounded-full blur-3xl pointer-events-none" />
 
             {/* Modal Header */}
             <div className={`flex items-center justify-between border-b pb-4 mb-4 ${
