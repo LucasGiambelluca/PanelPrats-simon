@@ -104,7 +104,7 @@ export default function Agenda() {
 
   // Load appointments
   const loadAppointments = async (silent = false) => {
-    if (!activeAccountId) return;
+    if (!activeAccountId) { setLoading(false); return; }
     if (!silent) setLoading(true);
     try {
       const data = await appointmentsApi.list(activeAccountId);

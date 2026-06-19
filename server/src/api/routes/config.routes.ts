@@ -65,11 +65,20 @@ export function configRouter(): Router {
     res.json(masked);
   });
 
+  // Claves que NUNCA se pueden editar desde la UI: reabrirían el bypass de auth
+  // o cambiarían el modo de ejecución en producción.
+  const FORBIDDEN_KEYS = ['DEV_AUTH_BYPASS', 'NODE_ENV'];
+
   // Save configurations
   r.post('/', (req, res) => {
     try {
+      const body = req.body || {};
+      const bad = Object.keys(body).filter((k) => FORBIDDEN_KEYS.includes(k));
+      if (bad.length) {
+        return res.status(400).json({ error: `Claves no editables por seguridad: ${bad.join(', ')}` });
+      }
       const current = readEnv();
-      const updated = { ...current, ...req.body };
+      const updated = { ...current, ...body };
       writeEnv(updated);
       res.json({ success: true, message: 'Configuraciones guardadas' });
     } catch (err: any) {

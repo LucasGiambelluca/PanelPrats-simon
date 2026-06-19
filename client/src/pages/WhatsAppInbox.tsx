@@ -192,7 +192,10 @@ export default function WhatsAppInbox() {
     : conversations;
 
   const messageGroups = groupByDate(messages);
-  const isAccountConnected = activeAccount?.status === 'connected';
+  // En modo unificado el chat abierto puede ser de otra línea: la conexión se
+  // evalúa contra la cuenta de la conversación, no la del selector.
+  const convoAccount = activeConvo ? accounts.find(a => a.id === activeConvo.account_id) : activeAccount;
+  const isAccountConnected = (convoAccount || activeAccount)?.status === 'connected';
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] lg:h-screen bg-brand-ivory">
@@ -364,7 +367,7 @@ export default function WhatsAppInbox() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-serif font-bold text-brand-ink text-sm">{activeConvo.contact_name || activeConvo.phone}</h3>
                     {(() => {
-                      const ch = (activeAccount?.channel || 'whatsapp') as Channel;
+                      const ch = (convoAccount?.channel || 'whatsapp') as Channel;
                       const chCfg = channelConfig[ch] || channelConfig.whatsapp;
                       const ChIcon = chCfg.icon;
                       return (

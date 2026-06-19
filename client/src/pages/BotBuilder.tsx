@@ -350,7 +350,10 @@ export default function BotBuilder() {
     [reactFlowInstance, addNodeByType]
   );
 
+  const [saving, setSaving] = useState(false);
+
   const handleSave = async () => {
+    if (saving) return; // anti doble-submit: evita crear flujos duplicados
     if (!reactFlowInstance) return;
     if (!activeAccountId) {
       toast.error('Seleccioná una cuenta de WhatsApp antes de guardar.');
@@ -374,6 +377,7 @@ export default function BotBuilder() {
         return { ...n, data: restData };
     });
 
+    setSaving(true);
     try {
         if (currentFlowId) {
             // Update existing flow
@@ -401,6 +405,8 @@ export default function BotBuilder() {
         toast.success('Flujo guardado correctamente');
     } catch (err: any) {
         toast.error('Error al guardar: ' + err.message);
+    } finally {
+        setSaving(false);
     }
   };
 

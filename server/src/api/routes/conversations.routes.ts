@@ -19,9 +19,16 @@ export function conversationsRouter(): Router {
   });
 
   r.get('/:id/messages', async (req, res) => {
-    const { data, error } = await supabase.from('whatsapp_messages').select('*').eq('conversation_id', req.params.id).order('timestamp', { ascending: true });
+    // Traemos los últimos 300 (desc + limit) y los devolvemos en orden ascendente.
+    // Evita payloads multi-MB en conversaciones largas polleadas cada 3s.
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('*')
+      .eq('conversation_id', req.params.id)
+      .order('timestamp', { ascending: false })
+      .limit(300);
     if (error) return res.status(400).json({ error: error.message });
-    res.json(data);
+    res.json((data ?? []).reverse());
   });
 
   // Handover manual: tomar / liberar
