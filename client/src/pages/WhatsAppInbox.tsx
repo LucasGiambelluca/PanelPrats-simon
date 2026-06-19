@@ -63,6 +63,7 @@ export default function WhatsAppInbox() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
   const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
+  const [loadError, setLoadError] = useState(false); // error en la carga de conversaciones
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollConvoRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,13 +83,15 @@ export default function WhatsAppInbox() {
         data = await conversationsApi.list(activeAccountId);
       }
       setConversations(data);
+      setLoadError(false);
       // Update active convo status if it changed
       if (activeConvoId) {
         const updated = data.find(c => c.id === activeConvoId);
         if (updated) setActiveConvo(updated);
       }
     } catch (err) {
-      // silent fail for polling
+      // Marcamos error: la UI lo muestra solo si no hay nada cargado (empty-state).
+      setLoadError(true);
     }
   }, [allLines, accounts, activeAccountId, activeConvoId]);
 
@@ -96,7 +99,7 @@ export default function WhatsAppInbox() {
     setLoadingConvos(true);
     loadConversations().then(() => setLoadingConvos(false));
     if (pollConvoRef.current) clearInterval(pollConvoRef.current);
-    pollConvoRef.current = setInterval(loadConversations, 5000);
+    pollConvoRef.current = setInterval(() => { if (!document.hidden) loadConversations(); }, 5000);
     return () => { if (pollConvoRef.current) clearInterval(pollConvoRef.current); };
   }, [loadConversations]);
 
@@ -117,7 +120,7 @@ export default function WhatsAppInbox() {
     if (activeConvoId) {
       loadMessages(true);
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
-      pollMsgRef.current = setInterval(() => loadMessages(false), 3000);
+      pollMsgRef.current = setInterval(() => { if (!document.hidden) loadMessages(false); }, 3000);
     } else {
       setMessages([]);
     }
@@ -324,7 +327,7 @@ export default function WhatsAppInbox() {
           {!loadingConvos && conversations.length === 0 && (
             <div className="text-center py-20 px-6">
               <MessageSquare size={36} className="text-brand-primary/30 mx-auto mb-3" />
-              <p className="text-brand-inkmuted text-sm font-medium">Sin conversaciones</p>
+              <p className="text-brand-inkmuted text-sm font-medium">{loadError ? 'Error al cargar — reintentando…' : 'Sin conversaciones'}</p>
               <p className="text-brand-inkmuted text-xs mt-1">
                 {isAccountConnected
                   ? 'Los mensajes aparecerán acá cuando alguien te escriba'

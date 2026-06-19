@@ -17,7 +17,7 @@ const allNav = [
 export default function Layout() {
   const { accounts, activeAccountId, setActiveAccountId } = useAccounts();
   const { signOut, role } = useAuth();
-  const navItems = allNav.filter(item => role ? (item.roles as readonly string[]).includes(role) : false);
+  const navItems = allNav.filter(item => (item.roles as readonly string[]).includes(role ?? 'empleada'));
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 

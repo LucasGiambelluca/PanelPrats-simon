@@ -61,7 +61,9 @@ export class ReminderScheduler {
     this.running = true;
     try {
       const now = Date.now();
-      const appointments = await AppointmentService.list(); // todas las cuentas
+      // Ventana ±24h en vez de toda la tabla: el recordatorio (lead ≤ 60min) y el
+      // no-show (fin del día) caen dentro de esa ventana. Evita full-scan por minuto.
+      const appointments = await AppointmentService.listSchedulerWindow(this.WINDOW_24H_MS);
       const minutesByAccount = await this.loadReminderMinutes();
 
       for (const a of appointments) {

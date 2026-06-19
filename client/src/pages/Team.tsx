@@ -22,7 +22,9 @@ export default function Team() {
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
-    if (!email.trim() || !password.trim()) { toast.error('Email y contraseña requeridos'); return; }
+    const em = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { toast.error('Email inválido'); return; }
+    if (password.trim().length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return; }
     setCreating(true);
     try {
       await teamApi.create(email.trim(), password.trim(), name.trim());

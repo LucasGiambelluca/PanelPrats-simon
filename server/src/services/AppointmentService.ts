@@ -110,6 +110,32 @@ export const AppointmentService = {
     return list;
   },
 
+  // Citas en una ventana ±windowMs alrededor de ahora, excluyendo estados terminales.
+  // Para el ReminderScheduler: evita el full-scan de toda la tabla cada minuto.
+  async listSchedulerWindow(windowMs: number): Promise<Appointment[]> {
+    const now = Date.now();
+    const fromIso = new Date(now - windowMs).toISOString();
+    const toIso = new Date(now + windowMs).toISOString();
+    const TERMINAL = ['cancelada', 'asistio', 'no_asistio', 'cerrado'];
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .gte('start_time', fromIso)
+        .lte('start_time', toIso)
+        .not('status', 'in', `(${TERMINAL.join(',')})`);
+      if (error) throw new Error(error.message);
+      return (data || []).map(deserializeAppointment);
+    }
+
+    return Array.from(memoryAppointments.values()).filter(a => {
+      if (!a.start_time) return false;
+      const t = new Date(a.start_time).getTime();
+      return t >= now - windowMs && t <= now + windowMs && !TERMINAL.includes(a.status);
+    });
+  },
+
   // ¿Hay una cita NO cancelada que solape el slot pedido en el mismo pool (oficina)?
   // Re-chequeo anti doble-booking: la disponibilidad se evaluó en otro nodo (TOCTOU);
   // revalidamos contra el estado actual justo antes de insertar.

@@ -68,7 +68,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const resolveRole = async (s: Session | null) => {
       if (!s) { setRole(null); return; }
-      try { const me = await meApi.get(); setRole(me.role); } catch { setRole(null); }
+      // Si /api/me falla de forma transitoria (p.ej. en TOKEN_REFRESHED), NO nuleamos
+      // el rol ya resuelto: evitar que la nav desaparezca por un error de red puntual.
+      try { const me = await meApi.get(); setRole(me.role); } catch { /* mantener rol previo */ }
     };
 
     // Get initial session
@@ -81,6 +83,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // INITIAL_SESSION ya lo maneja getSession() arriba → evitar doble llamada a /api/me.
+      if (_event === 'INITIAL_SESSION') return;
       setSession(session);
       setUser(session?.user ?? null);
       await resolveRole(session);

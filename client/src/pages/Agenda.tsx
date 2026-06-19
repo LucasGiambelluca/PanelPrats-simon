@@ -119,7 +119,7 @@ export default function Agenda() {
   useEffect(() => {
     loadAppointments();
     const interval = setInterval(() => {
-      loadAppointments(true);
+      if (!document.hidden) loadAppointments(true);
     }, 10000);
     return () => clearInterval(interval);
   }, [activeAccountId]);
