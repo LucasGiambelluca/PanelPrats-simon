@@ -129,8 +129,8 @@ export function accountsRouter(manager: AccountManager): Router {
     }
   });
 
-  // QR de la cuenta
-  r.get('/:id/qr', (req, res) => {
+  // QR de la cuenta (solo admin: con el QR se podría vincular/secuestrar la línea)
+  r.get('/:id/qr', requireRole('admin'), (req, res) => {
     const qr = manager.getQr(req.params.id);
     const rawStatus = manager.getStatus(req.params.id);
     // Map internal status to API status
@@ -141,8 +141,8 @@ export function accountsRouter(manager: AccountManager): Router {
     res.json({ qr, status });
   });
 
-  // Estado
-  r.get('/:id/status', (req, res) => {
+  // Estado (solo admin)
+  r.get('/:id/status', requireRole('admin'), (req, res) => {
     const rawStatus = manager.getStatus(req.params.id);
     const status = rawStatus === 'SCAN_QR_CODE' ? 'qr'
                  : rawStatus === 'WORKING' ? 'connected'

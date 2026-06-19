@@ -37,20 +37,6 @@ export function salasRouter(): Router {
     }
   });
 
-  // Validar invitado y devolver credenciales Daily (PÚBLICO)
-  r.post('/join', async (req, res) => {
-    if (!guard(res)) return;
-    const { salaId, invite } = req.body || {};
-    if (!salaId || !invite) return res.status(400).json({ error: 'Faltan datos' });
-    try {
-      const out = await SalaService.join(String(salaId), String(invite));
-      res.json(out);
-    } catch (e: any) {
-      const code = e.message === 'EXPIRED' ? 410 : e.message === 'INVALID' ? 403 : 400;
-      res.status(code).json({ error: e.message });
-    }
-  });
-
   // Token de operador (owner)
   r.post('/:salaId/host-token', async (req, res) => {
     if (!guard(res)) return;
@@ -62,5 +48,26 @@ export function salasRouter(): Router {
     }
   });
 
+  return r;
+}
+
+// Router PÚBLICO de salas (sin JWT): el invitado entra sin login. La seguridad la da
+// el invite-token opaco (hash en DB) + la ventana de validez. Se monta ANTES de authContext.
+export function salasPublicRouter(): Router {
+  const r = Router();
+  r.post('/join', async (req, res) => {
+    if (!SalaService.isConfigured()) {
+      return res.status(503).json({ status: 'not_configured', message: 'Salas no configuradas.' });
+    }
+    const { salaId, invite } = req.body || {};
+    if (!salaId || !invite) return res.status(400).json({ error: 'Faltan datos' });
+    try {
+      const out = await SalaService.join(String(salaId), String(invite));
+      res.json(out);
+    } catch (e: any) {
+      const code = e.message === 'EXPIRED' ? 410 : e.message === 'INVALID' ? 403 : 400;
+      res.status(code).json({ error: e.message });
+    }
+  });
   return r;
 }

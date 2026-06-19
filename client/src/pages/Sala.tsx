@@ -6,9 +6,6 @@ import { Loader2, VideoOff, AlertTriangle, PhoneOff } from 'lucide-react';
 type Estado = 'loading' | 'in-call' | 'ended' | 'error';
 type ErrorKind = 'expired' | 'invalid' | 'camera' | 'generic';
 
-// Guard a nivel módulo: evita doble-init (StrictMode / re-render).
-let salaIniciada = false;
-
 function loadJitsiScript(domain: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if ((window as any).JitsiMeetExternalAPI) return resolve();
@@ -29,6 +26,7 @@ export default function Sala() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<any>(null);
+  const startedRef = useRef(false); // guard por-instancia: se resetea al desmontar
 
   const [estado, setEstado] = useState<Estado>('loading');
   const [errorKind, setErrorKind] = useState<ErrorKind>('generic');
@@ -36,8 +34,8 @@ export default function Sala() {
   const [debug, setDebug] = useState('');
 
   useEffect(() => {
-    if (salaIniciada || apiRef.current) return;
-    salaIniciada = true;
+    if (startedRef.current || apiRef.current) return;
+    startedRef.current = true;
 
     (async () => {
       if (!salaId) { setErrorKind('invalid'); setEstado('error'); return; }
@@ -90,6 +88,13 @@ export default function Sala() {
         setEstado('error');
       }
     })();
+
+    // Cleanup real (desmontar): liberar Jitsi y resetear el guard para poder reentrar.
+    return () => {
+      startedRef.current = false;
+      try { apiRef.current?.dispose?.(); } catch { /* noop */ }
+      apiRef.current = null;
+    };
   }, [salaId, invite, host]);
 
   const overlayMsg: Record<ErrorKind, [string, string]> = {
@@ -122,7 +127,7 @@ export default function Sala() {
             <PhoneOff size={48} className="text-slate-400 mx-auto mb-4" />
             <p className="text-white text-2xl font-bold">Llamada finalizada</p>
             <p className="text-slate-400 text-base mt-2">Ya podés cerrar esta ventana. ¡Gracias!</p>
-            {debug && <p className="text-amber-400/70 text-xs mt-4 break-words font-mono">debug: {debug}</p>}
+            {import.meta.env.DEV && debug && <p className="text-amber-400/70 text-xs mt-4 break-words font-mono">debug: {debug}</p>}
           </div>
         </div>
       )}
@@ -132,7 +137,7 @@ export default function Sala() {
             <ErrIcon size={48} className="text-amber-400 mx-auto mb-4" />
             <p className="text-white text-2xl font-bold">{overlayMsg[errorKind][0]}</p>
             <p className="text-slate-300 text-lg mt-3 leading-relaxed">{overlayMsg[errorKind][1]}</p>
-            {debug && <p className="text-amber-400/70 text-xs mt-4 break-words font-mono">debug: {debug}</p>}
+            {import.meta.env.DEV && debug && <p className="text-amber-400/70 text-xs mt-4 break-words font-mono">debug: {debug}</p>}
           </div>
         </div>
       )}

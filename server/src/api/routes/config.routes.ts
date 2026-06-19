@@ -33,40 +33,36 @@ function readEnv(): Record<string, string> {
   return result;
 }
 
-// Helper to write .env file
-function writeEnv(configs: Record<string, string>) {
-  let content = '';
+const SENSITIVE_KEY = /KEY|SECRET|TOKEN|PASSWORD|SERVICE|DATABASE_URL/i;
+const MASK_PREFIX = '••••';
 
-  // Preserve some comments and structure, or write fresh formatted keys
-  content += '# ---- Supabase ----\n';
-  content += `SUPABASE_URL=${configs.SUPABASE_URL || ''}\n`;
-  content += `SUPABASE_SERVICE_KEY=${configs.SUPABASE_SERVICE_KEY || ''}\n`;
-  content += `DATABASE_URL=${configs.DATABASE_URL || ''}\n\n`;
+function maskValue(k: string, v: string): string {
+  if (!v || !SENSITIVE_KEY.test(k)) return v;
+  return MASK_PREFIX + String(v).slice(-4);
+}
 
-  content += '# ---- Redis ----\n';
-  content += `REDIS_URL=${configs.REDIS_URL || 'redis://127.0.0.1:6379'}\n\n`;
-
-  content += '# ---- Baileys ----\n';
-  content += `AUTH_BASE_PATH=${configs.AUTH_BASE_PATH || './auth'}\n\n`;
-
-  content += '# ---- IA ----\n';
-  content += `GROQ_API_KEY=${configs.GROQ_API_KEY || ''}\n`;
-  content += `GEMINI_API_KEY=${configs.GEMINI_API_KEY || ''}\n\n`;
-
-  content += '# ---- Server ----\n';
-  content += `PORT=${configs.PORT || '3001'}\n`;
-  content += `CORS_ORIGIN=${configs.CORS_ORIGIN || 'http://localhost:5173'}\n`;
-
+// Merge: parte del .env ACTUAL (preserva TODAS las claves: DAILY, OPENAI, ai_*, etc.)
+// y solo sobreescribe las provistas. Ignora valores enmascarados (no se editaron).
+function writeEnv(updates: Record<string, string>) {
+  const current = readEnv();
+  const merged: Record<string, string> = { ...current };
+  for (const [k, v] of Object.entries(updates)) {
+    if (typeof v === 'string' && v.startsWith(MASK_PREFIX)) continue; // sin cambios
+    merged[k] = v ?? '';
+  }
+  const content = Object.entries(merged).map(([k, v]) => `${k}=${v ?? ''}`).join('\n') + '\n';
   fs.writeFileSync(envPath, content, 'utf8');
 }
 
 export function configRouter(): Router {
   const r = Router();
 
-  // Get current configurations
+  // Get current configurations (secretos enmascarados: ••••<últimos 4>)
   r.get('/', (req, res) => {
     const envData = readEnv();
-    res.json(envData);
+    const masked: Record<string, string> = {};
+    for (const [k, v] of Object.entries(envData)) masked[k] = maskValue(k, v);
+    res.json(masked);
   });
 
   // Save configurations

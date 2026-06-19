@@ -6,7 +6,10 @@ export function messagesRouter(manager: AccountManager): Router {
 
   // Enviar mensaje manual (handover): envía por Baileys y persiste OUTBOUND
   r.post('/send', async (req, res) => {
-    const { account_id, phone, text } = req.body;
+    const { account_id, phone, text } = req.body || {};
+    if (!account_id || typeof phone !== 'string' || !phone.trim() || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'account_id, phone y text (no vacío) son requeridos' });
+    }
     try {
       const r = await manager.sendMessage(account_id, phone, text);
       res.json({ ok: true, resolved: r?.resolved !== false });
