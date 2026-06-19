@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { AuthProvider } from './context/AuthContext';
 import { AccountProvider } from './context/AccountContext';
 import { Toaster } from 'sonner';
@@ -7,14 +9,23 @@ import RoleRoute from './components/RoleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import NotFound from './pages/NotFound';
-import Accounts from './pages/Accounts';
-import WhatsAppInbox from './pages/WhatsAppInbox';
-import BotBuilder from './pages/BotBuilder';
-import Connections from './pages/Connections';
-import Agenda from './pages/Agenda';
-import Sala from './pages/Sala';
-import Team from './pages/Team';
+
+// Lazy: cada página en su propio chunk (achica el bundle inicial; BotBuilder/ReactFlow
+// es el más pesado y solo lo carga el admin al entrar al builder).
+const NotFound = lazy(() => import('./pages/NotFound'));
+const Accounts = lazy(() => import('./pages/Accounts'));
+const WhatsAppInbox = lazy(() => import('./pages/WhatsAppInbox'));
+const BotBuilder = lazy(() => import('./pages/BotBuilder'));
+const Connections = lazy(() => import('./pages/Connections'));
+const Agenda = lazy(() => import('./pages/Agenda'));
+const Sala = lazy(() => import('./pages/Sala'));
+const Team = lazy(() => import('./pages/Team'));
+
+const PageFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-brand-dark">
+    <Loader2 size={32} className="text-brand-secondary animate-spin" />
+  </div>
+);
 
 function App() {
   return (
@@ -31,6 +42,7 @@ function App() {
         }}
       />
       <BrowserRouter>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           {/* Sala de videollamada — PÚBLICA (el invitado entra sin login) */}
@@ -59,6 +71,7 @@ function App() {
           {/* Catch-all: 404 branded */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
     </ErrorBoundary>
