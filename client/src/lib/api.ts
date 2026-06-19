@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Sin VITE_API_URL → relativo: el front llama /api y vite lo proxyea al backend
+const BASE = import.meta.env.VITE_API_URL ?? '';
 const IS_DEV = !import.meta.env.VITE_SUPABASE_URL;
 
 async function authHeader(): Promise<Record<string, string>> {
@@ -13,7 +14,12 @@ async function authHeader(): Promise<Record<string, string>> {
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const auth = await authHeader();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...auth, ...(init?.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true', // evita la interstitial de ngrok en las llamadas API
+      ...auth,
+      ...(init?.headers || {}),
+    },
     ...init,
   });
   if (res.status === 401) {
