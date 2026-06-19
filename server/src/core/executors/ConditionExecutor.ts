@@ -1,5 +1,32 @@
 import { NodeExecutor, NodeExecutionResult, ExecutionContext } from './types';
 
+// Evaluador aritmético acotado (+ - * / y paréntesis), SIN Function()/eval.
+// Solo se llama sobre cadenas ya validadas como `[\d\s+\-*/().]`.
+function safeArith(expr: string): number | null {
+  const s = expr;
+  let i = 0;
+  const skip = () => { while (i < s.length && s[i] === ' ') i++; };
+  const factor = (): number => {
+    skip();
+    if (s[i] === '(') { i++; const v = expr2(); skip(); if (s[i] === ')') i++; return v; }
+    if (s[i] === '-') { i++; return -factor(); }
+    let num = '';
+    while (i < s.length && /[\d.]/.test(s[i])) num += s[i++];
+    return parseFloat(num);
+  };
+  const term = (): number => {
+    let v = factor(); skip();
+    while (s[i] === '*' || s[i] === '/') { const op = s[i++]; const f = factor(); v = op === '*' ? v * f : v / f; skip(); }
+    return v;
+  };
+  function expr2(): number {
+    let v = term(); skip();
+    while (s[i] === '+' || s[i] === '-') { const op = s[i++]; const t = term(); v = op === '+' ? v + t : v - t; skip(); }
+    return v;
+  }
+  try { skip(); const v = expr2(); return Number.isFinite(v) ? v : null; } catch { return null; }
+}
+
 export class ConditionExecutor implements NodeExecutor {
     async execute(data: any, context: ExecutionContext, engine: any): Promise<NodeExecutionResult> {
         const { variable, operator = 'equals', expectedValue } = data;
@@ -24,10 +51,8 @@ export class ConditionExecutor implements NodeExecutor {
         }
         // Si quedó una expresión puramente aritmética, evaluarla de forma acotada.
         if (/[+\-*/]/.test(expectedResolved) && /^[\d\s+\-*/().]+$/.test(expectedResolved.trim())) {
-            try {
-                const n = Function(`"use strict";return (${expectedResolved.trim()});`)();
-                if (typeof n === 'number' && isFinite(n)) expectedResolved = String(n);
-            } catch { /* dejar el literal si no evalúa */ }
+            const n = safeArith(expectedResolved.trim());
+            if (n !== null) expectedResolved = String(n);
         }
         const val2 = expectedResolved.trim().toLowerCase();
 
@@ -40,16 +65,17 @@ export class ConditionExecutor implements NodeExecutor {
 
         const isNumericMatch = matchesNumeric(val1, val2) || matchesNumeric(valRaw, val2);
 
-        // Also check if val1 (the text) is simply contained in the expected option (loose match)
-        const isLooseMatch = (val1.length >= 3 && val2.includes(val1)) || (valRaw.length >= 3 && val2.includes(valRaw));
+        // NOTA: el "loose match" por substring (val2.includes(val1)) se quitó de equals:
+        // hacía que `equals "conductor"` matcheara "con" y ruteara mal el embudo. Para
+        // coincidencia parcial existe el operador `contains`.
 
         console.log(`[ConditionExecutor] Comparing "${val1}" / Raw: "${valRaw}" / Index: "${valIndex}" ${operator} "${val2}"`);
 
         let result = false;
         if (operator === 'equals') {
-            result = (val1 === val2 || valRaw === val2 || isNumericMatch || isLooseMatch || valIndex === val2);
+            result = (val1 === val2 || valRaw === val2 || isNumericMatch || valIndex === val2);
         } else if (operator === 'not_equals') {
-            result = (val1 !== val2 && valRaw !== val2 && !isNumericMatch && !isLooseMatch && valIndex !== val2);
+            result = (val1 !== val2 && valRaw !== val2 && !isNumericMatch && valIndex !== val2);
         } else if (operator === 'contains') {
             result = val1.includes(val2) || valRaw.includes(val2);
         } else if (operator === 'greater_than' || operator === 'less_than') {
@@ -63,10 +89,10 @@ export class ConditionExecutor implements NodeExecutor {
         } else {
             // Unknown operator → safest default is equals semantics
             console.warn(`[ConditionExecutor] Unknown operator "${operator}" → using equals.`);
-            result = (val1 === val2 || valRaw === val2 || isNumericMatch || isLooseMatch || valIndex === val2);
+            result = (val1 === val2 || valRaw === val2 || isNumericMatch || valIndex === val2);
         }
 
-        console.log(`[ConditionExecutor] Result: ${result} (Numeric: ${isNumericMatch}, Loose: ${isLooseMatch})`);
+        console.log(`[ConditionExecutor] Result: ${result} (Numeric: ${isNumericMatch})`);
 
         // conditionNode doesn't send messages, just returns boolean for routing
         return {

@@ -60,13 +60,19 @@ export class MessageStore {
     }
   }
 
-  /** Atajo: upsert conversación + insert mensaje. */
+  /** Atajo: upsert conversación + insert mensaje. Con un reintento ante fallo transitorio. */
   async record(msg: StoredMessage): Promise<void> {
-    try {
-      const convId = await this.upsertConversation(msg.accountId, msg.phone, msg.contactName, msg.content);
-      await this.insertMessage(convId, msg);
-    } catch (err: any) {
-      console.warn(`[MessageStore] Warning: Failed to record message in database for account ${msg.accountId}:`, err?.message ?? err);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const convId = await this.upsertConversation(msg.accountId, msg.phone, msg.contactName, msg.content);
+        await this.insertMessage(convId, msg);
+        return;
+      } catch (err: any) {
+        if (attempt === 2) {
+          // No tragar en silencio: un INBOUND que no se persiste desaparece del inbox.
+          console.error(`[MessageStore] ERROR: no se pudo persistir el mensaje ${msg.direction} de ${msg.accountId}/${msg.phone} tras 2 intentos:`, err?.message ?? err);
+        }
+      }
     }
   }
 }

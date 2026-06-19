@@ -27,21 +27,31 @@ const isSupabaseConfigured = !!(
 // In-memory appointments store as fallback
 const memoryAppointments: Map<string, Appointment> = new Map();
 
+// El "envelope" que empaquetamos en la columna `resumen` (la tabla no tiene columnas
+// reales para start_time/etc). Solo lo tratamos como metadata si tiene la forma esperada,
+// así una nota del usuario que casualmente sea JSON (ej '{"x":1}') NO se malinterpreta.
+function isEnvelope(o: any): boolean {
+  return !!o && typeof o === 'object' && !Array.isArray(o) &&
+    ('text' in o || 'start_time' in o || 'oficina' in o || 'reminded' in o);
+}
+
 function deserializeAppointment(app: any): Appointment {
-  try {
-    if (app.resumen && (app.resumen.startsWith('{') || app.resumen.startsWith('['))) {
+  if (app.resumen && (app.resumen.startsWith('{') || app.resumen.startsWith('['))) {
+    try {
       const parsed = JSON.parse(app.resumen);
-      return {
-        ...app,
-        resumen: parsed.text || '',
-        start_time: parsed.start_time || app.created_at,
-        end_time: parsed.end_time || new Date(new Date(app.created_at).getTime() + 30 * 60000).toISOString(),
-        reminded: !!parsed.reminded,
-        oficina: parsed.oficina || '',
-      };
+      if (isEnvelope(parsed)) {
+        return {
+          ...app,
+          resumen: parsed.text || '',
+          start_time: parsed.start_time || app.created_at,
+          end_time: parsed.end_time || new Date(new Date(app.created_at).getTime() + 30 * 60000).toISOString(),
+          reminded: !!parsed.reminded,
+          oficina: parsed.oficina || '',
+        };
+      }
+    } catch {
+      // No es JSON válido → tratar como texto crudo (abajo).
     }
-  } catch (e) {
-    // If JSON parsing fails, treat it as raw text
   }
   return {
     ...app,
@@ -99,7 +109,28 @@ export const AppointmentService = {
     return list;
   },
 
+  // ¿Hay una cita NO cancelada que solape el slot pedido en el mismo pool (oficina)?
+  // Re-chequeo anti doble-booking: la disponibilidad se evaluó en otro nodo (TOCTOU);
+  // revalidamos contra el estado actual justo antes de insertar.
+  async hasOverlap(accountId: string, start?: string, end?: string, oficina?: string): Promise<boolean> {
+    if (!start || !end) return false;
+    const reqStart = new Date(start).getTime();
+    const reqEnd = new Date(end).getTime();
+    if (!Number.isFinite(reqStart) || !Number.isFinite(reqEnd)) return false;
+    const existing = await this.list(accountId);
+    const pool = (oficina || '').trim().toLowerCase();
+    return existing.some(a =>
+      a.status !== 'cancelada' && a.start_time && a.end_time &&
+      (a.oficina || '').trim().toLowerCase() === pool &&
+      new Date(a.start_time).getTime() < reqEnd &&
+      new Date(a.end_time).getTime() > reqStart
+    );
+  },
+
   async create(appointment: Omit<Appointment, 'id' | 'created_at' | 'updated_at'>): Promise<Appointment> {
+    if (await this.hasOverlap(appointment.account_id, appointment.start_time, appointment.end_time, appointment.oficina)) {
+      throw new Error('SLOT_TAKEN');
+    }
     const serialized = serializeAppointment(appointment);
 
     if (isSupabaseConfigured) {

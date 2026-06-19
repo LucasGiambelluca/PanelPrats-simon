@@ -39,6 +39,9 @@ export function appointmentsRouter(): Router {
       });
       res.json(newApp);
     } catch (err: any) {
+      if (String(err?.message) === 'SLOT_TAKEN') {
+        return res.status(409).json({ error: 'Ese horario ya está ocupado en esa modalidad/oficina.' });
+      }
       res.status(500).json({ error: err.message });
     }
   });

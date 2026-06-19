@@ -128,6 +128,13 @@ export class AppointmentExecutor implements NodeExecutor {
                 wait_for_input: false,
             };
         } catch (e: any) {
+            if (String(e?.message) === 'SLOT_TAKEN') {
+                console.warn('[AppointmentExecutor] slot ocupado al confirmar:', start_time);
+                return {
+                    messages: ['⚠️ Ese horario se acaba de ocupar. Por favor elegí otro horario.'],
+                    wait_for_input: false,
+                };
+            }
             console.error('[AppointmentExecutor] Error al guardar la cita:', e);
             return {
                 messages: ['⚠️ Hubo un error al agendar la cita. Por favor intentá más tarde.'],
