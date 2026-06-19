@@ -6,6 +6,7 @@ import fs from 'fs';
 import { authDir } from '../../lib/account-keys';
 
 import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
+import { requireRole } from '../middleware/auth';
 
 const AUTH_BASE_PATH = process.env.AUTH_BASE_PATH || './auth';
 
@@ -22,11 +23,18 @@ function isValidUUID(id: string): boolean {
   return uuidRegex.test(id);
 }
 
+// Campos sensibles que NO debe ver una empleada.
+function slimAccount(a: any) {
+  if (!a) return a;
+  const { access_token, app_secret, verify_token, ai_api_key, ai_support_prompt, ...safe } = a;
+  return safe;
+}
+
 export function accountsRouter(manager: AccountManager): Router {
   const r = Router();
 
   // Crear cuenta
-  r.post('/', async (req, res) => {
+  r.post('/', requireRole('admin'), async (req, res) => {
     const { user_id, name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id } = req.body;
     const resolvedChannel = channel || 'whatsapp';
     const resolvedProvider = provider || 'baileys';
@@ -78,17 +86,21 @@ export function accountsRouter(manager: AccountManager): Router {
     const userId = req.query.user_id as string;
 
     const useSupabase = isSupabaseConfigured && isValidUUID(userId);
+    const role = req.user?.role;
 
     if (useSupabase) {
-      const { data, error } = await supabase.from('accounts').select('*').eq('user_id', userId);
+      // Single-org: la empleada ve TODAS las líneas del estudio (sin secretos);
+      // el admin ve las suyas (que son las del estudio) con todos los campos.
+      const query = supabase.from('accounts').select('*');
+      const { data, error } = role === 'empleada' ? await query : await query.eq('user_id', userId);
       if (error) return res.status(400).json({ error: error.message });
-      return res.json(data);
+      return res.json(role === 'empleada' ? (data ?? []).map(slimAccount) : data);
     }
 
-    // Fallback: return all memory accounts for this user (or all if no filter)
-    const list = Array.from(memoryAccounts.values()).filter(
-      a => !userId || a.user_id === userId
-    );
+    // Fallback: empleada ve todas las cuentas en memoria; el resto filtra por user.
+    const list = role === 'empleada'
+      ? Array.from(memoryAccounts.values())
+      : Array.from(memoryAccounts.values()).filter(a => !userId || a.user_id === userId);
     // Sync statuses from AccountManager
     for (const a of list) {
       const liveStatus = manager.getStatus(a.id);
@@ -99,11 +111,11 @@ export function accountsRouter(manager: AccountManager): Router {
                  : a.status;
       }
     }
-    res.json(list);
+    res.json(role === 'empleada' ? list.map(slimAccount) : list);
   });
 
   // Conectar (levanta Baileys → genera QR)
-  r.post('/:id/connect', async (req, res) => {
+  r.post('/:id/connect', requireRole('admin'), async (req, res) => {
     try {
       await manager.connect(req.params.id);
       const status = manager.getStatus(req.params.id);
@@ -139,7 +151,7 @@ export function accountsRouter(manager: AccountManager): Router {
   });
 
   // Desconectar
-  r.post('/:id/disconnect', async (req, res) => {
+  r.post('/:id/disconnect', requireRole('admin'), async (req, res) => {
     await manager.disconnect(req.params.id);
     const memAcc = memoryAccounts.get(req.params.id);
     if (memAcc) memAcc.status = 'disconnected';
@@ -147,7 +159,7 @@ export function accountsRouter(manager: AccountManager): Router {
   });
 
   // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
-  r.put('/:id', async (req, res) => {
+  r.put('/:id', requireRole('admin'), async (req, res) => {
     const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes,
             ai_support_enabled, ai_api_key, ai_model, ai_support_prompt } = req.body;
     const accountId = req.params.id;
@@ -245,7 +257,7 @@ export function accountsRouter(manager: AccountManager): Router {
 
   // Eliminar cuenta (número). CASCADE en Supabase limpia flows, conversaciones,
   // mensajes y sesiones de esa cuenta. También cierra el socket y borra la sesión Baileys.
-  r.delete('/:id', async (req, res) => {
+  r.delete('/:id', requireRole('admin'), async (req, res) => {
     const accountId = req.params.id;
     console.log(`[accounts] DELETE recibido para ${accountId}`);
 
