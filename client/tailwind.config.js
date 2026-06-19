@@ -5,16 +5,16 @@ export default {
     extend: {
       colors: {
         brand: {
-          // Estilo "Trust & Authority" (skill ui-ux-pro-max, legal/SaaS):
-          // navy de autoridad + azul de acento + slate frío + blanco.
-          primary: '#1e3a8a',       // Navy autoridad — SIDEBAR / headings
-          primaryDark: '#172f6b',   // Navy más oscuro (gradiente/bordes sidebar)
-          secondary: '#2563eb',     // Azul — ACENTO (activo, links, íconos, focus)
-          accent: '#1d4ed8',        // Azul-700 (hover/pressed)
+          // Navy REAL de marca (extraído del logo Prats & Simon: #284050) + acento
+          // petróleo armónico + slate frío. Estilo legal "Trust & Authority".
+          primary: '#284050',       // Navy MARCA (logo) — SIDEBAR / headings
+          primaryDark: '#1d2f3c',   // Navy más oscuro (gradiente/bordes sidebar)
+          secondary: '#3f7ba3',     // Azul petróleo — ACENTO (activo, links, íconos)
+          accent: '#335f7d',        // Petróleo más oscuro (hover/pressed)
           dark: '#0b0f1a',          // (legacy)
           card: '#111827',          // (legacy)
-          textLight: '#f8fafc',     // texto claro (sobre navy)
-          textMuted: '#aebfdb',     // azul-gris claro (secundario sobre navy)
+          textLight: '#f6f9fb',     // texto claro (sobre navy)
+          textMuted: '#9db4c4',     // steel claro (secundario sobre navy)
 
           // Contenido — slate frío con jerarquía de superficies:
           ivory: '#f8fafc',         // fondo app (slate-50, frío y claro)
