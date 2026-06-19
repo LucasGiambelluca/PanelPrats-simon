@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { callsApi, messagesApi, salasApi } from '../lib/api';
+import { callsApi, messagesApi, salasApi, conversationsApi } from '../lib/api';
+import type { WhatsAppConversation } from '../types';
 import { toast } from 'sonner';
-import { Video, Phone, MessageCircle, Send, MonitorPlay } from 'lucide-react';
+import { Video, Phone, MessageCircle, Send, MonitorPlay, Users } from 'lucide-react';
 
 interface CallTarget {
   account_id: string;
@@ -25,38 +26,55 @@ export default function CallActions({ target, provider }: Props) {
   const [meetLink, setMeetLink] = useState('');
   const [sending, setSending] = useState(false);
   const [startingSala, setStartingSala] = useState(false);
+  // Selector de conversación (para citas sin número válido / @lid)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [convos, setConvos] = useState<WhatsAppConversation[]>([]);
+  const [selectedPhone, setSelectedPhone] = useState('');
 
   const phoneDigits = onlyDigits(target.telefono || target.phone);
 
-  // Crea una sala de video (Jitsi), manda el link al cliente por WhatsApp y entra como host.
-  const startSala = async () => {
+  const openPicker = async () => {
+    setPickerOpen(true);
+    if (convos.length === 0) {
+      try {
+        const list = await conversationsApi.list(target.account_id);
+        setConvos(list);
+      } catch { toast.error('No se pudieron cargar las conversaciones'); }
+    }
+  };
+
+  // Crea una sala (Jitsi), manda el link por WhatsApp al destino y entra como host.
+  // opts.phone/opts.nombre permiten enviar a OTRA conversación (no la de la cita).
+  const startSala = async (opts?: { phone?: string; nombre?: string }) => {
+    const toPhone = onlyDigits(opts?.phone) || phoneDigits;
+    const nombre = opts?.nombre || target.nombre || 'Cliente';
     setStartingSala(true);
     try {
-      const sala = await salasApi.create({ account_id: target.account_id, titulo: target.nombre });
+      const sala = await salasApi.create({ account_id: target.account_id, titulo: nombre });
       // Abrir la sala del operador SIEMPRE (no depende del envío al cliente).
       window.open(`/sala/${sala.id}?host=1`, '_blank');
 
-      const inv = await salasApi.invitar(sala.id, target.nombre || 'Cliente');
-      if (phoneDigits) {
+      const inv = await salasApi.invitar(sala.id, nombre);
+      if (toPhone) {
         try {
           const res = await messagesApi.send(
             target.account_id,
-            phoneDigits,
+            toPhone,
             `Te esperamos en tu *videollamada* con el estudio 👇 Entrá con este link (1 solo click, sin instalar nada):\n${inv.enlace}`
           );
           if (res.resolved === false) {
             await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
-            toast.warning('El número de la cita no parece de WhatsApp. Link copiado — pasáselo al cliente.');
+            toast.warning('Ese número no parece de WhatsApp. Link copiado — pasáselo o elegí otra conversación.');
           } else {
-            toast.success('Sala creada y link enviado al cliente por WhatsApp ✅');
+            toast.success('Sala creada y link enviado por WhatsApp ✅');
           }
         } catch (e: any) {
           await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
-          toast.warning('Sala lista, pero no se pudo enviar por WhatsApp. El link se copió — pasáselo al cliente.');
+          toast.warning('Sala lista, pero no se pudo enviar por WhatsApp. El link se copió.');
         }
       } else {
         await navigator.clipboard?.writeText(inv.enlace).catch(() => {});
-        toast.info('Sala lista. Link copiado al portapapeles (la cita no tiene teléfono).');
+        toast.info('Sala lista. Link copiado al portapapeles (sin teléfono).');
       }
     } catch (e: any) {
       toast.error('No se pudo iniciar la videollamada: ' + (e.message || ''));
@@ -110,10 +128,36 @@ export default function CallActions({ target, provider }: Props) {
   return (
     <div className="space-y-2">
       {/* Videollamada por sala (Jitsi): crea sala, manda link al cliente, entra como host */}
-      <button onClick={startSala} disabled={startingSala}
+      <button onClick={() => startSala()} disabled={startingSala}
         className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
         <MonitorPlay size={18} /> {startingSala ? 'Creando sala…' : 'Iniciar videollamada + enviar link'}
       </button>
+
+      {/* Selector de conversación: enviar el link a otro chat (citas sin número válido) */}
+      {!pickerOpen ? (
+        <button onClick={openPicker}
+          className="w-full flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-700 text-xs font-semibold py-1">
+          <Users size={13} /> Enviar a otra conversación
+        </button>
+      ) : (
+        <div className="flex gap-2 items-center bg-slate-50 border border-slate-200 rounded-xl p-2">
+          <select
+            value={selectedPhone}
+            onChange={e => setSelectedPhone(e.target.value)}
+            className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none">
+            <option value="">Elegí una conversación…</option>
+            {convos.map(c => (
+              <option key={c.id} value={c.phone}>{(c.contact_name || c.phone)} — {c.phone}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { if (selectedPhone) startSala({ phone: selectedPhone, nombre: convos.find(c => c.phone === selectedPhone)?.contact_name || undefined }); }}
+            disabled={!selectedPhone || startingSala}
+            className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40">
+            <Send size={13} /> Enviar acá
+          </button>
+        </div>
+      )}
 
       <button onClick={openWhatsApp}
         className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-semibold py-2.5 rounded-xl transition-colors">
