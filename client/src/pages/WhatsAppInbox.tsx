@@ -62,7 +62,7 @@ export default function WhatsAppInbox() {
   const [loadingConvos, setLoadingConvos] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
-  const [allLines, setAllLines] = useState(false); // ver chats de TODAS las líneas
+  const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollConvoRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -75,10 +75,8 @@ export default function WhatsAppInbox() {
     try {
       let data: WhatsAppConversation[];
       if (allLines) {
-        // Todas las líneas: merge de conversaciones de cada cuenta del usuario.
-        const lists = await Promise.all(accounts.map(a => conversationsApi.list(a.id).catch(() => [] as WhatsAppConversation[])));
-        data = lists.flat().sort((a, b) =>
-          new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+        // Bandeja unificada: todas las líneas en una sola query (backend ya ordena por last_message_at).
+        data = await conversationsApi.listAll();
       } else {
         if (!activeAccountId) return;
         data = await conversationsApi.list(activeAccountId);

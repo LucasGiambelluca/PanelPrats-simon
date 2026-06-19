@@ -6,7 +6,14 @@ export function conversationsRouter(): Router {
 
   r.get('/', async (req, res) => {
     const accountId = req.query.account_id as string;
-    const { data, error } = await supabase.from('whatsapp_conversations').select('*').eq('account_id', accountId).order('last_message_at', { ascending: false });
+    // account_id ausente o 'all' => bandeja unificada (todas las líneas del estudio).
+    let q = supabase
+      .from('whatsapp_conversations')
+      .select('*')
+      .order('last_message_at', { ascending: false })
+      .limit(500);
+    if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
+    const { data, error } = await q;
     if (error) return res.status(400).json({ error: error.message });
     res.json(data);
   });

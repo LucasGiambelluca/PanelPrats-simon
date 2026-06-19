@@ -132,6 +132,10 @@ export const conversationsApi = {
   list: (accountId: string) =>
     api<WhatsAppConversation[]>(`/api/conversations?account_id=${encodeURIComponent(accountId)}`),
 
+  // Bandeja unificada: todas las líneas del estudio en una sola query.
+  listAll: () =>
+    api<WhatsAppConversation[]>(`/api/conversations?account_id=all`),
+
   messages: (conversationId: string) =>
     api<WhatsAppMessage[]>(`/api/conversations/${conversationId}/messages`),
 
