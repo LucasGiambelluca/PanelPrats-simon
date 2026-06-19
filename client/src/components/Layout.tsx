@@ -1,19 +1,21 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users } from 'lucide-react';
 
-const navItems = [
-  { to: '/accounts', label: 'Mis Números', icon: Phone },
-  { to: '/inbox', label: 'Mensajes', icon: MessageSquare },
-  { to: '/builder', label: 'Bot Builder', icon: Bot },
-  { to: '/agenda', label: 'Agenda', icon: Calendar },
-  { to: '/connections', label: 'Conexiones', icon: Settings },
-];
+const allNav = [
+  { to: '/accounts', label: 'Mis Números', icon: Phone, roles: ['admin'] },
+  { to: '/inbox', label: 'Mensajes', icon: MessageSquare, roles: ['admin', 'empleada'] },
+  { to: '/builder', label: 'Bot Builder', icon: Bot, roles: ['admin'] },
+  { to: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'empleada'] },
+  { to: '/team', label: 'Equipo', icon: Users, roles: ['admin'] },
+  { to: '/connections', label: 'Conexiones', icon: Settings, roles: ['admin'] },
+] as const;
 
 export default function Layout() {
   const { accounts, activeAccountId, setActiveAccountId } = useAccounts();
-  const { signOut } = useAuth();
+  const { signOut, role } = useAuth();
+  const navItems = allNav.filter(item => role ? (item.roles as readonly string[]).includes(role) : false);
   const location = useLocation();
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
