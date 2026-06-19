@@ -22,7 +22,7 @@ const Sala = lazy(() => import('./pages/Sala'));
 const Team = lazy(() => import('./pages/Team'));
 
 const PageFallback = () => (
-  <div className="min-h-screen flex items-center justify-center bg-brand-dark">
+  <div className="min-h-screen flex items-center justify-center bg-brand-ivory">
     <Loader2 size={32} className="text-brand-secondary animate-spin" />
   </div>
 );

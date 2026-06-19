@@ -18,11 +18,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-[#0b0f1a] p-6 text-center">
+      <div className="min-h-screen w-full flex items-center justify-center bg-brand-ivory p-6 text-center">
         <div className="max-w-md">
-          <img src="/logo.png" alt="Prats & Simon" className="h-14 mx-auto mb-6 opacity-80" />
-          <h1 className="text-2xl font-serif font-bold text-brand-textLight mb-2">Algo salió mal</h1>
-          <p className="text-brand-textMuted mb-6">
+          <img src="/logo.png" alt="Prats & Simon" className="h-14 mx-auto mb-6 brightness-0 opacity-75" />
+          <h1 className="text-2xl font-serif font-bold text-brand-ink mb-2">Algo salió mal</h1>
+          <p className="text-brand-inkmuted mb-6">
             Ocurrió un problema en el panel. Probá recargar; si sigue, avisá al administrador.
           </p>
           {import.meta.env.DEV && this.state.message && (

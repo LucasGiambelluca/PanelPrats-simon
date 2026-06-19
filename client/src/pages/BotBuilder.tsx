@@ -500,14 +500,14 @@ export default function BotBuilder() {
   return (
     <div className="flex h-screen w-full">
       <ReactFlowProvider>
-        <div className="flex-1 flex flex-col h-full bg-gray-50 overflow-hidden" ref={reactFlowWrapper}>
+        <div className="flex-1 flex flex-col h-full bg-brand-ivory overflow-hidden" ref={reactFlowWrapper}>
             {/* Header - Desktop */}
-            <div className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-4 z-10 shadow-sm">
+            <div className="hidden lg:flex h-16 bg-brand-surface border-b border-brand-hairline items-center justify-between px-4 z-10 shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 font-semibold mb-1">Mis Flujos</label>
-                        <select 
-                            className="text-sm border-gray-300 rounded focus:ring-purple-500 py-1"
+                        <label className="text-xs text-brand-inkmuted font-semibold mb-1">Mis Flujos</label>
+                        <select
+                            className="text-sm bg-white border border-brand-hairline text-brand-ink rounded focus:ring-2 focus:ring-brand-secondary/40 py-1"
                             value={currentFlowId === null ? '' : (currentFlowId ?? '')}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -526,21 +526,21 @@ export default function BotBuilder() {
                         </select>
                     </div>
 
-                    <div className="h-8 w-px bg-gray-300 mx-2"></div>
+                    <div className="h-8 w-px bg-brand-hairline mx-2"></div>
 
                     <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 font-semibold mb-1">Nombre del Flujo</label>
-                        <input 
-                            className="font-bold text-sm border-gray-300 rounded focus:ring-purple-500 py-1 w-48"
+                        <label className="text-xs text-brand-inkmuted font-semibold mb-1">Nombre del Flujo</label>
+                        <input
+                            className="font-bold text-sm bg-white border border-brand-hairline text-brand-ink rounded focus:ring-2 focus:ring-brand-secondary/40 py-1 w-48"
                             value={flowName}
                             onChange={(e) => setFlowName(e.target.value)}
                         />
                     </div>
-                    
+
                     <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 font-semibold mb-1">Palabra Clave</label>
-                        <input 
-                            className="text-sm border-gray-300 rounded focus:ring-purple-500 py-1 w-32 font-mono text-blue-600"
+                        <label className="text-xs text-brand-inkmuted font-semibold mb-1">Palabra Clave</label>
+                        <input
+                            className="text-sm bg-white border border-brand-hairline rounded focus:ring-2 focus:ring-brand-secondary/40 py-1 w-32 font-mono text-brand-secondary"
                             value={trigger}
                             onChange={(e) => setTrigger(e.target.value)}
                         />
@@ -551,35 +551,35 @@ export default function BotBuilder() {
                      <label className="flex items-center cursor-pointer relative">
                         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="sr-only peer" />
                         <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
-                        <span className="ml-2 text-xs font-medium text-gray-900">Activo</span>
+                        <span className="ml-2 text-xs font-medium text-brand-ink">Activo</span>
                     </label>
 
-                    <div className="h-8 w-px bg-gray-200 mx-1"></div>
+                    <div className="h-8 w-px bg-brand-hairline mx-1"></div>
 
                     <div className="flex items-center gap-2">
-                        <button 
+                        <button
                             onClick={handleExport}
                             title="Exportar archivo JSON"
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded transition"
+                            className="p-2 text-brand-inkmuted hover:bg-black/[0.04] rounded transition"
                         >
                             <Download size={20} />
                         </button>
-                        
-                        <label className="p-2 text-gray-600 hover:bg-gray-100 rounded transition cursor-pointer">
+
+                        <label className="p-2 text-brand-inkmuted hover:bg-black/[0.04] rounded transition cursor-pointer">
                             <Upload size={20} />
-                            <input 
-                                type="file" 
-                                accept=".json" 
-                                className="hidden" 
+                            <input
+                                type="file"
+                                accept=".json"
+                                className="hidden"
                                 onChange={handleImport}
                             />
                         </label>
                     </div>
 
-                    <div className="h-8 w-px bg-gray-200 mx-1"></div>
+                    <div className="h-8 w-px bg-brand-hairline mx-1"></div>
 
                     {currentFlowId && (
-                        <button 
+                        <button
                             onClick={handleDelete}
                             className="bg-red-50 text-red-600 px-4 py-2 rounded flex items-center gap-2 hover:bg-red-100 transition shadow-sm border border-red-200"
                         >
@@ -601,7 +601,7 @@ export default function BotBuilder() {
             </div>
 
             {/* Header - Mobile */}
-            <div className="lg:hidden h-14 bg-[#6366f1] flex items-center justify-between px-4 z-20 shadow-md">
+            <div className="lg:hidden h-14 bg-brand-secondary flex items-center justify-between px-4 z-20 shadow-md">
                 <div className="flex items-center gap-3">
                     <button onClick={() => window.history.back()} className="text-white">
                         <ChevronLeft size={24} />
@@ -646,7 +646,7 @@ export default function BotBuilder() {
                     deleteKeyCode={['Backspace', 'Delete']}
                     defaultEdgeOptions={{
                         animated: true,
-                        style: { strokeWidth: 2, stroke: '#6366f1' },
+                        style: { strokeWidth: 2, stroke: '#9c7a55' },
                     }}
                     onEdgeDoubleClick={(_event, edge) => {
                         setEdges((eds) => eds.filter((e) => e.id !== edge.id));
@@ -658,13 +658,13 @@ export default function BotBuilder() {
                     zoomOnDoubleClick={false}
                 >
                     <Controls className="hidden lg:block" />
-                    <Background color="#aaa" gap={16} />
+                    <Background color="#d8d2c4" gap={16} />
                 </ReactFlow>
 
                 {/* FAB - Mobile */}
                 <button 
                     onClick={() => setIsNodeSelectorOpen(true)}
-                    className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#6366f1] text-white rounded-full shadow-xl flex items-center justify-center z-30 active:scale-90 transition-transform"
+                    className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-brand-secondary text-white rounded-full shadow-xl flex items-center justify-center z-30 active:scale-90 transition-transform"
                 >
                     <Plus size={28} />
                 </button>
@@ -673,9 +673,9 @@ export default function BotBuilder() {
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 z-[110] bg-black/50 animate-in fade-in duration-300">
                         <div className="absolute inset-y-0 right-0 w-[80%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-                            <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-                                <h3 className="font-bold text-gray-800">Ajustes de Flujo</h3>
-                                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-gray-200 rounded-full">
+                            <div className="p-4 border-b border-brand-hairline flex items-center justify-between bg-brand-panel">
+                                <h3 className="font-bold text-brand-ink">Ajustes de Flujo</h3>
+                                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-black/[0.04] rounded-full text-brand-inkmuted">
                                     <X size={24} />
                                 </button>
                             </div>
@@ -683,23 +683,23 @@ export default function BotBuilder() {
                             <div className="p-4 flex-1 overflow-y-auto space-y-6">
                                 <div className="space-y-4">
                                     <div className="flex flex-col gap-1">
-                                        <label className="text-xs text-gray-500 font-bold uppercase">Nombre</label>
-                                        <input 
-                                            className="w-full border-gray-300 rounded-xl p-3 bg-gray-50"
+                                        <label className="text-xs text-brand-inkmuted font-bold uppercase">Nombre</label>
+                                        <input
+                                            className="w-full bg-white border border-brand-hairline text-brand-ink rounded-xl p-3"
                                             value={flowName}
                                             onChange={(e) => setFlowName(e.target.value)}
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="text-xs text-gray-500 font-bold uppercase">Palabra Clave</label>
-                                        <input 
-                                            className="w-full border-gray-300 rounded-xl p-3 bg-gray-50 font-mono text-blue-600"
+                                        <label className="text-xs text-brand-inkmuted font-bold uppercase">Palabra Clave</label>
+                                        <input
+                                            className="w-full bg-white border border-brand-hairline rounded-xl p-3 font-mono text-brand-secondary"
                                             value={trigger}
                                             onChange={(e) => setTrigger(e.target.value)}
                                         />
                                     </div>
-                                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                                        <span className="text-sm font-medium text-gray-700">Estado Activo</span>
+                                    <div className="flex items-center justify-between p-3 bg-brand-panel border border-brand-hairline rounded-xl">
+                                        <span className="text-sm font-medium text-brand-ink">Estado Activo</span>
                                         <label className="flex items-center cursor-pointer relative">
                                             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="sr-only peer" />
                                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
@@ -707,20 +707,20 @@ export default function BotBuilder() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t space-y-3">
-                                    <label className="text-xs text-gray-500 font-bold uppercase block mb-2">Cambiar de Flujo</label>
+                                <div className="pt-4 border-t border-brand-hairline space-y-3">
+                                    <label className="text-xs text-brand-inkmuted font-bold uppercase block mb-2">Cambiar de Flujo</label>
                                     <div className="grid grid-cols-1 gap-2">
-                                        <button 
+                                        <button
                                             onClick={() => { createNewFlow(); setIsMobileMenuOpen(false); }}
-                                            className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-gray-300 text-blue-600 font-medium text-sm hover:bg-blue-50"
+                                            className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-brand-hairline text-brand-secondary font-medium text-sm hover:bg-brand-secondary/5"
                                         >
                                             <Plus size={18} /> Nuevo Flujo
                                         </button>
                                         {flows.map(f => (
-                                            <button 
+                                            <button
                                                 key={f.id}
                                                 onClick={() => { loadFlow(f); setIsMobileMenuOpen(false); }}
-                                                className={`flex items-center justify-between p-3 rounded-xl border ${String(f.id) === String(currentFlowId) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-100 text-gray-700'}`}
+                                                className={`flex items-center justify-between p-3 rounded-xl border ${String(f.id) === String(currentFlowId) ? 'bg-brand-secondary/10 border-brand-secondary/20 text-brand-secondary' : 'bg-white border-brand-hairline text-brand-ink'}`}
                                             >
                                                 <span className="text-sm font-medium truncate">{f.name}</span>
                                                 <div className={`w-2 h-2 rounded-full ${f.is_active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
@@ -729,15 +729,15 @@ export default function BotBuilder() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t grid grid-cols-2 gap-3">
-                                    <button 
+                                <div className="pt-4 border-t border-brand-hairline grid grid-cols-2 gap-3">
+                                    <button
                                         onClick={handleExport}
-                                        className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 rounded-2xl text-gray-600 active:bg-gray-100"
+                                        className="flex flex-col items-center justify-center gap-2 p-4 bg-brand-panel border border-brand-hairline rounded-2xl text-brand-inkmuted active:bg-black/[0.04]"
                                     >
                                         <Download size={20} />
                                         <span className="text-xs font-bold">Exportar</span>
                                     </button>
-                                    <label className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 rounded-2xl text-gray-600 active:bg-gray-100 cursor-pointer">
+                                    <label className="flex flex-col items-center justify-center gap-2 p-4 bg-brand-panel border border-brand-hairline rounded-2xl text-brand-inkmuted active:bg-black/[0.04] cursor-pointer">
                                         <Upload size={20} />
                                         <span className="text-xs font-bold">Importar</span>
                                         <input type="file" accept=".json" className="hidden" onChange={handleImport} />

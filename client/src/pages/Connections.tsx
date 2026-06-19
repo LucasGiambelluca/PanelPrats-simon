@@ -92,17 +92,17 @@ export default function Connections() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0b0f1a]">
+      <div className="flex items-center justify-center min-h-screen bg-brand-ivory">
         <div className="text-center">
-          <RefreshCw className="animate-spin text-[#C6AC98] mx-auto mb-4" size={36} />
-          <p className="text-slate-400 text-sm">Cargando configuraciones...</p>
+          <RefreshCw className="animate-spin text-brand-secondary mx-auto mb-4" size={36} />
+          <p className="text-brand-inkmuted text-sm">Cargando configuraciones...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a] p-6 lg:p-8">
+    <div className="min-h-screen bg-brand-ivory p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}
@@ -112,14 +112,14 @@ export default function Connections() {
               <Settings size={22} className="text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Conexiones</h1>
-              <p className="text-sm text-slate-500">Configurá las credenciales, bases de datos y servicios externos</p>
+              <h1 className="text-2xl font-bold text-brand-ink tracking-tight">Conexiones</h1>
+              <p className="text-sm text-brand-inkmuted">Configurá las credenciales, bases de datos y servicios externos</p>
             </div>
           </div>
           <button
             onClick={handleRestart}
             disabled={restarting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/15 text-red-400 text-xs font-semibold rounded-xl border border-red-500/20 transition-all duration-200 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/15 text-red-600 text-xs font-semibold rounded-xl border border-red-500/20 transition-all duration-200 disabled:opacity-50"
           >
             <RefreshCw size={14} className={restarting ? 'animate-spin' : ''} />
             {restarting ? 'Reiniciando…' : 'Reiniciar Servidor'}
@@ -131,54 +131,54 @@ export default function Connections() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* Supabase & DB section */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <h2 className="text-white font-bold text-base mb-5 flex items-center gap-2">
-                <Database size={18} className="text-[#C6AC98]" />
+            <div className="bg-brand-surface border border-brand-hairline rounded-2xl p-6">
+              <h2 className="text-brand-ink font-bold text-base mb-5 flex items-center gap-2">
+                <Database size={18} className="text-brand-secondary" />
                 Base de Datos y Supabase
               </h2>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">SUPABASE URL</label>
+                  <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">SUPABASE URL</label>
                   <input
                     type="text"
                     value={configs.SUPABASE_URL}
                     onChange={(e) => handleChange('SUPABASE_URL', e.target.value)}
                     placeholder="https://tu-proyecto.supabase.co"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
+                    className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">SUPABASE SERVICE ROLE KEY</label>
+                  <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">SUPABASE SERVICE ROLE KEY</label>
                   <div className="relative">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-inkmuted" size={16} />
                     <input
                       type="password"
                       value={configs.SUPABASE_SERVICE_KEY}
                       onChange={(e) => handleChange('SUPABASE_SERVICE_KEY', e.target.value)}
                       placeholder="eyJhbGciOi..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
+                      className="w-full bg-white border border-brand-hairline rounded-xl pl-11 pr-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all font-mono"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5">
+                  <p className="text-[10px] text-brand-inkmuted mt-1.5">
                     Debe ser la clave "service_role" para omitir las políticas de RLS al guardar datos del sistema.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">PostgreSQL DATABASE URL</label>
+                  <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">PostgreSQL DATABASE URL</label>
                   <div className="relative">
-                    <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
+                    <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-inkmuted" size={16} />
                     <input
                       type="text"
                       value={configs.DATABASE_URL}
                       onChange={(e) => handleChange('DATABASE_URL', e.target.value)}
                       placeholder="postgresql://postgres:password@db.supabase.co:5432/postgres"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
+                      className="w-full bg-white border border-brand-hairline rounded-xl pl-11 pr-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all font-mono"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5">
+                  <p className="text-[10px] text-brand-inkmuted mt-1.5">
                     Requerida para realizar la sincronización inicial de tablas.
                   </p>
                 </div>
@@ -186,78 +186,78 @@ export default function Connections() {
             </div>
 
             {/* APIs & Services */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <h2 className="text-white font-bold text-base mb-5 flex items-center gap-2">
-                <Server size={18} className="text-[#C6AC98]" />
+            <div className="bg-brand-surface border border-brand-hairline rounded-2xl p-6">
+              <h2 className="text-brand-ink font-bold text-base mb-5 flex items-center gap-2">
+                <Server size={18} className="text-brand-secondary" />
                 Servicios Externos e Infraestructura
               </h2>
               
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">REDIS URL</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">REDIS URL</label>
                     <input
                       type="text"
                       value={configs.REDIS_URL}
                       onChange={(e) => handleChange('REDIS_URL', e.target.value)}
                       placeholder="redis://127.0.0.1:6379"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Carpeta Auth Baileys</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">Carpeta Auth Baileys</label>
                     <input
                       type="text"
                       value={configs.AUTH_BASE_PATH}
                       onChange={(e) => handleChange('AUTH_BASE_PATH', e.target.value)}
                       placeholder="./auth"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">GROQ API KEY</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">GROQ API KEY</label>
                     <input
                       type="password"
                       value={configs.GROQ_API_KEY}
                       onChange={(e) => handleChange('GROQ_API_KEY', e.target.value)}
                       placeholder="gsk_..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">GEMINI API KEY</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">GEMINI API KEY</label>
                     <input
                       type="password"
                       value={configs.GEMINI_API_KEY}
                       onChange={(e) => handleChange('GEMINI_API_KEY', e.target.value)}
                       placeholder="AIzaSy..."
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all font-mono"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Puerto de Servidor</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">Puerto de Servidor</label>
                     <input
                       type="text"
                       value={configs.PORT}
                       onChange={(e) => handleChange('PORT', e.target.value)}
                       placeholder="3001"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">CORS Origin</label>
+                    <label className="block text-xs font-semibold text-brand-inkmuted uppercase tracking-wider mb-2">CORS Origin</label>
                     <input
                       type="text"
                       value={configs.CORS_ORIGIN}
                       onChange={(e) => handleChange('CORS_ORIGIN', e.target.value)}
                       placeholder="http://localhost:5173"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C6AC98]/40 transition-all"
+                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 transition-all"
                     />
                   </div>
                 </div>
@@ -282,15 +282,15 @@ export default function Connections() {
           <div className="space-y-6">
             
             {/* Sync Database Operations */}
-            <div className="bg-gradient-to-br from-[#304352]/25 to-[#a57b5a]/15 border border-[#C6AC98]/20 rounded-2xl p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#C6AC98]/5 rounded-full blur-2xl pointer-events-none" />
-              
-              <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-                <Database size={16} className="text-[#C6AC98]" />
+            <div className="bg-brand-panel border border-brand-hairline rounded-2xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-brand-secondary/5 rounded-full blur-2xl pointer-events-none" />
+
+              <h3 className="text-brand-ink font-bold text-sm mb-3 flex items-center gap-2">
+                <Database size={16} className="text-brand-secondary" />
                 Base de Datos
               </h3>
-              
-              <p className="text-xs text-slate-400 leading-relaxed mb-5">
+
+              <p className="text-xs text-brand-inkmuted leading-relaxed mb-5">
                 Crea automáticamente todas las tablas requeridas por la aplicación en tu cuenta de Supabase/PostgreSQL.
               </p>
 
@@ -305,28 +305,28 @@ export default function Connections() {
             </div>
 
             {/* Help / Instructions Box */}
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6">
-              <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-                <HelpCircle size={14} className="text-slate-500" />
+            <div className="bg-brand-panel border border-brand-hairline rounded-2xl p-6">
+              <h3 className="text-brand-ink font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                <HelpCircle size={14} className="text-brand-inkmuted" />
                 Guía rápida
               </h3>
 
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-white text-xs font-semibold mb-1">1. Guardar configuraciones</h4>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <h4 className="text-brand-ink text-xs font-semibold mb-1">1. Guardar configuraciones</h4>
+                  <p className="text-[11px] text-brand-inkmuted leading-relaxed">
                     Al presionar "Guardar en .env", se grabarán las variables en el archivo local de configuración.
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-white text-xs font-semibold mb-1">2. Sincronizar Base de Datos</h4>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <h4 className="text-brand-ink text-xs font-semibold mb-1">2. Sincronizar Base de Datos</h4>
+                  <p className="text-[11px] text-brand-inkmuted leading-relaxed">
                     Usa esta opción para inyectar la estructura inicial (migraciones) de la base de datos automáticamente.
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-white text-xs font-semibold mb-1">3. Aplicar y Reiniciar</h4>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <h4 className="text-brand-ink text-xs font-semibold mb-1">3. Aplicar y Reiniciar</h4>
+                  <p className="text-[11px] text-brand-inkmuted leading-relaxed">
                     Hacé click en "Reiniciar Servidor" arriba a la derecha para relanzar la app con las nuevas variables del .env.
                   </p>
                 </div>
@@ -337,9 +337,9 @@ export default function Connections() {
             <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 flex gap-3">
               <ShieldAlert className="text-amber-500 flex-shrink-0 mt-0.5" size={16} />
               <div>
-                <h4 className="text-amber-400 text-xs font-bold mb-1">Seguridad del Sistema</h4>
-                <p className="text-[10px] text-slate-500 leading-relaxed">
-                  Las credenciales se guardan de forma local en tu servidor. Nunca compartas la clave <code className="bg-black/40 text-slate-400 px-1 rounded">service_role</code> en la red pública.
+                <h4 className="text-amber-600 text-xs font-bold mb-1">Seguridad del Sistema</h4>
+                <p className="text-[10px] text-brand-inkmuted leading-relaxed">
+                  Las credenciales se guardan de forma local en tu servidor. Nunca compartas la clave <code className="bg-black/[0.05] text-brand-ink px-1 rounded">service_role</code> en la red pública.
                 </p>
               </div>
             </div>
