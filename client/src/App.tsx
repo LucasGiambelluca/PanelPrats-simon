@@ -13,6 +13,7 @@ import Login from './pages/Login';
 // Lazy: cada página en su propio chunk (achica el bundle inicial; BotBuilder/ReactFlow
 // es el más pesado y solo lo carga el admin al entrar al builder).
 const NotFound = lazy(() => import('./pages/NotFound'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Accounts = lazy(() => import('./pages/Accounts'));
 const WhatsAppInbox = lazy(() => import('./pages/WhatsAppInbox'));
 const BotBuilder = lazy(() => import('./pages/BotBuilder'));
@@ -54,8 +55,9 @@ function App() {
                 <Layout />
               </AccountProvider>
             }>
-              <Route index element={<Navigate to="/inbox" replace />} />
+              <Route index element={<Navigate to="/dashboard" replace />} />
               {/* ambos roles */}
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/inbox" element={<WhatsAppInbox />} />
               <Route path="/agenda" element={<Agenda />} />
               {/* solo admin */}

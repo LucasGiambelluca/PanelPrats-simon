@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users, Menu, X } from 'lucide-react';
+import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users, Menu, X, LayoutDashboard } from 'lucide-react';
 
 const allNav = [
+  { to: '/dashboard', label: 'Inicio', icon: LayoutDashboard, roles: ['admin', 'empleada'] },
   { to: '/accounts', label: 'Mis Números', icon: Phone, roles: ['admin'] },
   { to: '/inbox', label: 'Mensajes', icon: MessageSquare, roles: ['admin', 'empleada'] },
   { to: '/builder', label: 'Bot Builder', icon: Bot, roles: ['admin'] },
