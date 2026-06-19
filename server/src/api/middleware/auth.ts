@@ -11,7 +11,9 @@ declare global {
 
 // Debe coincidir con el MOCK_USER del frontend (AuthContext.tsx).
 const MOCK_ADMIN_ID = '03f6b5d7-febe-4af9-909b-70fba81e26af';
-const isProd = () => process.env.NODE_ENV === 'production';
+// Bypass de desarrollo: OPT-IN explícito. Nunca activo por defecto (no depende de
+// que el deploy setee NODE_ENV). En prod simplemente NO se setea DEV_AUTH_BYPASS.
+const devAuthEnabled = () => process.env.DEV_AUTH_BYPASS === '1';
 
 /** Valida el JWT de Supabase, carga el rol desde profiles y lo adjunta a req.user. */
 export async function authContext(req: Request, res: Response, next: NextFunction) {
@@ -19,9 +21,9 @@ export async function authContext(req: Request, res: Response, next: NextFunctio
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   if (!token) return res.status(401).json({ error: 'No autenticado' });
 
-  // Bypass de desarrollo: solo fuera de producción.
+  // Bypass de desarrollo: solo si DEV_AUTH_BYPASS=1 está explícitamente seteado.
   if (token === 'dev-token') {
-    if (isProd()) return res.status(401).json({ error: 'No autenticado' });
+    if (!devAuthEnabled()) return res.status(401).json({ error: 'No autenticado' });
     req.user = { id: MOCK_ADMIN_ID, role: 'admin', name: 'Administrador (dev)' };
     return next();
   }

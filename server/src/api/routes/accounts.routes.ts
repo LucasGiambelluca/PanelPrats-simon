@@ -26,7 +26,8 @@ function isValidUUID(id: string): boolean {
 // Campos sensibles que NO debe ver una empleada.
 function slimAccount(a: any) {
   if (!a) return a;
-  const { access_token, app_secret, verify_token, ai_api_key, ai_support_prompt, ...safe } = a;
+  // qr_code se excluye: una empleada con el QR podría vincular/secuestrar la sesión de WhatsApp.
+  const { access_token, app_secret, verify_token, ai_api_key, ai_support_prompt, qr_code, ...safe } = a;
   return safe;
 }
 

@@ -39,13 +39,17 @@ export function teamRouter(): Router {
     const { data, error } = await supabase
       .from('profiles').update(patch).eq('id', req.params.id).eq('role', 'empleada').select('*').maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Empleada no encontrada' });
     res.json(data);
   });
 
-  // Resetear password.
+  // Resetear password (solo de empleadas: verificamos el rol antes de tocar auth).
   r.post('/:id/reset-password', async (req, res) => {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'password requerido' });
+    const { data: prof } = await supabase
+      .from('profiles').select('role').eq('id', req.params.id).maybeSingle();
+    if (!prof || prof.role !== 'empleada') return res.status(404).json({ error: 'Empleada no encontrada' });
     const { error } = await supabase.auth.admin.updateUserById(req.params.id, { password });
     if (error) return res.status(400).json({ error: error.message });
     res.json({ ok: true });

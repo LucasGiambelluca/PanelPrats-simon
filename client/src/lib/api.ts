@@ -23,7 +23,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (res.status === 401) {
-    if (!IS_DEV) { await supabase.auth.signOut(); window.location.href = '/login'; }
+    // No forzar logout cuando es /api/me (resolución de rol): un 401 ahí significa
+    // "sin perfil", y desloguear crearía un loop login→/api/me→401→login.
+    if (!IS_DEV && !path.startsWith('/api/me')) { await supabase.auth.signOut(); window.location.href = '/login'; }
     throw new Error('Sesión expirada');
   }
   if (res.status === 403) throw new Error('No tenés permiso para esta acción');

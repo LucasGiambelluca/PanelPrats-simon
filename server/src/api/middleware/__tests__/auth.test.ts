@@ -22,7 +22,7 @@ function makeRes() {
 }
 
 describe('authContext', () => {
-  beforeEach(() => { state.user = null; state.userError = null; state.profile = null; process.env.NODE_ENV = 'test'; });
+  beforeEach(() => { state.user = null; state.userError = null; state.profile = null; delete process.env.DEV_AUTH_BYPASS; });
 
   it('sin token => 401', async () => {
     const res = makeRes(); let nexted = false;
@@ -51,15 +51,15 @@ describe('authContext', () => {
     expect(res.statusCode).toBe(401); expect(nexted).toBe(false);
   });
 
-  it('dev-token fuera de prod => admin', async () => {
-    process.env.NODE_ENV = 'development';
+  it('dev-token con DEV_AUTH_BYPASS=1 => admin', async () => {
+    process.env.DEV_AUTH_BYPASS = '1';
     const req = makeReq('Bearer dev-token'); const res = makeRes(); let nexted = false;
     await authContext(req, res, () => { nexted = true; });
     expect(nexted).toBe(true); expect(req.user.role).toBe('admin');
   });
 
-  it('dev-token en prod => 401', async () => {
-    process.env.NODE_ENV = 'production';
+  it('dev-token sin DEV_AUTH_BYPASS (ej. prod) => 401', async () => {
+    // beforeEach borra DEV_AUTH_BYPASS: simula prod donde el bypass no está habilitado.
     const res = makeRes(); let nexted = false;
     await authContext(makeReq('Bearer dev-token'), res, () => { nexted = true; });
     expect(res.statusCode).toBe(401); expect(nexted).toBe(false);
