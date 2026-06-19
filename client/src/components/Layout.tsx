@@ -44,8 +44,8 @@ export default function Layout() {
         <button onClick={() => setMobileOpen(false)} aria-label="Cerrar menú" className="lg:hidden absolute top-3 right-3 z-20 text-brand-textMuted hover:text-brand-textLight">
           <X size={20} />
         </button>
-        {/* Glow bronce sutil detrás del logo */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-brand-accent/15 rounded-full blur-3xl pointer-events-none" />
+        {/* Glow dorado sutil detrás del logo */}
+        <div className="absolute -top-20 -left-20 w-40 h-40 bg-brand-gold/15 rounded-full blur-3xl pointer-events-none" />
 
         {/* Logo Container */}
         <div className="p-5 border-b border-white/10 relative z-10">
@@ -59,18 +59,18 @@ export default function Layout() {
               />
             </div>
             <div className="flex items-center gap-1.5 mt-1">
-              <ShieldCheck size={12} className="text-brand-accent" />
-              <span className="text-[10px] text-brand-accent font-semibold uppercase tracking-widest">Panel de Control</span>
+              <ShieldCheck size={12} className="text-brand-gold" />
+              <span className="text-[10px] text-brand-gold font-semibold uppercase tracking-widest">Panel de Control</span>
             </div>
           </div>
         </div>
 
         {/* Account Selector */}
         <div className="px-4 py-4 border-b border-white/10 relative z-10 bg-black/10">
-          <label className="block text-[9px] font-bold text-brand-accent uppercase tracking-widest mb-2 px-1">Cuenta Activa</label>
+          <label className="block text-[9px] font-bold text-brand-gold uppercase tracking-widest mb-2 px-1">Cuenta Activa</label>
           <div className="relative">
             <select
-              className="w-full appearance-none bg-white/10 border border-white/15 text-brand-textLight text-xs rounded-xl px-3 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-all cursor-pointer font-medium"
+              className="w-full appearance-none bg-white/10 border border-white/15 text-brand-textLight text-xs rounded-xl px-3 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold/50 transition-all cursor-pointer font-medium"
               value={activeAccountId ?? ''}
               onChange={(e) => setActiveAccountId(e.target.value)}
             >
@@ -80,7 +80,7 @@ export default function Layout() {
                 </option>
               ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-gold pointer-events-none" />
           </div>
           {activeAccount && (
             <div className="flex items-center gap-2 mt-2.5 px-1.5 py-1 rounded-lg bg-white/[0.04] border border-white/10">
@@ -92,7 +92,7 @@ export default function Layout() {
               }`} />
               <span className="text-[10px] text-brand-textMuted capitalize font-medium">{activeAccount.status}</span>
               {activeAccount.phone_number && (
-                <span className="text-[10px] text-brand-accent ml-auto font-mono font-medium">{activeAccount.phone_number}</span>
+                <span className="text-[10px] text-brand-gold ml-auto font-mono font-medium">{activeAccount.phone_number}</span>
               )}
             </div>
           )}
@@ -107,13 +107,13 @@ export default function Layout() {
                 key={to}
                 to={to}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative border-l-2 ${
                   isActive
-                    ? 'bg-brand-secondary text-white shadow-md shadow-brand-secondary/25'
-                    : 'text-brand-textMuted hover:text-brand-textLight hover:bg-white/[0.06]'
+                    ? 'bg-brand-gold/[0.14] text-brand-gold border-brand-gold'
+                    : 'text-brand-textMuted border-transparent hover:text-brand-textLight hover:bg-white/[0.06]'
                 }`}
               >
-                <Icon size={18} className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-brand-textMuted group-hover:text-white'}`} />
+                <Icon size={18} className={`transition-colors duration-200 ${isActive ? 'text-brand-gold' : 'text-brand-textMuted group-hover:text-brand-gold'}`} />
                 {label}
               </Link>
             );
@@ -139,7 +139,7 @@ export default function Layout() {
           <div className="text-sm font-semibold text-brand-ink">Estudio Prats &amp; Simon</div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5 pr-3 border-r border-brand-hairline">
-              <div className="w-8 h-8 rounded-full bg-brand-secondary/12 text-brand-secondary flex items-center justify-center text-xs font-bold">
+              <div className="w-8 h-8 rounded-full bg-brand-primary text-white ring-2 ring-brand-gold/40 flex items-center justify-center text-xs font-bold">
                 {role === 'admin' ? 'A' : 'E'}
               </div>
               <span className="text-xs font-semibold text-brand-ink">{role === 'admin' ? 'Administrador' : 'Empleada'}</span>

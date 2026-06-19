@@ -12,7 +12,7 @@ import {
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
 
 const channelConfig: Record<Channel, { label: string; icon: any; color: string }> = {
-  whatsapp:  { label: 'WhatsApp',  icon: MessageCircle, color: 'bg-[#3f7ba3]/10 text-[#3f7ba3] border-[#3f7ba3]/20' },
+  whatsapp:  { label: 'WhatsApp',  icon: MessageCircle, color: 'bg-[#24365a]/10 text-[#24365a] border-[#24365a]/20' },
   facebook:  { label: 'Facebook',  icon: Facebook,      color: 'bg-blue-400/10 text-blue-600 border-blue-400/20' },
   instagram: { label: 'Instagram', icon: Instagram,     color: 'bg-pink-400/10 text-pink-600 border-pink-400/20' },
 };
@@ -262,22 +262,22 @@ export default function Accounts() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8 border-b border-brand-hairline pb-6">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#284050] to-[#335f7d] flex items-center justify-center shadow-lg shadow-brand-secondary/10">
-              <Smartphone size={22} className="text-[#3f7ba3]" />
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1a2949] to-[#101820] flex items-center justify-center shadow-lg shadow-brand-secondary/10">
+              <Smartphone size={22} className="text-[#24365a]" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-brand-ink tracking-tight font-serif">Gestión de Líneas</h1>
               <p className="text-sm text-brand-inkmuted">Configuración y asignación de flujos de atención para el bufete Prats & Simon</p>
             </div>
           </div>
-          <button onClick={() => { reload(); loadFlows(); }} className="text-[#335f7d] hover:text-brand-ink transition-colors p-2.5 rounded-xl bg-black/[0.03] border border-brand-hairline hover:bg-black/[0.06]">
+          <button onClick={() => { reload(); loadFlows(); }} className="text-[#101820] hover:text-brand-ink transition-colors p-2.5 rounded-xl bg-black/[0.03] border border-brand-hairline hover:bg-black/[0.06]">
             <RefreshCw size={18} />
           </button>
         </div>
 
         {/* Create Account Branded Card */}
         <div className="glass-card rounded-2xl p-6 mb-8 border border-brand-hairline relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#3f7ba3]/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#24365a]/5 rounded-full blur-3xl pointer-events-none" />
 
           <h2 className="text-brand-ink font-serif font-bold text-lg mb-4">Nueva Línea de Atención</h2>
 
@@ -347,7 +347,7 @@ export default function Accounts() {
               <button
                 onClick={handleCreate}
                 disabled={creating || !name.trim()}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#284050] to-[#335f7d] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-7 py-3.5 rounded-xl font-bold text-sm shadow-md transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-40 disabled:hover:translate-y-0 whitespace-nowrap"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#1a2949] to-[#101820] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-7 py-3.5 rounded-xl font-bold text-sm shadow-md transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-40 disabled:hover:translate-y-0 whitespace-nowrap"
               >
                 <Plus size={16} />
                 Crear Línea
@@ -420,15 +420,15 @@ export default function Accounts() {
                 }`}
               >
                 {/* Decorative gold-glow line on hover */}
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#3f7ba3]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#24365a]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 {/* Card Main Area */}
                 <div className={`p-5 flex flex-col ${isConnecting ? '' : 'h-full'} justify-between`}>
                   <div>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#284050]/30 to-[#335f7d]/30 border border-brand-hairline flex items-center justify-center relative">
-                          <Smartphone size={22} className="text-[#335f7d]" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1a2949]/30 to-[#101820]/30 border border-brand-hairline flex items-center justify-center relative">
+                          <Smartphone size={22} className="text-[#101820]" />
                           <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-brand-surface ${cfg.dotColor} ${
                             a.status === 'qr' || a.status === 'connecting' ? 'animate-pulse' : ''
                           }`} />
@@ -464,7 +464,7 @@ export default function Accounts() {
                       <span className="text-[11px] text-brand-inkmuted block uppercase tracking-wider mb-1 font-semibold">Flujo de Atención Asignado:</span>
                       {activeFlow ? (
                         <div className="flex items-center gap-2 text-brand-ink text-sm font-semibold">
-                          <Check size={14} className="text-[#335f7d]" />
+                          <Check size={14} className="text-[#101820]" />
                           <span>{activeFlow.name}</span>
                           {activeFlow.trigger_word && (
                             <span className="text-xs text-brand-inkmuted font-normal">({activeFlow.trigger_word})</span>
@@ -484,7 +484,7 @@ export default function Accounts() {
                   <div className="flex gap-2 mt-4 pt-3 border-t border-brand-hairline">
                     <button
                       onClick={() => openEditModal(a)}
-                      className="flex items-center justify-center p-2.5 bg-black/[0.03] hover:bg-black/[0.06] text-[#335f7d] rounded-xl border border-brand-hairline transition-all"
+                      className="flex items-center justify-center p-2.5 bg-black/[0.03] hover:bg-black/[0.06] text-[#101820] rounded-xl border border-brand-hairline transition-all"
                       title="Configurar línea y flujo"
                     >
                       <Settings2 size={15} />
@@ -530,7 +530,7 @@ export default function Accounts() {
 
                 {/* Instructions panel for meta webhook / WhatsApp Official */}
                 {isConnecting && (isMeta || isOfficial) && (
-                  <div className="border-t border-brand-hairline bg-gradient-to-b from-[#3f7ba3]/5 to-transparent p-6 animate-fade-in col-span-1 md:col-span-2 lg:col-span-3">
+                  <div className="border-t border-brand-hairline bg-gradient-to-b from-[#24365a]/5 to-transparent p-6 animate-fade-in col-span-1 md:col-span-2 lg:col-span-3">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h4 className="text-brand-ink font-bold text-sm">Configurar Webhook en Meta</h4>
@@ -544,7 +544,7 @@ export default function Accounts() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL</p>
-                        <code className="block bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-[#335f7d] text-xs font-mono break-all">
+                        <code className="block bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-[#101820] text-xs font-mono break-all">
                           {apiBase}/api/webhooks/meta
                         </code>
                       </div>
@@ -556,8 +556,8 @@ export default function Accounts() {
                       </div>
                     </div>
 
-                    <div className="mt-4 p-3.5 bg-[#3f7ba3]/5 rounded-xl border border-[#3f7ba3]/10 text-xs text-brand-inkmuted leading-relaxed flex items-start gap-2.5">
-                      <HelpCircle size={16} className="text-[#335f7d] flex-shrink-0 mt-0.5" />
+                    <div className="mt-4 p-3.5 bg-[#24365a]/5 rounded-xl border border-[#24365a]/10 text-xs text-brand-inkmuted leading-relaxed flex items-start gap-2.5">
+                      <HelpCircle size={16} className="text-[#101820] flex-shrink-0 mt-0.5" />
                       <div>
                         <span className="font-bold text-brand-ink block mb-0.5">¿Cómo configurar?</span>
                         Ve a la sección Webhooks de tu app de Meta Developer, selecciona <span className="text-brand-ink font-semibold">{isOfficial ? 'WhatsApp Business Account' : 'Page'}</span>, añade la URL y el Token de verificación anteriores, y suscríbete al campo <span className="text-brand-ink font-semibold">messages</span>.
@@ -568,7 +568,7 @@ export default function Accounts() {
 
                 {/* QR Code panel for Baileys WhatsApp */}
                 {isConnecting && !isMeta && !isOfficial && (
-                  <div className="border-t border-brand-hairline bg-gradient-to-b from-[#3f7ba3]/5 to-transparent p-6 animate-fade-in col-span-1 md:col-span-2 lg:col-span-3">
+                  <div className="border-t border-brand-hairline bg-gradient-to-b from-[#24365a]/5 to-transparent p-6 animate-fade-in col-span-1 md:col-span-2 lg:col-span-3">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h4 className="text-brand-ink font-bold text-sm">Vincular WhatsApp por Código QR</h4>
@@ -593,11 +593,11 @@ export default function Accounts() {
                               alt="QR Code"
                               className="w-full h-full object-contain rounded-xl"
                             />
-                            <div className="absolute left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#3f7ba3] to-transparent animate-scan-line" />
+                            <div className="absolute left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#24365a] to-transparent animate-scan-line" />
                           </div>
                         ) : (
                           <div className="w-60 h-60 bg-brand-panel rounded-2xl flex items-center justify-center border border-brand-hairline">
-                            <Loader2 size={40} className="text-[#335f7d] animate-spin" />
+                            <Loader2 size={40} className="text-[#101820] animate-spin" />
                           </div>
                         )}
                       </div>
@@ -611,8 +611,8 @@ export default function Accounts() {
                             { step: '4', text: 'Apunta la cámara del móvil a la pantalla para escanear' },
                           ].map((item) => (
                             <div key={item.step} className="flex items-center gap-3">
-                              <div className="w-6 h-6 rounded-full bg-[#3f7ba3]/10 flex items-center justify-center flex-shrink-0 border border-[#3f7ba3]/20">
-                                <span className="text-[#335f7d] text-[11px] font-bold">{item.step}</span>
+                              <div className="w-6 h-6 rounded-full bg-[#24365a]/10 flex items-center justify-center flex-shrink-0 border border-[#24365a]/20">
+                                <span className="text-[#101820] text-[11px] font-bold">{item.step}</span>
                               </div>
                               <p className="text-brand-inkmuted text-xs">{item.text}</p>
                             </div>
@@ -637,7 +637,7 @@ export default function Accounts() {
         {/* Empty state */}
         {accounts.length === 0 && (
           <div className="text-center py-24 glass-card rounded-2xl border border-brand-hairline">
-            <div className="w-20 h-20 rounded-2xl bg-black/[0.03] border border-brand-hairline flex items-center justify-center mx-auto mb-5 text-[#335f7d]">
+            <div className="w-20 h-20 rounded-2xl bg-black/[0.03] border border-brand-hairline flex items-center justify-center mx-auto mb-5 text-[#101820]">
               <Smartphone size={36} />
             </div>
             <h3 className="text-brand-ink font-serif font-bold text-lg mb-1">No hay líneas configuradas</h3>
@@ -652,7 +652,7 @@ export default function Accounts() {
       {editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="glass-card rounded-2xl border border-brand-hairline max-w-lg w-full overflow-hidden shadow-2xl relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#3f7ba3]/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#24365a]/5 rounded-full blur-3xl pointer-events-none" />
 
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-brand-hairline">
@@ -675,7 +675,7 @@ export default function Accounts() {
               <div className="space-y-1">
                 <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider">Nombre de la línea</label>
                 <input
-                  className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30"
+                  className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#24365a]/30"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                 />
@@ -716,7 +716,7 @@ export default function Accounts() {
               <div className="space-y-1">
                 <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider block">Flujo Activo Mapeado</label>
                 <select
-                  className="w-full bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30 appearance-none cursor-pointer"
+                  className="w-full bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#24365a]/30 appearance-none cursor-pointer"
                   value={editFlowId || ''}
                   onChange={(e) => setEditFlowId(e.target.value || null)}
                 >
@@ -739,7 +739,7 @@ export default function Accounts() {
               <div className="space-y-1">
                 <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider block">Recordatorio de citas (anticipación)</label>
                 <select
-                  className="w-full bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30 appearance-none cursor-pointer"
+                  className="w-full bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm focus:outline-none focus:ring-2 focus:ring-[#24365a]/30 appearance-none cursor-pointer"
                   value={editReminderMinutes}
                   onChange={(e) => setEditReminderMinutes(Number(e.target.value))}
                 >
@@ -755,13 +755,13 @@ export default function Accounts() {
               <div className="space-y-3 border-t border-brand-hairline pt-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Bot size={15} className="text-[#335f7d]" />
+                    <Bot size={15} className="text-[#101820]" />
                     <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider">Agente IA de soporte</label>
                   </div>
                   <button
                     type="button"
                     onClick={() => setEditAiEnabled(v => !v)}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${editAiEnabled ? 'bg-[#335f7d]' : 'bg-black/[0.12]'}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${editAiEnabled ? 'bg-[#101820]' : 'bg-black/[0.12]'}`}
                     title={editAiEnabled ? 'Activado' : 'Desactivado'}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${editAiEnabled ? 'translate-x-5' : ''}`} />
@@ -778,7 +778,7 @@ export default function Accounts() {
                         <label className="text-[11px] text-brand-inkmuted font-semibold">API Key (OpenAI)</label>
                         <input
                           type="password"
-                          className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30"
+                          className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/30"
                           placeholder="sk-..."
                           value={editAiApiKey}
                           onChange={(e) => setEditAiApiKey(e.target.value)}
@@ -787,7 +787,7 @@ export default function Accounts() {
                       <div className="space-y-1">
                         <label className="text-[11px] text-brand-inkmuted font-semibold">Modelo</label>
                         <input
-                          className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30"
+                          className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/30"
                           placeholder="gpt-4o-mini"
                           value={editAiModel}
                           onChange={(e) => setEditAiModel(e.target.value)}
@@ -797,7 +797,7 @@ export default function Accounts() {
                     <div className="space-y-1">
                       <label className="text-[11px] text-brand-inkmuted font-semibold">Prompt del agente de soporte</label>
                       <textarea
-                        className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm min-h-[70px] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/30 resize-none leading-relaxed"
+                        className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm min-h-[70px] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/30 resize-none leading-relaxed"
                         placeholder="Ej: Sos el asistente de soporte del estudio. Entendés qué necesita la persona y la derivás al flujo correcto."
                         value={editAiPrompt}
                         onChange={(e) => setEditAiPrompt(e.target.value)}
@@ -866,7 +866,7 @@ export default function Accounts() {
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={saving || !editName.trim()}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-[#284050] to-[#335f7d] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all duration-300 disabled:opacity-40"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-[#1a2949] to-[#101820] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all duration-300 disabled:opacity-40"
               >
                 {saving ? (
                   <>

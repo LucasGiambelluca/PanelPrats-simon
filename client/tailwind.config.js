@@ -5,28 +5,29 @@ export default {
     extend: {
       colors: {
         brand: {
-          // Navy REAL de marca (extraído del logo Prats & Simon: #284050) + acento
-          // petróleo armónico + slate frío. Estilo legal "Trust & Authority".
-          primary: '#284050',       // Navy MARCA (logo) — SIDEBAR / headings
-          primaryDark: '#1d2f3c',   // Navy más oscuro (gradiente/bordes sidebar)
-          secondary: '#3f7ba3',     // Azul petróleo — ACENTO (activo, links, íconos)
-          accent: '#335f7d',        // Petróleo más oscuro (hover/pressed)
+          // Paleta OFICIAL de marca (Prats&Simon.ase): navy + dorado + blanco hueso.
+          primary: '#1a2949',       // Navy MARCA — SIDEBAR / headings / botones / links
+          primaryDark: '#111e30',   // Navy profundo (gradiente/bordes sidebar)
+          secondary: '#24365a',     // Navy interactivo legible (acento texto/íconos s/ claro)
+          accent: '#101820',        // Navy casi-negro (hover/pressed)
+          gold: '#cca378',          // DORADO de marca — acento sobre navy, divisores, badges
+          goldDark: '#b5895c',      // Dorado oscuro (texto dorado sobre claro, grande/bold)
           dark: '#0b0f1a',          // (legacy)
           card: '#111827',          // (legacy)
-          textLight: '#f6f9fb',     // texto claro (sobre navy)
-          textMuted: '#9db4c4',     // steel claro (secundario sobre navy)
+          textLight: '#f4f3ef',     // texto claro (sobre navy)
+          textMuted: '#9aa6bd',     // azul-gris claro (secundario sobre navy)
 
-          // Contenido — slate frío con jerarquía de superficies:
-          ivory: '#f8fafc',         // fondo app (slate-50, frío y claro)
+          // Contenido — blanco hueso cálido con jerarquía de superficies:
+          ivory: '#f4f3ef',         // fondo app (blanco hueso, marca #f7f7f7 cálido)
           surface: '#ffffff',       // cards (blanco, elevadas)
-          panel: '#f1f5fb',         // inset/panel sutil
-          ink: '#0f172a',           // texto principal (slate-900, ≈16:1)
-          inkmuted: '#475569',      // texto secundario (slate-600, ≈7:1)
-          hairline: '#cbd5e1',      // borde (slate-300, visible)
+          panel: '#faf9f6',         // inset/panel sutil
+          ink: '#101820',           // texto principal (navy casi-negro, ≈16:1)
+          inkmuted: '#57534e',      // texto secundario (gris cálido, ≈7:1)
+          hairline: '#e4e1da',      // borde cálido sutil
         }
       },
       boxShadow: {
-        card: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.12)',
+        card: '0 1px 2px rgba(16,24,32,0.05), 0 8px 24px -12px rgba(16,24,32,0.14)',
       },
       fontFamily: {
         sans: ['Lato', 'Inter', 'system-ui', 'sans-serif'],

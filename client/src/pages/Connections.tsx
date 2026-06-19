@@ -108,7 +108,7 @@ export default function Connections() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#284050] to-[#335f7d] flex items-center justify-center shadow-lg shadow-[#284050]/20">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1a2949] to-[#101820] flex items-center justify-center shadow-lg shadow-[#1a2949]/20">
               <Settings size={22} className="text-white" />
             </div>
             <div>
@@ -269,7 +269,7 @@ export default function Connections() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 bg-gradient-to-r from-[#284050] to-[#335f7d] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-[#284050]/20 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
+                className="flex items-center gap-2 bg-gradient-to-r from-[#1a2949] to-[#101820] hover:from-[#3a5264] hover:to-[#b88c6b] text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-[#1a2949]/20 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
               >
                 <Save size={16} />
                 {saving ? 'Guardando…' : 'Guardar en .env'}
@@ -297,7 +297,7 @@ export default function Connections() {
               <button
                 onClick={handleSyncDb}
                 disabled={syncing}
-                className="w-full flex items-center justify-center gap-2 bg-[#3f7ba3]/10 hover:bg-[#3f7ba3]/20 text-[#3f7ba3] text-xs font-bold py-3.5 px-4 rounded-xl border border-[#3f7ba3]/20 transition-all duration-200 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-[#24365a]/10 hover:bg-[#24365a]/20 text-[#24365a] text-xs font-bold py-3.5 px-4 rounded-xl border border-[#24365a]/20 transition-all duration-200 disabled:opacity-50"
               >
                 {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Database size={14} />}
                 {syncing ? 'Sincronizando…' : 'Sincronizar tablas'}

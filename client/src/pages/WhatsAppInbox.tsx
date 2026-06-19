@@ -240,7 +240,7 @@ export default function WhatsAppInbox() {
               placeholder="Buscar contacto o número…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white border border-brand-hairline text-brand-ink text-xs rounded-xl pl-9 pr-3 py-2.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/40 transition-all"
+              className="w-full bg-white border border-brand-hairline text-brand-ink text-xs rounded-xl pl-9 pr-3 py-2.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/40 transition-all"
             />
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function WhatsAppInbox() {
                 onClick={() => selectConversation(c)}
                 className={`w-full text-left px-4 py-3.5 transition-all duration-150 flex items-center gap-3 ${
                   isActive
-                    ? 'bg-[#3f7ba3]/10 border-l-2 border-l-[#3f7ba3]'
+                    ? 'bg-[#24365a]/10 border-l-2 border-l-[#24365a]'
                     : 'hover:bg-black/[0.03] border-l-2 border-l-transparent'
                 }`}
               >
@@ -263,10 +263,10 @@ export default function WhatsAppInbox() {
                 <div className="relative flex-shrink-0">
                   <div className={`w-11 h-11 rounded-full flex items-center justify-center ${
                     isActive
-                      ? 'bg-[#3f7ba3]/20 border border-[#3f7ba3]/30'
+                      ? 'bg-[#24365a]/20 border border-[#24365a]/30'
                       : 'bg-black/[0.03] border border-brand-hairline'
                   }`}>
-                    <span className={`text-xs font-bold ${isActive ? 'text-[#3f7ba3]' : 'text-brand-inkmuted'}`}>
+                    <span className={`text-xs font-bold ${isActive ? 'text-[#24365a]' : 'text-brand-inkmuted'}`}>
                       {getInitials(c.contact_name || c.phone.slice(-4))}
                     </span>
                   </div>
@@ -342,8 +342,8 @@ export default function WhatsAppInbox() {
                 <button onClick={() => setActiveConvo(null)} aria-label="Volver" className="lg:hidden text-brand-inkmuted hover:text-brand-ink -ml-1 mr-1">
                   <ArrowLeft size={20} />
                 </button>
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#284050]/30 to-[#335f7d]/30 border border-[#3f7ba3]/20 flex items-center justify-center relative">
-                  <span className="text-[#3f7ba3] font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1a2949]/30 to-[#101820]/30 border border-[#24365a]/20 flex items-center justify-center relative">
+                  <span className="text-[#24365a] font-bold text-sm">
                     {getInitials(activeConvo.contact_name || activeConvo.phone.slice(-4))}
                   </span>
                   {/* Small overlapping channel icon in active chat header */}
@@ -384,7 +384,7 @@ export default function WhatsAppInbox() {
                       </span>
                     )}
                     {activeConvo.status === 'BOT' && (
-                      <span className="text-[9px] bg-[#3f7ba3]/10 text-[#3f7ba3] border border-[#3f7ba3]/20 rounded-full px-2 py-0.5 font-bold uppercase">
+                      <span className="text-[9px] bg-[#24365a]/10 text-[#24365a] border border-[#24365a]/20 rounded-full px-2 py-0.5 font-bold uppercase">
                         Bot
                       </span>
                     )}
@@ -396,7 +396,7 @@ export default function WhatsAppInbox() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:-translate-y-0.5 ${
                   activeConvo.status === 'HANDOVER'
                     ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20'
-                    : 'bg-[#3f7ba3]/10 text-[#3f7ba3] border-[#3f7ba3]/20 hover:bg-[#3f7ba3]/20'
+                    : 'bg-[#24365a]/10 text-[#24365a] border-[#24365a]/20 hover:bg-[#24365a]/20'
                 }`}
               >
                 {activeConvo.status === 'HANDOVER' ? <Bot size={14} /> : <UserCheck size={14} />}
@@ -431,7 +431,7 @@ export default function WhatsAppInbox() {
                         <div
                           className={`max-w-[65%] px-4 py-2.5 text-sm relative group ${
                             m.direction === 'OUTBOUND'
-                              ? 'bg-gradient-to-r from-[#284050] to-[#335f7d] text-white rounded-2xl rounded-br-md shadow-md shadow-[#284050]/10'
+                              ? 'bg-gradient-to-r from-[#1a2949] to-[#101820] text-white rounded-2xl rounded-br-md shadow-md shadow-[#1a2949]/10'
                               : 'bg-brand-panel border border-brand-hairline text-brand-ink rounded-2xl rounded-bl-md'
                           }`}
                         >
@@ -472,7 +472,7 @@ export default function WhatsAppInbox() {
                 <div className="flex-1 relative">
                   <input
                     ref={inputRef}
-                    className="w-full bg-white border border-brand-hairline rounded-2xl pl-4 pr-12 py-3.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3f7ba3]/40 focus:border-[#3f7ba3]/30 transition-all"
+                    className="w-full bg-white border border-brand-hairline rounded-2xl pl-4 pr-12 py-3.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/40 focus:border-[#24365a]/30 transition-all"
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -483,7 +483,7 @@ export default function WhatsAppInbox() {
                 <button
                   onClick={send}
                   disabled={!draft.trim() || sending || !isAccountConnected}
-                  className="bg-gradient-to-r from-[#284050] to-[#335f7d] hover:from-[#3a5264] hover:to-[#b88c6b] text-white p-3.5 rounded-2xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.95] disabled:opacity-30 disabled:hover:translate-y-0 shadow-lg shadow-[#284050]/20 flex-shrink-0"
+                  className="bg-gradient-to-r from-[#1a2949] to-[#101820] hover:from-[#3a5264] hover:to-[#b88c6b] text-white p-3.5 rounded-2xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.95] disabled:opacity-30 disabled:hover:translate-y-0 shadow-lg shadow-[#1a2949]/20 flex-shrink-0"
                 >
                   <Send size={18} />
                 </button>
@@ -494,8 +494,8 @@ export default function WhatsAppInbox() {
           /* Empty State — No conversation selected */
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center max-w-xs">
-              <div className="w-20 h-20 rounded-2xl bg-[#3f7ba3]/10 border border-[#3f7ba3]/20 flex items-center justify-center mx-auto mb-5">
-                <MessageSquare size={32} className="text-[#3f7ba3]/60" />
+              <div className="w-20 h-20 rounded-2xl bg-[#24365a]/10 border border-[#24365a]/20 flex items-center justify-center mx-auto mb-5">
+                <MessageSquare size={32} className="text-[#24365a]/60" />
               </div>
               <h3 className="text-brand-ink font-semibold text-lg mb-2">Tu Inbox</h3>
               <p className="text-brand-inkmuted text-sm leading-relaxed">
