@@ -17,16 +17,16 @@ function sameDay(a: Date, b: Date) {
 interface StatProps { icon: any; label: string; value: number | string; hint?: string; gold?: boolean }
 function StatCard({ icon: Icon, label, value, hint, gold }: StatProps) {
   return (
-    <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-5 relative overflow-hidden">
+    <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-4 sm:p-5 relative overflow-hidden">
       <div className={`absolute top-0 left-0 right-0 h-1 ${gold ? 'bg-brand-gold' : 'bg-brand-primary'}`} />
       <div className="flex items-center justify-between">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${gold ? 'bg-brand-gold/20 text-brand-primary' : 'bg-brand-primary/[0.07] text-brand-primary'}`}>
+        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${gold ? 'bg-brand-gold/20 text-brand-primary' : 'bg-brand-primary/[0.07] text-brand-primary'}`}>
           <Icon size={20} />
         </div>
         {hint && <span className="text-[11px] font-semibold text-brand-inkmuted">{hint}</span>}
       </div>
-      <p className="text-3xl font-bold text-brand-ink mt-3 font-serif tabular-nums">{value}</p>
-      <p className="text-sm text-brand-inkmuted mt-0.5">{label}</p>
+      <p className="text-2xl sm:text-3xl font-bold text-brand-ink mt-3 font-serif tabular-nums">{value}</p>
+      <p className="text-xs sm:text-sm text-brand-inkmuted mt-0.5 leading-tight">{label}</p>
     </div>
   );
 }
@@ -93,38 +93,38 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-full p-6 lg:p-8">
+    <div className="min-h-full p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-end justify-between mb-7">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-brand-ink font-serif">Panel del estudio</h1>
-            <p className="text-sm text-brand-inkmuted mt-1">
+        <div className="flex items-start justify-between gap-3 mb-6 sm:mb-7">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-brand-ink font-serif">Panel del estudio</h1>
+            <p className="text-xs sm:text-sm text-brand-inkmuted mt-1 capitalize">
               {now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
           <button onClick={() => { setLoading(true); load(); }}
-            className="flex items-center gap-2 text-xs font-semibold text-brand-inkmuted hover:text-brand-primary px-3 py-2 rounded-lg hover:bg-brand-panel transition-colors">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
+            className="flex-shrink-0 flex items-center gap-2 text-xs font-semibold text-brand-inkmuted hover:text-brand-primary px-3 py-2 rounded-lg hover:bg-brand-panel transition-colors">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> <span className="hidden sm:inline">Actualizar</span>
           </button>
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
           <StatCard icon={CalendarDays} label="Citas hoy" value={stats.hoy.length} hint="agenda" gold />
           <StatCard icon={CalendarCheck} label="Citas esta semana" value={stats.semana.length} />
           <StatCard icon={MessageSquare} label="Conversaciones" value={convos.length} />
           <StatCard icon={Headphones} label="En atención humana" value={stats.enAtencion} hint="handover" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Bar chart — últimos 7 días */}
-          <div className="lg:col-span-2 bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6">
+          <div className="lg:col-span-2 bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-5">
               <TrendingUp size={18} className="text-brand-primary" />
               <h3 className="font-serif font-bold text-brand-ink">Citas — últimos 7 días</h3>
             </div>
-            <div className="flex items-end justify-between gap-3 h-44">
+            <div className="flex items-end justify-between gap-1.5 sm:gap-3 h-40 sm:h-44">
               {stats.dias.map((d, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2">
                   <span className="text-xs font-bold text-brand-ink tabular-nums">{d.count}</span>
@@ -140,7 +140,7 @@ export default function Dashboard() {
           </div>
 
           {/* Estado de citas */}
-          <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6">
+          <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-5 sm:p-6">
             <h3 className="font-serif font-bold text-brand-ink mb-5">Estado de las citas</h3>
             <div className="space-y-3">
               {(['pendiente', 'confirmada', 'asistio', 'no_asistio'] as const).map(st => {
@@ -168,7 +168,7 @@ export default function Dashboard() {
         </div>
 
         {/* Próximas citas */}
-        <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-6 mt-6">
+        <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card p-5 sm:p-6 mt-4 sm:mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-serif font-bold text-brand-ink">Próximas citas</h3>
             <Link to="/agenda" className="flex items-center gap-1 text-xs font-semibold text-brand-primary hover:text-brand-accent">
