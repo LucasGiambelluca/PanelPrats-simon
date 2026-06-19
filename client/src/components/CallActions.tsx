@@ -159,13 +159,20 @@ export default function CallActions({ target, provider }: Props) {
         </div>
       )}
 
+      {/* Acciones secundarias (ghost para no competir con la primaria) */}
+      <div className="flex items-center gap-2 pt-1">
+        <div className="flex-1 h-px bg-slate-200" />
+        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Otras opciones</span>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       <button onClick={openWhatsApp}
-        className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-semibold py-2.5 rounded-xl transition-colors">
+        className="w-full flex items-center justify-center gap-2 bg-white border border-[#25D366]/40 text-[#1ebe5b] hover:bg-[#25D366]/5 font-semibold py-2.5 rounded-xl transition-colors">
         <MessageCircle size={17} /> Abrir WhatsApp
       </button>
 
       <button onClick={openMeet}
-        className="w-full flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1666d0] text-white font-semibold py-2.5 rounded-xl transition-colors">
+        className="w-full flex items-center justify-center gap-2 bg-white border border-[#1a73e8]/40 text-[#1a73e8] hover:bg-[#1a73e8]/5 font-semibold py-2.5 rounded-xl transition-colors">
         <Video size={17} /> Iniciar Google Meet
       </button>
 

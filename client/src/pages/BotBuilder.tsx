@@ -473,12 +473,8 @@ export default function BotBuilder() {
     event.target.value = '';
   };
 
-  const handleDelete = async () => {
+  const doDeleteFlow = async () => {
       if (!currentFlowId) return;
-      
-      const confirmDelete = window.confirm(`¿Estás seguro de que quieres eliminar el flujo "${flowName}"? Esta acción no se puede deshacer.`);
-      if (!confirmDelete) return;
-
       try {
           await flowsApi.delete(String(currentFlowId));
           toast.success('Flujo eliminado correctamente');
@@ -488,6 +484,15 @@ export default function BotBuilder() {
           console.error('Error deleting flow:', err);
           toast.error('Error al eliminar: ' + err.message);
       }
+  };
+
+  const handleDelete = () => {
+      if (!currentFlowId) return;
+      toast(`¿Eliminar el flujo "${flowName}"? No se puede deshacer.`, {
+        duration: 10000,
+        action: { label: 'Eliminar', onClick: () => doDeleteFlow() },
+        cancel: { label: 'Cancelar', onClick: () => {} },
+      });
   };
 
 

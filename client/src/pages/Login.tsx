@@ -73,7 +73,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full bg-black/30 border border-white/10 pl-11 pr-4 py-3.5 rounded-2xl text-white placeholder-brand-textMuted/40 focus:outline-none focus:ring-2 focus:ring-brand-secondary/40 focus:border-transparent transition-all text-sm font-medium"
-                  placeholder="tu@abogadosps.com"
+                  placeholder="nombre@estudio.com"
                 />
               </div>
             </div>
@@ -111,6 +111,10 @@ export default function Login() {
               ) : 'Entrar al Panel'}
             </span>
           </button>
+
+          <p className="text-center text-[11px] text-brand-textMuted/70 pt-1">
+            ¿Olvidaste tu contraseña? Pedile al administrador del estudio que te la reinicie.
+          </p>
         </form>
       </div>
     </div>

@@ -439,10 +439,19 @@ export default function WhatsAppInbox() {
                         >
                           <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
                           <div className={`flex items-center gap-1 mt-1 ${m.direction === 'OUTBOUND' ? 'justify-end' : ''}`}>
-                            <Clock size={9} className={m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'} />
-                            <span className={`text-[9px] ${m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'}`}>
-                              {formatTime(m.timestamp)}
-                            </span>
+                            {m.direction === 'OUTBOUND' && m.id.startsWith('opt-') ? (
+                              <>
+                                <RefreshCw size={9} className="text-slate-300 animate-spin" />
+                                <span className="text-[9px] text-slate-300">enviando…</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock size={9} className={m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'} />
+                                <span className={`text-[9px] ${m.direction === 'OUTBOUND' ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {formatTime(m.timestamp)}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -70,24 +70,24 @@ export default function Connections() {
     }
   };
 
-  const handleRestart = async () => {
-    const confirmRestart = window.confirm(
-      '¿Estás seguro de que querés reiniciar la aplicación? Esto aplicará los cambios del archivo .env y desconectará temporalmente el panel por un instante.'
-    );
-    if (!confirmRestart) return;
-
+  const doRestart = async () => {
     setRestarting(true);
     try {
       const res = await configApi.restart();
       toast.info(res.message || 'Reiniciando el backend...');
-      // Wait 3 seconds and reload the page
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      setTimeout(() => { window.location.reload(); }, 3000);
     } catch (err: any) {
       toast.error('Error al intentar reiniciar: ' + err.message);
       setRestarting(false);
     }
+  };
+
+  const handleRestart = () => {
+    toast('¿Reiniciar la aplicación? Aplica los cambios del .env y desconecta el panel un instante.', {
+      duration: 10000,
+      action: { label: 'Reiniciar', onClick: () => doRestart() },
+      cancel: { label: 'Cancelar', onClick: () => {} },
+    });
   };
 
   if (loading) {

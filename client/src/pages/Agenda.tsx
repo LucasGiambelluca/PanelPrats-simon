@@ -41,7 +41,16 @@ export default function Agenda() {
   const [searchTerm, setSearchTerm] = useState('');
   
   // Theme state: defaults to light to resemble Google Calendar exactly
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    () => (typeof localStorage !== 'undefined' && localStorage.getItem('agenda_theme') === 'dark' ? 'dark' : 'light')
+  );
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      try { localStorage.setItem('agenda_theme', next); } catch { /* noop */ }
+      return next;
+    });
+  };
 
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -135,8 +144,7 @@ export default function Agenda() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar esta cita de la agenda?')) return;
+  const doDelete = async (id: string) => {
     try {
       await appointmentsApi.delete(id);
       toast.success('Cita eliminada de la agenda');
@@ -145,6 +153,15 @@ export default function Agenda() {
     } catch (err: any) {
       toast.error('Error al eliminar cita: ' + err.message);
     }
+  };
+
+  // Confirmación vía toast-action (sonner) en vez de window.confirm.
+  const handleDelete = (id: string) => {
+    toast('¿Eliminar esta cita de la agenda?', {
+      duration: 10000,
+      action: { label: 'Eliminar', onClick: () => doDelete(id) },
+      cancel: { label: 'Cancelar', onClick: () => {} },
+    });
   };
 
   // Date utilities
@@ -810,7 +827,7 @@ export default function Agenda() {
 
             {/* Theme Toggle Button */}
             <button
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              onClick={toggleTheme}
               className={`p-2 rounded-xl border transition-all ${
                 theme === 'light'
                   ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
