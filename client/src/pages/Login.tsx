@@ -28,12 +28,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-brand-ivory flex items-center justify-center p-4 overflow-hidden relative font-sans">
-      {/* Decorative background gradients */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-secondary/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-accent/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
-
       {/* LOGIN CARD */}
-      <div className="max-w-md w-full bg-brand-surface backdrop-blur-xl border border-brand-hairline p-8 md:p-10 rounded-[2.5rem] shadow-2xl text-center animate-fade-in relative overflow-hidden">
+      <div className="max-w-md w-full bg-brand-surface border border-brand-hairline p-8 md:p-10 rounded-2xl shadow-card text-center animate-fade-in relative overflow-hidden">
         {/* Subtle decorative top border in brand color */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-secondary to-brand-accent" />
         

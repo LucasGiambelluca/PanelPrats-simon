@@ -45,9 +45,6 @@ export default function Layout() {
         <button onClick={() => setMobileOpen(false)} aria-label="Cerrar menú" className="lg:hidden absolute top-3 right-3 z-20 text-brand-textMuted hover:text-brand-textLight">
           <X size={20} />
         </button>
-        {/* Glow dorado sutil detrás del logo */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-brand-gold/15 rounded-full blur-3xl pointer-events-none" />
-
         {/* Logo Container */}
         <div className="p-5 border-b border-white/10 relative z-10">
           <div className="flex flex-col gap-2 items-center justify-center py-3 px-1 rounded-xl bg-white/[0.04] border border-white/10 group">
@@ -151,11 +148,8 @@ export default function Layout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto relative">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-brand-secondary/[0.05] rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10">
-            <Outlet />
-          </div>
+        <div className="flex-1 overflow-auto">
+          <Outlet />
         </div>
       </main>
     </div>

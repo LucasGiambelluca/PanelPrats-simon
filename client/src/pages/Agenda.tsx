@@ -1183,8 +1183,6 @@ export default function Agenda() {
                           : 'glass-card border-white/5'
                       }`}
                     >
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-brand-secondary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-pulse" />
-                      
                       <div>
                         <div className="flex items-start justify-between gap-3 mb-4">
                           <div>

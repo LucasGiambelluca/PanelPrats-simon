@@ -650,7 +650,7 @@ export default function Accounts() {
 
       {/* Branded Edit Configuration Drawer/Modal */}
       {editingAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
           <div className="bg-brand-surface rounded-2xl border border-brand-hairline shadow-card max-w-lg w-full overflow-hidden relative">
             <div className="absolute top-0 left-0 right-0 h-1 bg-brand-gold" />
 

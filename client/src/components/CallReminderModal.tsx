@@ -57,7 +57,7 @@ export default function CallReminderModal({ appointments, provider }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#1a2949] to-[#101820] p-5 text-white relative">

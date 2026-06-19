@@ -343,7 +343,7 @@ export default function WhatsAppInbox() {
         {activeConvo ? (
           <>
             {/* Chat Header */}
-            <div className="px-4 lg:px-6 py-3.5 border-b border-brand-hairline flex items-center justify-between bg-brand-surface backdrop-blur-sm">
+            <div className="px-4 lg:px-6 py-3.5 border-b border-brand-hairline flex items-center justify-between bg-brand-surface">
               <div className="flex items-center gap-3">
                 <button onClick={() => setActiveConvo(null)} aria-label="Volver" className="lg:hidden text-brand-inkmuted hover:text-brand-ink -ml-1 mr-1">
                   <ArrowLeft size={20} />
