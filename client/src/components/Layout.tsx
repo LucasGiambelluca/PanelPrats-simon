@@ -107,17 +107,14 @@ export default function Layout() {
                 key={to}
                 to={to}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 group relative ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
                   isActive
-                    ? 'bg-white/[0.10] text-brand-textLight border-l-2 border-brand-accent shadow-sm'
+                    ? 'bg-brand-secondary text-white shadow-md shadow-brand-secondary/25'
                     : 'text-brand-textMuted hover:text-brand-textLight hover:bg-white/[0.06]'
                 }`}
               >
-                <Icon size={18} className={`transition-colors duration-300 ${isActive ? 'text-brand-accent' : 'text-brand-textMuted group-hover:text-brand-accent'}`} />
+                <Icon size={18} className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-brand-textMuted group-hover:text-white'}`} />
                 {label}
-                {isActive && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse-glow" />
-                )}
               </Link>
             );
           })}
@@ -135,12 +132,29 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main Content — marfil */}
-      <main className="flex-1 overflow-auto bg-brand-ivory relative pt-14 lg:pt-0 w-full lg:w-auto">
-        {/* Glow ambiental sutil */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-accent/[0.06] rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10">
-          <Outlet />
+      {/* Main Content — gris frío + topbar de escritorio */}
+      <main className="flex-1 flex flex-col min-w-0 bg-brand-ivory pt-14 lg:pt-0">
+        {/* Topbar (solo escritorio) */}
+        <header className="hidden lg:flex items-center justify-between h-14 px-6 bg-brand-surface border-b border-brand-hairline sticky top-0 z-20">
+          <div className="text-sm font-semibold text-brand-ink">Estudio Prats &amp; Simon</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 pr-3 border-r border-brand-hairline">
+              <div className="w-8 h-8 rounded-full bg-brand-secondary/12 text-brand-secondary flex items-center justify-center text-xs font-bold">
+                {role === 'admin' ? 'A' : 'E'}
+              </div>
+              <span className="text-xs font-semibold text-brand-ink">{role === 'admin' ? 'Administrador' : 'Empleada'}</span>
+            </div>
+            <button onClick={signOut} title="Cerrar sesión" className="text-brand-inkmuted hover:text-red-600 transition-colors p-2 rounded-lg hover:bg-brand-panel">
+              <LogOut size={16} />
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-auto relative">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-brand-secondary/[0.05] rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>

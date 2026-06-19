@@ -5,26 +5,27 @@ export default {
     extend: {
       colors: {
         brand: {
-          primary: '#2f4256',       // Azul pizarra profundo — SIDEBAR
-          primaryDark: '#26384a',   // azul más oscuro (bordes/hover sidebar)
-          secondary: '#9c7a55',     // Bronce (acento, legible sobre claro y sobre azul)
-          accent: '#b88a5e',        // Cobre/dorado cálido (acento sobre azul)
-          dark: '#0b0f1a',          // (legacy) fondo oscuro
-          card: '#111827',          // (legacy) card oscuro
-          textLight: '#f4f1ea',     // texto claro (sobre azul)
-          textMuted: '#a9b6c4',     // gris-azulado claro (texto secundario sobre azul)
+          // SaaS corporativo: navy sidebar + azul royal de acento + gris frío + blanco.
+          primary: '#243150',       // Navy — SIDEBAR
+          primaryDark: '#1b2640',   // Navy más oscuro (gradiente/bordes sidebar)
+          secondary: '#3b6fe0',     // Azul royal — ACENTO PRIMARIO (botones, activo, links)
+          accent: '#2f5fd0',        // Azul más oscuro (hover/pressed)
+          dark: '#0b0f1a',          // (legacy)
+          card: '#111827',          // (legacy)
+          textLight: '#eef2f8',     // texto claro (sobre navy)
+          textMuted: '#9fb0c9',     // azul-gris claro (texto secundario sobre navy)
 
-          // Contenido — tema MARFIL con jerarquía de superficies:
-          ivory: '#ebe5d9',         // fondo app (marfil cálido, MÁS profundo → las cards elevan)
-          surface: '#ffffff',       // cards (blanco, contrastan sobre ivory)
-          panel: '#f4efe5',         // inset/panel sutil (entre ivory y blanco)
-          ink: '#283039',           // texto principal (≈10:1 sobre marfil)
-          inkmuted: '#5a6573',      // texto secundario (≈5.5:1)
-          hairline: '#ddd4c4',      // borde cálido (visible sobre marfil/blanco)
+          // Contenido — gris frío con jerarquía de superficies:
+          ivory: '#eef1f6',         // fondo app (gris-azulado frío, como la referencia)
+          surface: '#ffffff',       // cards (blanco, elevadas)
+          panel: '#f5f7fb',         // inset/panel sutil (gris muy claro)
+          ink: '#1f2a40',           // texto principal (slate navy, ≈12:1)
+          inkmuted: '#64748b',      // texto secundario (slate-500, ≈4.8:1)
+          hairline: '#e4e8f0',      // borde frío sutil
         }
       },
       boxShadow: {
-        card: '0 1px 2px rgba(40,48,57,0.04), 0 6px 16px -8px rgba(40,48,57,0.10)',
+        card: '0 1px 2px rgba(30,41,59,0.04), 0 8px 24px -12px rgba(30,41,59,0.12)',
       },
       fontFamily: {
         sans: ['Raleway', 'Poppins', 'Inter', 'sans-serif'],

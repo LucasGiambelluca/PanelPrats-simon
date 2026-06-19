@@ -60,7 +60,7 @@ export default function CallReminderModal({ appointments, provider }: Props) {
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#304352] to-[#a57b5a] p-5 text-white relative">
+        <div className="bg-gradient-to-r from-[#243150] to-[#2f5fd0] p-5 text-white relative">
           <button onClick={close} className="absolute top-3 right-3 text-white/70 hover:text-white"><X size={18} /></button>
           <div className="flex items-center gap-2 mb-1">
             <Bell size={18} className="animate-pulse" />
