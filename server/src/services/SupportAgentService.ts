@@ -24,6 +24,7 @@ export interface SupportConfig {
     apiKey?: string;
     model?: string;
     prompt?: string;
+    businessContext?: string;
 }
 
 export interface FlowOption {
@@ -118,19 +119,27 @@ REGLAS:
         const config: SupportConfig = {};
 
         // 1. Config a nivel cuenta (columnas ai_* — migración 0008). Tolerante si no existen.
+        let acc: any = null;
         try {
-            const { data: acc } = await supabase
+            acc = (await supabase
                 .from('accounts')
-                .select('ai_support_enabled, ai_api_key, ai_model, ai_support_prompt')
+                .select('ai_support_enabled, ai_api_key, ai_model, ai_support_prompt, business_context')
                 .eq('id', accountId)
-                .maybeSingle();
+                .maybeSingle()).data;
             if (acc && (acc as any).ai_support_enabled && (acc as any).ai_api_key) {
                 config.apiKey = (acc as any).ai_api_key;
                 config.model = (acc as any).ai_model || 'gpt-4o-mini';
                 config.prompt = (acc as any).ai_support_prompt || undefined;
+                config.businessContext = (acc as any).business_context || undefined;
             }
         } catch (_) {
             // columnas inexistentes → seguimos con fallback al nodo
+            acc = null;
+        }
+
+        // business_context puede existir aunque ai_support_enabled sea false.
+        if (acc && (acc as any).business_context && !config.businessContext) {
+            config.businessContext = (acc as any).business_context;
         }
 
         // 2. Flujos activos del cuenta.
