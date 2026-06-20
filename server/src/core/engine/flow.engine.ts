@@ -392,18 +392,6 @@ export class FlowEngine {
         return false;
     }
 
-    private optionMatchesDirect(input: string, options: string[]): string | null {
-        const clean = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
-            .replace(/[^\w\s]/gi, '').toLowerCase().trim();
-        const ci = clean(input);
-        if (!ci) return null;
-        for (const o of options) {
-            const co = clean(o);
-            if (co && (co === ci || (ci.length > 2 && (co.includes(ci) || ci.includes(co))))) return o;
-        }
-        return null;
-    }
-
     // Aplica el veredicto del supervisor que NO es 'fill'. Devuelve true si el caller
     // debe cortar (quedarse en el paso o escapar al router); false si debe continuar.
     private applySupervisorOutcome(session: Session, decision: SupervisorDecision, repromptMsg: string): boolean {
