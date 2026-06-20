@@ -413,6 +413,11 @@ export class FlowEngine {
             (session as any)._pendingMessages = [txt];
             return true;
         }
+        if (decision.action === 'answer') {
+            const txt = decision.reply ? `${decision.reply}\n\n${repromptMsg}` : repromptMsg;
+            (session as any)._pendingMessages = [txt];
+            return true;
+        }
         // switch / human / none → escapar al router (Agente IA de soporte).
         (session as any)._exitToAI = true;
         (session as any)._aiResult = {

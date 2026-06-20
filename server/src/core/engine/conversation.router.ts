@@ -72,6 +72,9 @@ export class ConversationRouter {
       if (GLOBAL_BREAKERS.includes(t)) return runWildcardMenu();
 
       const decision = await SupportAgentService.resolve({ accountId, text, pushName });
+      if (decision.action === 'answer' && decision.reply) {
+        return [decision.reply];
+      }
       if (decision.action === 'route' && decision.trigger) {
         const routed = await this.engine.processMessage(accountId, phone, decision.trigger, baseCtx);
         return this.extractMessages(routed?.currentStateDefinition?.message_template);
@@ -96,6 +99,10 @@ export class ConversationRouter {
       // Sin decisión previa (off-script al inicio, o poll sin supervisor): el Agente
       // de soporte global decide a qué flujo rutear o si deriva.
       const decision = await SupportAgentService.resolve({ accountId, text, pushName });
+
+      if (decision.action === 'answer' && decision.reply) {
+        return [decision.reply];
+      }
 
       if (decision.action === 'route' && decision.trigger) {
         // Reingreso: re-procesamos como si el usuario hubiera tipeado el trigger
