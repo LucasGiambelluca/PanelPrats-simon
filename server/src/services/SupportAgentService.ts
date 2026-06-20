@@ -14,7 +14,8 @@ import { AIService } from './AIService';
 import { logger } from '../utils/logger';
 
 export interface SupportDecision {
-    action: 'route' | 'handoff' | 'none';
+    action: 'answer' | 'route' | 'handoff' | 'none';
+    reply?: string;     // texto en rol (cuando action='answer')
     trigger?: string;   // trigger del flujo destino (cuando action='route')
     flowName?: string;
     reason?: string;
@@ -63,25 +64,27 @@ export class SupportAgentService {
             .map((f, i) => `${i + 1}. trigger="${f.trigger}" — ${f.name}`)
             .join('\n');
 
+        const ctx = (config.businessContext || '').trim();
         const systemPrompt = `${config.prompt || DEFAULT_SUPPORT_PROMPT}
 
 Tenés estos flujos de atención disponibles (cada uno se activa con su "trigger"):
 ${menu}
 
-El usuario escribió un mensaje que NO encaja en el paso actual de la conversación.
-Tu tarea: entender su intención y elegir el flujo más adecuado.
+DATOS DEL ESTUDIO (única fuente para responder preguntas generales):
+${ctx || '(no hay datos cargados)'}
 
-Respondé ÚNICAMENTE con JSON válido, sin texto extra:
-{ "action": "route" | "handoff", "trigger": "<el trigger exacto del flujo elegido, o null>" }
+El usuario escribió un mensaje. Decidí UNA acción y respondé SOLO con JSON válido:
+{ "action": "answer" | "route" | "handoff", "reply": "<texto o null>", "trigger": "<trigger exacto o null>" }
 
 REGLAS:
-- "route": si la intención del usuario encaja claramente con uno de los flujos. Poné en "trigger" el valor EXACTO de ese flujo (tal cual aparece arriba).
-- "handoff": si pide hablar con una persona, está molesto/frustrado, o su intención NO encaja con ningún flujo. En ese caso "trigger" = null.
-- Ante la duda entre dos flujos, elegí el más específico. Si no hay ninguno razonable, usá "handoff".`;
+- "answer": SOLO si es una pregunta general respondible con los DATOS DEL ESTUDIO de arriba. En "reply" poné la respuesta en rol de atención: humana, breve, voseo argentino, máx 1 emoji, sin sonar robot. Si conviene, ofrecé avanzar ("¿Te agendo?"). NUNCA inventes datos que no estén arriba.
+- "route": si revela una gestión que encaja con un flujo. En "trigger" el valor EXACTO del flujo.
+- "handoff": si pide una persona, está molesto, o no podés responder con los datos de arriba. "trigger"=null.
+- Ante la duda entre answer y handoff cuando el dato no está arriba, elegí handoff.`;
 
-        let parsed: { action?: string; trigger?: string | null } | null = null;
+        let parsed: { action?: string; trigger?: string | null; reply?: string | null } | null = null;
         try {
-            parsed = await AIService.extractJSON<{ action: string; trigger: string | null }>({
+            parsed = await AIService.extractJSON<{ action: string; trigger: string | null; reply?: string | null }>({
                 systemPrompt,
                 userMessage: text,
                 jsonMode: true,
@@ -95,18 +98,29 @@ REGLAS:
             return { action: 'handoff', reason: 'error IA' };
         }
 
-        if (!parsed || parsed.action === 'handoff' || !parsed.trigger) {
-            return { action: 'handoff', reason: parsed?.action === 'handoff' ? 'IA decidió handoff' : 'sin trigger' };
+        if (!parsed || !parsed.action) {
+            return { action: 'handoff', reason: 'IA sin respuesta' };
         }
 
-        // Validar que el trigger devuelto corresponda a un flujo real (anti-alucinación).
+        // answer: validar que haya contexto (anti-alucinación) y reply no vacío.
+        if (parsed.action === 'answer') {
+            const reply = String((parsed as any).reply || '').trim();
+            if (!ctx || !reply) {
+                return { action: 'handoff', reason: 'answer sin contexto/reply' };
+            }
+            return { action: 'answer', reply };
+        }
+
+        if (parsed.action === 'handoff' || !parsed.trigger) {
+            return { action: 'handoff', reason: parsed.action === 'handoff' ? 'IA decidió handoff' : 'sin trigger' };
+        }
+
         const wantedTrigger = String(parsed.trigger).trim().toLowerCase();
         const match = flows.find(f => f.trigger.toLowerCase() === wantedTrigger);
         if (!match) {
             logger.info(`[SupportAgent] trigger "${wantedTrigger}" no corresponde a ningún flujo → handoff`);
             return { action: 'handoff', reason: 'trigger inválido' };
         }
-
         logger.info(`[SupportAgent] route → flujo "${match.name}" (trigger="${match.trigger}")`);
         return { action: 'route', trigger: match.trigger, flowName: match.name };
     }
