@@ -18,7 +18,7 @@ import { SupportAgentService } from './SupportAgentService';
 import { logger } from '../utils/logger';
 
 export interface SupervisorDecision {
-    action: 'fill' | 'side' | 'switch' | 'human' | 'none';
+    action: 'fill' | 'side' | 'switch' | 'human' | 'answer' | 'none';
     value?: string;     // opción canónica (action='fill')
     reply?: string;     // respuesta breve al usuario (action='side')
     trigger?: string;   // trigger del flujo destino (action='switch')
@@ -50,6 +50,8 @@ export class SupervisorService {
             ? flows.map(f => `- trigger="${f.trigger}" — ${f.name}`).join('\n')
             : '(sin otros flujos)';
 
+        const ctx = (config.businessContext || '').trim();
+
         const systemPrompt = `${config.prompt || 'Sos un asistente de soporte conversacional.'}
 
 Estás supervisando una conversación que está EN un flujo de atención. El paso actual le pregunta al usuario:
@@ -61,16 +63,20 @@ ${optionsBlock}
 Otros flujos de atención disponibles (por si el usuario en realidad quiere otra cosa):
 ${flowsBlock}
 
+DATOS DEL ESTUDIO (única fuente para responder preguntas generales):
+${ctx || '(no hay datos cargados)'}
+
 El usuario respondió: "${userInput}"
 
 Interpretá la intención real y respondé ÚNICAMENTE con JSON válido, sin texto extra:
-{ "action": "fill" | "side" | "switch" | "human", "value": "<opción exacta o null>", "reply": "<texto o null>", "trigger": "<trigger o null>" }
+{ "action": "fill" | "side" | "switch" | "human" | "answer", "value": "<opción exacta o null>", "reply": "<texto o null>", "trigger": "<trigger o null>" }
 
 REGLAS:
 - "fill": si la respuesta CORRESPONDE a una de las opciones válidas, aunque esté dicha de otra forma (ej "iba manejando y me chocaron" → la opción "Conductor"). En "value" poné el texto EXACTO de la opción elegida (tal cual aparece en la lista).
 - "side": si hace una pregunta u objeción off-topic pero igual quiere continuar. En "reply" poné una respuesta breve y amable; luego el sistema repetirá la pregunta del paso.
 - "switch": si su intención encaja claramente con OTRO flujo. En "trigger" poné el trigger exacto de ese flujo.
 - "human": si pide hablar con una persona o está claramente molesto/frustrado.
+- "answer": si hace una pregunta general respondible con los DATOS DEL ESTUDIO. En "reply" la respuesta en rol (humana, breve, voseo, máx 1 emoji). Si el dato NO está arriba, NO uses answer: usá "human".
 - Ante la duda razonable de que SÍ es una respuesta al paso, preferí "fill".`;
 
         let parsed: any = null;
@@ -111,6 +117,11 @@ REGLAS:
             }
             case 'human':
                 return { action: 'human' };
+            case 'answer': {
+                const reply = String(parsed.reply || '').trim();
+                if (!ctx || !reply) return { action: 'human', reason: 'answer sin contexto/reply' };
+                return { action: 'answer', reply };
+            }
             case 'side':
             default:
                 return { action: 'side', reply: parsed.reply || undefined };
