@@ -13,6 +13,7 @@ import { PhoneUtils } from '../../utils/phoneUtils';
 import { ConfigurationService } from '../../services/ConfigurationService';
 import { SupervisorService, SupervisorDecision } from '../../services/SupervisorService';
 import { memoryAccounts, memoryFlows } from '../accounts/memoryStore';
+import { evaluate } from './ConversationGate';
 
 const isSupabaseConfigured = !!(
   process.env.SUPABASE_URL &&
@@ -478,57 +479,48 @@ export class FlowEngine {
                 const numericMatch = input.replace(/[\*_]/g, '').match(/\d+/);
                 let index = numericMatch ? parseInt(numericMatch[0]) - 1 : -1;
 
-                // 1. Direct match (normalizado + sin acentos, para no gastar IA en
-                //    diferencias triviales como "peaton" vs "Peatón")
-                const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
-                    .replace(/[^\w\s]/gi, '').toLowerCase().trim();
-                const cleanInput = fold(input);
-
-                const exactIndex = options.findIndex((o: string) => fold(o) === cleanInput);
-
-                if (exactIndex !== -1) {
-                    index = exactIndex;
-                } else if (cleanInput.length > 1) {
-                    // 2. Partial/Fuzzy match
-                    const partialIndex = options.findIndex((o: string) => {
-                        const cleanOpt = fold(o);
-                        return cleanOpt.includes(cleanInput) || cleanInput.includes(cleanOpt);
-                    });
-                    if (partialIndex !== -1) {
-                        index = partialIndex;
-                        logger.info(`[FlowEngine] [INPUT] Fuzzy poll match: "${input}" => option ${index + 1}: "${options[index]}"`);
-                    }
-                }
-
-                // Si el match directo falló, el Supervisor IA interpreta la respuesta
-                // semánticamente contra las opciones (ej "iba manejando" → "Conductor").
                 if (index < 0 || index >= options.length) {
-                    const optionLines = options.map((opt: string, i: number) => {
-                        const cleanOpt = opt.replace(/^\d+[\s.)-]*\s*/, '');
-                        return `*${i + 1}.* ${cleanOpt}`;
-                    }).join('\n');
-                    const question = currentNode.data?.question || 'Elegí una opción:';
-                    const repromptMsg = `⚠️ No entendí tu respuesta. Por favor, elegí una opción válida:\n\n${question}\n\n${optionLines}\n\n_Respondé con el número de tu elección._`;
-
-                    logger.info(`[FlowEngine] [INPUT] Poll sin match directo: "${input}". Consultando Supervisor IA.`);
-                    const decision = await SupervisorService.interpret({
-                        accountId,
-                        question,
-                        expectedOptions: options.map((o: string) => o.replace(/^\d+[\s.)-]*\s*/, '').trim()),
-                        userInput: input,
-                        pushName: session.getVariable('pushName'),
+                    const stripped = options.map((o: string) => o.replace(/^\d+[\s.)-]*\s*/, '').trim());
+                    const retryKey = `_gate_retries_${currentNode.id}`;
+                    const retryCount = parseInt(session.getVariable(retryKey) || '0', 10);
+                    const gate = evaluate({
+                        input,
+                        expectedOptions: stripped,
+                        retryCount,
+                        maxRetries: parseInt(currentNode.data?.max_retries ?? '1', 10),
+                        synonyms: currentNode.data?.synonyms,
                     });
 
-                    if (decision.action === 'fill' && decision.value) {
-                        // El supervisor mapeó a una opción (texto sin prefijo) → ubicar índice real.
-                        const want = decision.value.toLowerCase().trim();
-                        index = options.findIndex((o: string) => o.replace(/^\d+[\s.)-]*\s*/, '').trim().toLowerCase() === want);
-                        logger.info(`[FlowEngine] [INPUT] Supervisor mapeó "${input}" → "${decision.value}" (opción ${index + 1})`);
-                    } else {
-                        this.applySupervisorOutcome(session, decision, repromptMsg);
+                    const question = currentNode.data?.question || 'Elegí una opción:';
+                    const repromptMsg = `Disculpá, no te seguí 🙈 ¿me lo decís de nuevo?\n\n${question}`;
+
+                    if (gate.decision === 'match') {
+                        index = stripped.findIndex((o: string) => o === gate.value);
+                        session.setVariable(retryKey, '0');
+                    } else if (gate.decision === 'reprompt') {
+                        session.setVariable(retryKey, (retryCount + 1).toString());
+                        (session as any)._pendingMessages = [repromptMsg];
+                        session.status = 'waiting_input';
                         session.logInteraction(session.currentNodeId, input);
-                        return; // No avanzar: side (re-pregunta) o escape al router (switch/human/none)
+                        return;
+                    } else {
+                        // escalate → Supervisor IA (puede answer/fill/switch/human)
+                        session.setVariable(retryKey, '0');
+                        const decision = await SupervisorService.interpret({
+                            accountId, question, expectedOptions: stripped,
+                            userInput: input, pushName: session.getVariable('pushName'),
+                        });
+                        if (decision.action === 'fill' && decision.value) {
+                            index = stripped.findIndex((o: string) => o === decision.value);
+                        } else {
+                            this.applySupervisorOutcome(session, decision, repromptMsg);
+                            session.logInteraction(session.currentNodeId, input);
+                            return;
+                        }
                     }
+                } else {
+                    // index ya válido por número → match directo, limpiar reintentos
+                    session.setVariable(`_gate_retries_${currentNode.id}`, '0');
                 }
 
                 if (index >= 0 && index < options.length) {
@@ -546,27 +538,41 @@ export class FlowEngine {
                     logger.info(`[FlowEngine] [INPUT] Número extraído de "${input}" → "${processedInput}"`);
                 }
             } else {
-                // questionNode / genérico: si el paso ramifica sobre su variable
-                // (switch/condition), el Supervisor IA interpreta respuestas dichas
-                // de otra forma (ej rol: "iba manejando" → "Conductor").
+                // questionNode / genérico: el gate decide si reprompt (barato) o escala a IA.
                 const expected = this.gatherExpectedOptions(flow, currentNode);
-                if (expected.length > 0 && !this.optionMatchesDirect(input, expected)) {
-                    const question = currentNode.data?.question || currentNode.data?.label || 'el paso anterior';
-                    logger.info(`[FlowEngine] [INPUT] "${input}" sin match en [${expected.join(', ')}]. Supervisor IA.`);
-                    const decision = await SupervisorService.interpret({
-                        accountId,
-                        question: String(question),
-                        expectedOptions: expected,
-                        userInput: input,
-                        pushName: session.getVariable('pushName'),
+                if (expected.length > 0) {
+                    const retryKey = `_gate_retries_${currentNode.id}`;
+                    const retryCount = parseInt(session.getVariable(retryKey) || '0', 10);
+                    const gate = evaluate({
+                        input, expectedOptions: expected, retryCount,
+                        maxRetries: parseInt(currentNode.data?.max_retries ?? '1', 10),
+                        synonyms: currentNode.data?.synonyms,
                     });
-                    if (decision.action === 'fill' && decision.value) {
-                        processedInput = decision.value;
-                        logger.info(`[FlowEngine] [INPUT] Supervisor mapeó "${input}" → "${decision.value}"`);
-                    } else {
-                        this.applySupervisorOutcome(session, decision, String(question));
+                    const question = currentNode.data?.question || currentNode.data?.label || 'el paso anterior';
+                    const repromptMsg = `Disculpá, no te seguí 🙈 ¿me lo repetís?`;
+
+                    if (gate.decision === 'match') {
+                        processedInput = gate.value;
+                        session.setVariable(retryKey, '0');
+                    } else if (gate.decision === 'reprompt') {
+                        session.setVariable(retryKey, (retryCount + 1).toString());
+                        (session as any)._pendingMessages = [repromptMsg];
+                        session.status = 'waiting_input';
                         session.logInteraction(session.currentNodeId, input);
                         return;
+                    } else {
+                        session.setVariable(retryKey, '0');
+                        const decision = await SupervisorService.interpret({
+                            accountId, question: String(question), expectedOptions: expected,
+                            userInput: input, pushName: session.getVariable('pushName'),
+                        });
+                        if (decision.action === 'fill' && decision.value) {
+                            processedInput = decision.value;
+                        } else {
+                            this.applySupervisorOutcome(session, decision, String(question));
+                            session.logInteraction(session.currentNodeId, input);
+                            return;
+                        }
                     }
                 }
             }
