@@ -32,7 +32,7 @@ const LINK_JUBH = 'link_jubh';
       type: 'intentResolverNode',
       position: { x: -560, y: 300 },
       data: {
-        question: 'Perfecto 👍 ¿A nombre de quién hacemos la consulta? (nombre y apellido)',
+        question: 'Perfecto 👍 ¿Cómo te llamás?',
         possible_intents: 'mujer,hombre',
         output_variable: 'sexo',
         system_prompt: "Sos un clasificador. Te dan el NOMBRE de una persona de Argentina. Devolvé SOLO 'mujer' u 'hombre' según el sexo más probable del nombre de pila. Si es unisex, ilegible o no es un nombre, devolvé 'no_entendido'. Sin texto extra.",
