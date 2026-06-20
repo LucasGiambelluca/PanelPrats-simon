@@ -14,12 +14,13 @@ export class PollExecutor implements NodeExecutor {
         const question = data.question || "Elige una opción:";
         const options = data.options || ['Sí', 'No'];
 
-        // Build a text-based numbered menu (Fallback for Baileys/Legacy)
-        const optionLines = options.map((opt: string, i: number) => {
+        // Texto fallback (Baileys): viñetas, sin números. El match por texto lo
+        // resuelve ConversationGate (ej "me echaron" → "Despido").
+        const optionLines = options.map((opt: string) => {
             const cleanOpt = opt.replace(/^\d+[\s.)-]*\s*/, '');
-            return `*${i + 1}.* ${cleanOpt}`;
+            return `• ${cleanOpt}`;
         }).join('\n');
-        const menuText = `${question}\n\n${optionLines}\n\n_Respondé con el número de tu elección._`;
+        const menuText = `${question}\n\n${optionLines}`;
 
         const interactiveObj: any = {
             type: options.length <= 3 ? 'button' : 'list',
