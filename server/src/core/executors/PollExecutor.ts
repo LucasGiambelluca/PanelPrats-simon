@@ -20,7 +20,7 @@ export class PollExecutor implements NodeExecutor {
             const cleanOpt = opt.replace(/^\d+[\s.)-]*\s*/, '');
             return `• ${cleanOpt}`;
         }).join('\n');
-        const menuText = `${question}\n\n${optionLines}`;
+        const menuText = `${question}\n\n${optionLines}\n\n_Decime cuál o contame con tus palabras._`;
 
         const interactiveObj: any = {
             type: options.length <= 3 ? 'button' : 'list',

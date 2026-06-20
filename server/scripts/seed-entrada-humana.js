@@ -98,7 +98,7 @@ async function putFlow(flowId, body) {
     ...welcomeNode,
     type: 'questionNode',
     data: {
-      question: '¡Hola{{nombre}}! 👋 Contame, ¿en qué te puedo ayudar?',
+      question: '¡Hola {{nombre}}! 👋 Contame, ¿en qué te puedo ayudar?',
       variable: 'consulta',
       route_by_ai: true,
     },

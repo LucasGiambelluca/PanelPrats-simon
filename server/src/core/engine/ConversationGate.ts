@@ -32,14 +32,16 @@ export function matchOption(
   // 1. exacto / fuzzy parcial
   for (const o of options) {
     const co = fold(o);
-    if (co && (co === ci || (ci.length > 2 && (co.includes(ci) || ci.includes(co))))) return o;
+    // exacto siempre; substring solo si ambos lados son largos (evita que opciones
+    // cortas como "Sí"/"No" matcheen cualquier frase que las contenga: "sin causa" ⊃ "si").
+    if (co && (co === ci || (ci.length > 2 && co.length > 3 && (co.includes(ci) || ci.includes(co))))) return o;
   }
   // 2. sinónimos declarados en el nodo
   if (synonyms) {
     for (const o of options) {
       for (const syn of synonyms[o] || []) {
         const cs = fold(syn);
-        if (cs && (cs === ci || (ci.length > 2 && (cs.includes(ci) || ci.includes(cs))))) return o;
+        if (cs && (cs === ci || (ci.length > 2 && cs.length > 3 && (cs.includes(ci) || ci.includes(cs))))) return o;
       }
     }
   }

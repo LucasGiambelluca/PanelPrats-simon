@@ -17,6 +17,12 @@ describe('matchOption', () => {
   it('devuelve null si no matchea', () => {
     expect(matchOption('xyz', OPTS)).toBeNull();
   });
+  it('opción corta no matchea por substring accidental ("sin" ⊅ "Sí")', () => {
+    expect(matchOption('me despidieron sin causa', ['Sí', 'No'])).toBeNull();
+  });
+  it('opción corta sigue matcheando exacto', () => {
+    expect(matchOption('si', ['Sí', 'No'])).toBe('Sí');
+  });
 });
 
 describe('isQuestion', () => {

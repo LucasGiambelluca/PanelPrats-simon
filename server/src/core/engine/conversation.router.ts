@@ -73,7 +73,9 @@ export class ConversationRouter {
 
       const decision = await SupportAgentService.resolve({ accountId, text, pushName });
       if (decision.action === 'answer' && decision.reply) {
-        return [decision.reply];
+        // Responde la duda y, como respaldo, muestra el menú para que pueda avanzar.
+        const menu = await runWildcardMenu();
+        return [decision.reply, ...menu];
       }
       if (decision.action === 'route' && decision.trigger) {
         const routed = await this.engine.processMessage(accountId, phone, decision.trigger, baseCtx);
