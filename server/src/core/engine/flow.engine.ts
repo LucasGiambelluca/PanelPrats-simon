@@ -430,6 +430,35 @@ export class FlowEngine {
         const currentNode = (flow.nodes || []).find((n: any) => n.id === session.currentNodeId);
         if (!currentNode) return;
 
+        // Nodo de saludo abierto: la respuesta libre se rutea por IA (answer/route/handoff).
+        if (currentNode.data?.route_by_ai) {
+            const { SupportAgentService } = await import('../../services/SupportAgentService');
+            const decision = await SupportAgentService.resolve({
+                accountId, text: input, pushName: session.getVariable('pushName'),
+            });
+            if (decision.action === 'route' && decision.trigger) {
+                (session as any)._exitToAI = true;
+                (session as any)._aiResult = { route: decision.trigger };
+                session.logInteraction(session.currentNodeId, input);
+                return;
+            }
+            if (decision.action === 'answer' && decision.reply) {
+                (session as any)._pendingMessages = [decision.reply];
+                // tras responder, avanzar al siguiente nodo (botones de respaldo)
+            } else if (decision.action === 'handoff') {
+                (session as any)._exitToAI = true;
+                (session as any)._aiResult = { handoff: true };
+                session.logInteraction(session.currentNodeId, input);
+                return;
+            }
+            // answer o none → caer al avance normal (muestra el poll de botones)
+            session.setVariable(currentNode.data?.variable || 'consulta', input);
+            session.logInteraction(session.currentNodeId, input);
+            const nextId = this.findNextNodeId(flow, currentNode.id, undefined);
+            if (nextId) { session.currentNodeId = nextId; } else { session.status = 'waiting_input'; }
+            return;
+        }
+
         let processedInput = input;
         const varName = (currentNode.data?.variable || 'user_choice').trim();
 
