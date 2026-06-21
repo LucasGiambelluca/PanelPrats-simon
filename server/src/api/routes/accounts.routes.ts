@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { supabase } from '../../config/supabase';
 import type { AccountManager } from '../../core/accounts/AccountManager';
 import crypto from 'crypto';
@@ -7,6 +8,37 @@ import { authDir } from '../../lib/account-keys';
 
 import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
 import { requireRole } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
+
+const createAccountSchema = z.object({
+  name: z.string().trim().min(1),
+  user_id: z.string().nullish(),
+  phone_number: z.string().nullish(),
+  channel: z.string().nullish(),
+  external_id: z.string().nullish(),
+  access_token: z.string().nullish(),
+  app_secret: z.string().nullish(),
+  verify_token: z.string().nullish(),
+  provider: z.string().nullish(),
+  flow_id: z.string().nullish(),
+}).strict();
+
+const updateAccountSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  phone_number: z.string().nullish(),
+  channel: z.string().nullish(),
+  external_id: z.string().nullish(),
+  access_token: z.string().nullish(),
+  app_secret: z.string().nullish(),
+  verify_token: z.string().nullish(),
+  provider: z.string().nullish(),
+  flow_id: z.string().nullish(),
+  reminder_minutes: z.coerce.number().int().positive().nullish(),
+  ai_support_enabled: z.boolean().nullish(),
+  ai_api_key: z.string().nullish(),
+  ai_model: z.string().nullish(),
+  ai_support_prompt: z.string().nullish(),
+}).strict();
 
 const AUTH_BASE_PATH = process.env.AUTH_BASE_PATH || './auth';
 
@@ -35,7 +67,7 @@ export function accountsRouter(manager: AccountManager): Router {
   const r = Router();
 
   // Crear cuenta
-  r.post('/', requireRole('admin'), async (req, res) => {
+  r.post('/', requireRole('admin'), validateBody(createAccountSchema), async (req, res) => {
     const { user_id, name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id } = req.body;
     const resolvedChannel = channel || 'whatsapp';
     const resolvedProvider = provider || 'baileys';
@@ -155,7 +187,7 @@ export function accountsRouter(manager: AccountManager): Router {
   });
 
   // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
-  r.put('/:id', requireRole('admin'), async (req, res) => {
+  r.put('/:id', requireRole('admin'), validateBody(updateAccountSchema), async (req, res) => {
     const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes,
             ai_support_enabled, ai_api_key, ai_model, ai_support_prompt } = req.body;
     const accountId = req.params.id;

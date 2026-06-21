@@ -2,6 +2,8 @@ import axios from 'axios';
 import { logger } from '../../utils/logger';
 import type { MessageStore } from '../../services/MessageStore';
 import type { ChannelClient } from '../../core/channels/ChannelClient';
+import { claimWebhookMessage } from '../../services/idempotency';
+import { withRetry } from '../../utils/retry';
 
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -65,9 +67,21 @@ export class MetaClient implements ChannelClient {
     if (!text) return;
 
     try {
-      await axios.post(
-        `${GRAPH_BASE}/me/messages?access_token=${encodeURIComponent(this.config.accessToken)}`,
-        { recipient: { id: to }, message: { text } },
+      // Facebook (Page token) usa /me/messages. Instagram con Instagram Login API
+      // requiere /{ig-id}/messages; usamos externalId si está. Para IG vinculado
+      // vía Facebook Login (Page token), /me/messages también funciona, pero
+      // /{ig-id}/messages es válido en ambos casos cuando hay externalId.
+      const path =
+        this.channel === 'instagram' && this.config.externalId
+          ? `/${encodeURIComponent(this.config.externalId)}/messages`
+          : '/me/messages';
+
+      await withRetry(
+        () => axios.post(
+          `${GRAPH_BASE}${path}?access_token=${encodeURIComponent(this.config.accessToken)}`,
+          { recipient: { id: to }, message: { text } },
+        ),
+        { label: `MetaClient:${this.accountId} sendMessage` },
       );
 
       await this.store.record({
@@ -89,7 +103,12 @@ export class MetaClient implements ChannelClient {
    */
   async handleEvent(entry: any): Promise<void> {
     const inbound = MetaClient.extractInbound(entry);
-    for (const { senderId, text } of inbound) {
+    for (const { senderId, text, mid } of inbound) {
+      // Idempotencia: Meta reintenta webhooks; no reprocesar el mismo mensaje.
+      if (!(await claimWebhookMessage(mid))) {
+        logger.info(`[MetaClient:${this.accountId}] mensaje duplicado ${mid} descartado`);
+        continue;
+      }
       try {
         await this.store.record({
           accountId: this.accountId,
@@ -97,6 +116,7 @@ export class MetaClient implements ChannelClient {
           direction: 'INBOUND',
           content: text,
           contactName: senderId,
+          waMessageId: mid,
         });
 
         const responses = await this.onMessage(this.accountId, senderId, text, senderId, {});
@@ -127,8 +147,8 @@ export class MetaClient implements ChannelClient {
    * (`entry.messaging` o `entry.changes[].value`). Ignora echoes
    * (`message.is_echo`) y eventos sin mensaje/texto.
    */
-  static extractInbound(entry: any): Array<{ senderId: string; text: string }> {
-    const out: Array<{ senderId: string; text: string }> = [];
+  static extractInbound(entry: any): Array<{ senderId: string; text: string; mid?: string }> {
+    const out: Array<{ senderId: string; text: string; mid?: string }> = [];
     if (!entry || typeof entry !== 'object') return out;
 
     const items: any[] = [];
@@ -153,7 +173,8 @@ export class MetaClient implements ChannelClient {
       const senderId = item?.sender?.id;
       if (!senderId) continue;
 
-      out.push({ senderId: String(senderId), text });
+      const mid = message.mid ? String(message.mid) : undefined;
+      out.push({ senderId: String(senderId), text, mid });
     }
 
     return out;

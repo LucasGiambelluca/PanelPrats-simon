@@ -9,20 +9,35 @@ process.env.TZ = process.env.TZ || 'America/Argentina/Buenos_Aires';
 import { FlowEngine } from './core/engine/flow.engine';
 import { AccountManager } from './core/accounts/AccountManager';
 import { ReminderScheduler } from './services/ReminderScheduler';
+import { WebhookQueue } from './services/WebhookQueue';
 import { setNotificationSender } from './services/NotifierService';
 import { createApp } from './api/app';
+import { closeRedis } from './config/redis';
+import { initErrorTracking, captureException } from './config/errorTracking';
+
+// Error tracking (A9): Sentry si hay SENTRY_DSN, no-op si no.
+initErrorTracking();
 
 // Red de seguridad: un error no atrapado (en un flujo, un webhook, una librería)
-// NO debe tumbar todo el servidor de bots. Lo logueamos y seguimos vivos.
+// NO debe tumbar todo el servidor de bots. Lo logueamos, lo reportamos y seguimos vivos.
 process.on('unhandledRejection', (reason: any) => {
   console.error('⚠️ [unhandledRejection]', reason?.stack || reason);
+  captureException(reason);
 });
 process.on('uncaughtException', (err: any) => {
   console.error('⚠️ [uncaughtException]', err?.stack || err);
+  captureException(err);
 });
 
 async function bootstrap() {
   const PORT = Number(process.env.PORT || 3001);
+
+  // Guard de seguridad: el bypass de auth NUNCA debe convivir con producción.
+  // Fail-fast antes de aceptar tráfico si alguien dejó DEV_AUTH_BYPASS=1 en prod.
+  if (process.env.NODE_ENV === 'production' && process.env.DEV_AUTH_BYPASS === '1') {
+    console.error('❌ SEGURIDAD: DEV_AUTH_BYPASS=1 con NODE_ENV=production. Abortando. Quitá el flag del entorno de prod.');
+    process.exit(1);
+  }
 
   const engine = new FlowEngine();
   const manager = new AccountManager(engine);
@@ -30,14 +45,46 @@ async function bootstrap() {
   // Permite que executors (ej agendamiento) notifiquen por la línea de una cuenta.
   setNotificationSender(async (accountId, to, text) => { await manager.sendMessage(accountId, to, text); });
 
-  const app = createApp(manager);
-  app.listen(PORT, '0.0.0.0', () => console.log(`🚀 server en :${PORT}`));
+  // Cola durable de webhooks: el request encola y devuelve 200 rápido; el worker
+  // procesa en background con retry/backoff + dead-letter (A1, no perder eventos).
+  const webhookQueue = new WebhookQueue(manager);
+  webhookQueue.start();
+
+  const app = createApp(manager, webhookQueue);
+  const server = app.listen(PORT, '0.0.0.0', () => console.log(`🚀 server en :${PORT}`));
 
   // Reconectar cuentas que estaban conectadas
   await manager.bootstrapExisting().catch((e) => console.error('[bootstrap] reconexión:', e));
 
   // Recordatorios de citas (20 min antes, dentro de la ventana de 24h)
-  new ReminderScheduler(manager).start();
+  const reminders = new ReminderScheduler(manager);
+  reminders.start();
+
+  // Apagado limpio (A7): al recibir SIGTERM/SIGINT dejamos de aceptar requests,
+  // frenamos los workers, cerramos los clientes de WhatsApp y la conexión Redis.
+  // Con timeout de respaldo por si algo se cuelga.
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`🛑 ${signal} recibido: apagando limpio…`);
+    const forced = setTimeout(() => { console.error('⏱️ apagado forzado (timeout)'); process.exit(1); }, 10_000);
+    try {
+      await new Promise<void>((resolve) => server.close(() => resolve())); // no más requests nuevos
+      reminders.stop();
+      webhookQueue.stop();
+      await manager.stopAll();
+      await closeRedis();
+      clearTimeout(forced);
+      console.log('✅ apagado completo');
+      process.exit(0);
+    } catch (e: any) {
+      console.error('❌ error en apagado:', e?.message ?? e);
+      process.exit(1);
+    }
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 bootstrap().catch((e) => {

@@ -2,6 +2,8 @@ import axios from 'axios';
 import { logger } from '../../utils/logger';
 import type { MessageStore } from '../../services/MessageStore';
 import type { ChannelClient } from '../../core/channels/ChannelClient';
+import { claimWebhookMessage } from '../../services/idempotency';
+import { withRetry } from '../../utils/retry';
 
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -46,21 +48,24 @@ export class WhatsAppOfficialClient implements ChannelClient {
     const cleanPhone = to.replace('@s.whatsapp.net', '');
 
     try {
-      await axios.post(
-        `${GRAPH_BASE}/${this.config.phone_number_id}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone,
-          type: 'text',
-          text: { body: text },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.config.accessToken}`,
-            'Content-Type': 'application/json',
+      await withRetry(
+        () => axios.post(
+          `${GRAPH_BASE}/${this.config.phone_number_id}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'text',
+            text: { body: text },
           },
-        }
+          {
+            headers: {
+              Authorization: `Bearer ${this.config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        ),
+        { label: `WhatsAppOfficialClient:${this.accountId} sendMessage` },
       );
 
       await this.store.record({
@@ -82,6 +87,12 @@ export class WhatsAppOfficialClient implements ChannelClient {
     for (const msg of messages) {
       if (msg.type !== 'text' && !msg.text?.body) continue;
 
+      // Idempotencia: Meta reintenta webhooks; no reprocesar el mismo mensaje.
+      if (!(await claimWebhookMessage(msg.id))) {
+        logger.info(`[WhatsAppOfficialClient:${this.accountId}] mensaje duplicado ${msg.id} descartado`);
+        continue;
+      }
+
       const from = msg.from;
       const text = msg.text?.body;
       const contact = contacts.find((c: any) => c.wa_id === from);
@@ -94,6 +105,7 @@ export class WhatsAppOfficialClient implements ChannelClient {
           direction: 'INBOUND',
           content: text,
           contactName: pushName,
+          waMessageId: msg.id,
         });
 
         const responses = await this.onMessage(this.accountId, from, text, pushName, {});

@@ -5,6 +5,10 @@ vi.mock('axios', () => ({
   default: { post: (url: string, body: any) => { posts.push({ url, body }); return Promise.resolve({ data: {} }); } },
 }));
 
+// Por defecto el claim de idempotencia deja pasar (primera vez).
+const claim = vi.fn().mockResolvedValue(true);
+vi.mock('../../../services/idempotency', () => ({ claimWebhookMessage: (...a: any[]) => claim(...a) }));
+
 import { MetaClient } from '../MetaClient';
 
 describe('MetaClient.extractInbound', () => {
@@ -47,6 +51,11 @@ describe('MetaClient.extractInbound', () => {
     expect(MetaClient.extractInbound({})).toEqual([]);
     expect(MetaClient.extractInbound({ messaging: 'nope' } as any)).toEqual([]);
   });
+
+  it('incluye el mid del mensaje cuando está presente (para idempotencia)', () => {
+    const entry = { id: 'PAGE', messaging: [{ sender: { id: 'U' }, message: { mid: 'm.abc', text: 'hola' } }] };
+    expect(MetaClient.extractInbound(entry)).toEqual([{ senderId: 'U', text: 'hola', mid: 'm.abc' }]);
+  });
 });
 
 describe('MetaClient.coerceText', () => {
@@ -75,7 +84,7 @@ describe('MetaClient status', () => {
 });
 
 describe('MetaClient.handleEvent', () => {
-  beforeEach(() => { posts.length = 0; });
+  beforeEach(() => { posts.length = 0; claim.mockReset().mockResolvedValue(true); });
 
   it('persiste INBOUND, enruta y responde por la Graph API', async () => {
     const recorded: any[] = [];
@@ -107,6 +116,26 @@ describe('MetaClient.handleEvent', () => {
     await client.handleEvent({ id: 'IG', messaging: [{ sender: { id: 'U' }, message: { is_echo: true, text: 'x' } }] });
     expect(onMsg).not.toHaveBeenCalled();
     expect(posts).toHaveLength(0);
+  });
+
+  it('idempotencia: un mensaje duplicado (claim=false) no se procesa ni responde', async () => {
+    claim.mockResolvedValue(false); // Meta reintenta el mismo mid
+    const store = { record: vi.fn() } as any;
+    const onMsg = vi.fn().mockResolvedValue(['respuesta']);
+    const client = new MetaClient('acc1', 'facebook', { externalId: 'PAGE', accessToken: 'TKN' }, onMsg, store);
+    await client.handleEvent({ id: 'PAGE', messaging: [{ sender: { id: 'PSID1' }, message: { mid: 'm.dup', text: 'hola' } }] });
+    expect(store.record).not.toHaveBeenCalled();
+    expect(onMsg).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('idempotencia: persiste el INBOUND con waMessageId = mid', async () => {
+    const recorded: any[] = [];
+    const store = { record: (m: any) => { recorded.push(m); return Promise.resolve(); } } as any;
+    const client = new MetaClient('acc1', 'facebook', { externalId: 'PAGE', accessToken: 'TKN' }, vi.fn().mockResolvedValue([]), store);
+    await client.handleEvent({ id: 'PAGE', messaging: [{ sender: { id: 'PSID1' }, message: { mid: 'm.first', text: 'hola' } }] });
+    expect(recorded[0]).toMatchObject({ direction: 'INBOUND', waMessageId: 'm.first' });
+    expect(claim).toHaveBeenCalledWith('m.first');
   });
 });
 

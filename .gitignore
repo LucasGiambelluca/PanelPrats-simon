@@ -10,3 +10,15 @@ auth/
 memory_store.json
 scratch_*.ts
 src/scratch_*.ts
+
+# secretos / credenciales (NUNCA versionar)
+claves.txt
+*.key
+*.pem
+.env.*
+!.env.example
+
+# assets de marca / archivos pesados locales
+brand_info.txt
+*.ase
+*.pdf

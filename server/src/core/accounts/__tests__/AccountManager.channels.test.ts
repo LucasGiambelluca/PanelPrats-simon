@@ -69,7 +69,9 @@ describe('AccountManager omnichannel', () => {
     memoryAccounts.set('fbAcc', acc);
     const mgr = new AccountManager({} as any);
     const c = await mgr.connect('fbAcc');
-    expect((c as any).constructor.name).toBe('MetaClient');
+    // instanceof contra la clase mockeada (robusto al renombrado por el bundler,
+    // a diferencia de comparar constructor.name, que esbuild puede sufijar).
+    expect(c).toBeInstanceOf(MetaClient);
     expect(mgr.getQr('fbAcc')).toBeNull();
     expect(mgr.getStatus('fbAcc')).toBe('connected');
   });

@@ -95,6 +95,13 @@ export class AccountManager {
     this.clients.delete(accountId);
   }
 
+  /** Cierra todos los clientes conectados (para apagado limpio). No relanza errores. */
+  async stopAll(): Promise<void> {
+    const clients = [...this.clients.values()];
+    await Promise.allSettled(clients.map((c) => c.stop()));
+    this.clients.clear();
+  }
+
   getQr(accountId: string): string | null {
     const client = this.clients.get(accountId);
     if (!client) return null;

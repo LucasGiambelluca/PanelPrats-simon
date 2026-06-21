@@ -39,10 +39,15 @@ describe('teamRouter POST /', () => {
     expect(calls.insert.profileRow.id).toBe('new-uid');
     expect(res.statusCode).toBe(200);
   });
-  it('sin email/password => 400', async () => {
-    const handler = getHandler(teamRouter(), 'post', '/');
+  it('sin email/password => 400 (validateBody)', () => {
+    // La validación vive en el middleware (primer handler del stack), no en el handler final.
+    const router: any = teamRouter();
+    const layer = router.stack.find((l: any) => l.route && l.route.methods.post && l.route.path === '/');
+    const validate = layer.route.stack[0].handle;
     const res = makeRes();
-    await handler({ body: { name: 'Ana' } } as any, res);
+    const next = vi.fn();
+    validate({ body: { name: 'Ana' } } as any, res, next);
     expect(res.statusCode).toBe(400);
+    expect(next).not.toHaveBeenCalled();
   });
 });

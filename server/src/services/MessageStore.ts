@@ -38,7 +38,12 @@ export class MessageStore {
       message_type: msg.messageType ?? 'text',
       wa_message_id: msg.waMessageId ?? null,
     });
-    if (error) throw error;
+    if (error) {
+      // 23505 = unique_violation sobre wa_message_id: el mensaje ya estaba
+      // persistido (webhook reintentado). Es idempotente: no es un error.
+      if ((error as any).code === '23505') return;
+      throw error;
+    }
   }
 
   /** Timestamp del último mensaje ENTRANTE de un contacto (para la ventana de 24h). */

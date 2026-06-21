@@ -5,6 +5,44 @@ const LOG_DIR = path.join(__dirname, '../../../logs');
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const MAX_FILES = 7; // Keep last 7 rotated files
 
+// --- Masking de secretos ---------------------------------------------------
+// Evita filtrar tokens/keys a los logs (consola y archivos). Redacta por:
+//  - patrón de valor: JWT (eyJ...), Bearer, claves OpenAI (sk-...).
+//  - nombre de campo en metadata: access_token, app_secret, api_key, etc.
+const SECRET_FIELD_RE = /(access[_-]?token|app[_-]?secret|verify[_-]?token|service[_-]?key|api[_-]?key|ai_api_key|authorization|password|secret|token)/i;
+const REDACTED = '***REDACTED***';
+
+export function redactString(s: string): string {
+  return s
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, REDACTED) // JWT
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, `Bearer ${REDACTED}`)             // Bearer xxx
+    .replace(/sk-[A-Za-z0-9_-]{10,}/g, REDACTED);                            // OpenAI sk-...
+}
+
+export function redactDeep(value: any, depth = 0): any {
+  if (depth > 6 || value == null) return value;
+  if (typeof value === 'string') return redactString(value);
+  if (Array.isArray(value)) return value.map((v) => redactDeep(v, depth + 1));
+  if (typeof value === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = SECRET_FIELD_RE.test(k) ? REDACTED : redactDeep(v, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+// Format de winston que redacta message + metadata antes de cualquier transport.
+const redactFormat = winston.format((info) => {
+  if (typeof info.message === 'string') info.message = redactString(info.message);
+  for (const k of Object.keys(info)) {
+    if (k === 'level' || k === 'message' || k === 'timestamp') continue;
+    (info as any)[k] = SECRET_FIELD_RE.test(k) ? REDACTED : redactDeep((info as any)[k]);
+  }
+  return info;
+})();
+
 const logFormat = winston.format.printf((info) => {
     const { level, message, timestamp, ...metadata } = info;
 
@@ -36,12 +74,14 @@ const logFormat = winston.format.printf((info) => {
 
 // JSON format for production file logs (easy to parse/search)
 const jsonFormat = winston.format.combine(
+    redactFormat,
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.json()
 );
 
 // Colorized format for console
 const consoleFormat = winston.format.combine(
+    redactFormat,
     winston.format.timestamp({ format: 'HH:mm:ss' }),
     winston.format.colorize(),
     logFormat

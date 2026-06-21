@@ -1,5 +1,20 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { supabase } from '../../config/supabase';
+import { validateBody } from '../middleware/validate';
+
+const createEmpleadaSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, 'mínimo 8 caracteres'),
+  name: z.string().trim().min(1).max(120).nullish(),
+}).strict();
+
+const updateEmpleadaSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  active: z.boolean().optional(),
+}).strict();
+
+const resetPasswordSchema = z.object({ password: z.string().min(8, 'mínimo 8 caracteres') }).strict();
 
 /**
  * Gestión de empleadas (solo admin; el guard requireRole se monta en app.ts).
@@ -20,9 +35,8 @@ export function teamRouter(): Router {
   });
 
   // Crear empleada: user en auth + profile role empleada.
-  r.post('/', async (req, res) => {
+  r.post('/', validateBody(createEmpleadaSchema), async (req, res) => {
     const { email, password, name } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'email y password requeridos' });
     const { data, error } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
     if (error || !data?.user) return res.status(400).json({ error: error?.message ?? 'no se pudo crear el usuario' });
     const { error: pErr } = await supabase
@@ -32,7 +46,7 @@ export function teamRouter(): Router {
   });
 
   // Actualizar nombre / activar / desactivar.
-  r.put('/:id', async (req, res) => {
+  r.put('/:id', validateBody(updateEmpleadaSchema), async (req, res) => {
     const patch: Record<string, any> = {};
     if (req.body.name !== undefined) patch.name = req.body.name;
     if (req.body.active !== undefined) patch.active = !!req.body.active;
@@ -44,9 +58,8 @@ export function teamRouter(): Router {
   });
 
   // Resetear password (solo de empleadas: verificamos el rol antes de tocar auth).
-  r.post('/:id/reset-password', async (req, res) => {
+  r.post('/:id/reset-password', validateBody(resetPasswordSchema), async (req, res) => {
     const { password } = req.body;
-    if (!password) return res.status(400).json({ error: 'password requerido' });
     const { data: prof } = await supabase
       .from('profiles').select('role').eq('id', req.params.id).maybeSingle();
     if (!prof || prof.role !== 'empleada') return res.status(404).json({ error: 'Empleada no encontrada' });

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { supabase } from '../../config/supabase';
 import { logger } from '../../utils/logger';
 import type { AccountManager } from '../../core/accounts/AccountManager';
+import type { WebhookQueue, WebhookKind } from '../../services/WebhookQueue';
 
 /**
  * Verifica la firma `X-Hub-Signature-256` de un webhook de Meta.
@@ -33,8 +34,23 @@ export function verifyMetaSignature(rawBody: Buffer | string | undefined, appSec
  *
  * Requiere que app.ts capture el raw body en `req.rawBody` (ver express.json verify).
  */
-export function metaWebhookRouter(manager: AccountManager): Router {
+export function metaWebhookRouter(manager: AccountManager, queue?: WebhookQueue): Router {
   const r = Router();
+
+  // Despacha un entry verificado: lo encola para procesamiento async y durable
+  // (A1, no perder eventos). Si Redis no está disponible al encolar, cae a
+  // procesamiento inline como fail-safe. Sin cola inyectada (tests) => inline.
+  async function dispatch(kind: WebhookKind, entry: any): Promise<void> {
+    const inline = () =>
+      kind === 'whatsapp' ? manager.handleWhatsAppWebhook(entry) : manager.handleMetaWebhook(entry);
+    if (!queue) return inline();
+    try {
+      await queue.enqueue(kind, entry);
+    } catch (err: any) {
+      logger.warn(`[meta-webhook] enqueue falló (${err?.message ?? err}); proceso inline para no perder el evento`);
+      await inline();
+    }
+  }
 
   // Verificación del webhook (Meta hace GET al configurar la suscripción).
   r.get('/', async (req, res) => {
@@ -93,15 +109,26 @@ export function metaWebhookRouter(manager: AccountManager): Router {
           .limit(1);
 
         const appSecret = data?.[0]?.app_secret as string | undefined;
-        if (appSecret && !verifyMetaSignature(rawBody, appSecret, signature)) {
+        // Sin app_secret no podemos verificar la firma: rechazamos por defecto
+        // (un evento forjado no debe procesarse). Bypass explícito solo para
+        // desarrollo/local (modo memoria) vía META_WEBHOOK_INSECURE=1.
+        const insecure = process.env.META_WEBHOOK_INSECURE === '1';
+        if (!appSecret) {
+          if (insecure) {
+            logger.warn(`[meta-webhook] sin app_secret para external_id=${externalId}; firma NO verificada (META_WEBHOOK_INSECURE=1)`);
+          } else {
+            logger.warn(`[meta-webhook] sin app_secret para external_id=${externalId}, rechazo (object=${object})`);
+            return res.sendStatus(403);
+          }
+        } else if (!verifyMetaSignature(rawBody, appSecret, signature)) {
           logger.warn(`[meta-webhook] firma inválida para external_id=${externalId} (object=${object})`);
           return res.sendStatus(403);
         }
 
         if (object === 'whatsapp_business_account') {
-          await manager.handleWhatsAppWebhook(entry);
+          await dispatch('whatsapp', entry);
         } else {
-          await manager.handleMetaWebhook(entry);
+          await dispatch('meta', entry);
         }
       }
     } catch (err: any) {

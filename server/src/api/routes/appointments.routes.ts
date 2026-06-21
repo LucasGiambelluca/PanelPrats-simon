@@ -1,5 +1,19 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { AppointmentService } from '../../services/AppointmentService';
+import { validateBody } from '../middleware/validate';
+
+const createAppointmentSchema = z.object({
+  account_id: z.string().min(1),
+  nombre: z.string().trim().min(1),
+  phone: z.string().nullish(),
+  telefono: z.string().nullish(),
+  resumen: z.string().nullish(),
+  status: z.string().nullish(),
+  start_time: z.string().nullish(),
+  end_time: z.string().nullish(),
+  oficina: z.string().nullish(),
+}).strict();
 
 export function appointmentsRouter(): Router {
   const r = Router();
@@ -17,12 +31,9 @@ export function appointmentsRouter(): Router {
   });
 
   // Crear cita
-  r.post('/', async (req, res) => {
+  r.post('/', validateBody(createAppointmentSchema), async (req, res) => {
     try {
       const { account_id, phone, nombre, telefono, resumen, status, start_time, end_time, oficina } = req.body || {};
-      if (!account_id || !nombre || !String(nombre).trim()) {
-        return res.status(400).json({ error: 'account_id y nombre son requeridos' });
-      }
       if (start_time && end_time && new Date(end_time).getTime() <= new Date(start_time).getTime()) {
         return res.status(400).json({ error: 'end_time debe ser posterior a start_time' });
       }

@@ -128,4 +128,27 @@ describe('metaWebhookRouter POST', () => {
     expect(handleMetaWebhook).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(403);
   });
+
+  it('sin app_secret => 403 y no enruta (default seguro)', async () => {
+    delete process.env.META_WEBHOOK_INSECURE;
+    supabaseResult.data = [{ app_secret: null }];
+    const handleMetaWebhook = vi.fn();
+    const handler = getHandler(metaWebhookRouter({ handleMetaWebhook } as any), 'post');
+    const res = makeRes();
+    await handler(makeReq(sign(raw, secret)), res);
+    expect(handleMetaWebhook).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('sin app_secret + META_WEBHOOK_INSECURE=1 => enruta y responde 200', async () => {
+    process.env.META_WEBHOOK_INSECURE = '1';
+    supabaseResult.data = [{ app_secret: null }];
+    const handleMetaWebhook = vi.fn().mockResolvedValue(undefined);
+    const handler = getHandler(metaWebhookRouter({ handleMetaWebhook } as any), 'post');
+    const res = makeRes();
+    await handler(makeReq(undefined), res);
+    expect(handleMetaWebhook).toHaveBeenCalledWith(payload.entry[0]);
+    expect(res.statusCode).toBe(200);
+    delete process.env.META_WEBHOOK_INSECURE;
+  });
 });
