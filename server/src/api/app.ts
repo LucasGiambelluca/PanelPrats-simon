@@ -14,6 +14,7 @@ import { salasRouter, salasPublicRouter } from './routes/salas.routes';
 import { metaWebhookRouter } from './routes/webhooks.routes';
 import { meRouter } from './routes/me.routes';
 import { teamRouter } from './routes/team.routes';
+import { officesRouter } from './routes/offices.routes';
 import { authContext, requireRole } from './middleware/auth';
 import type { WebhookQueue } from '../services/WebhookQueue';
 
@@ -67,6 +68,7 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/flows', authContext, requireRole('admin'), flowsRouter());
   app.use('/api/config', authContext, requireRole('admin'), sensitiveLimiter, configRouter());
   app.use('/api/team', authContext, requireRole('admin'), sensitiveLimiter, teamRouter());
+  app.use('/api/offices', authContext, requireRole('admin'), officesRouter());
 
   return app;
 }
