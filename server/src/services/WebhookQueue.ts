@@ -133,7 +133,7 @@ export class WebhookQueue {
         logger.error(`[WebhookQueue] job a dead-letter tras ${attempts} intentos: ${err?.message ?? err}`);
         captureException(err, { kind: job.kind, attempts });
       } else {
-        const delay = BASE_BACKOFF_MS * Math.pow(2, attempts - 1);
+        const delay = Math.min(BASE_BACKOFF_MS * Math.pow(2, attempts - 1), 60_000); // cap 1min
         const readyAt = Date.now() + delay;
         await redis.zadd(RETRY, readyAt, JSON.stringify({ ...job, attempts }));
         logger.warn(`[WebhookQueue] job falla (intento ${attempts}/${MAX_ATTEMPTS}), reintenta en ${delay}ms: ${err?.message ?? err}`);

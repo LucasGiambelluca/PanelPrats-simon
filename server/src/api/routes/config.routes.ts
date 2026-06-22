@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 
 // Path to .env file
 const envPath = path.join(process.cwd(), '.env');
-const migrationPath = path.join(process.cwd(), '../supabase/migrations/0001_init_multicuenta.sql');
+const migrationsDir = path.join(process.cwd(), '../supabase/migrations');
 
 // Helper to parse .env file
 function readEnv(): Record<string, string> {
@@ -95,8 +95,15 @@ export function configRouter(): Router {
       return res.status(400).json({ error: 'Falta configurar la variable DATABASE_URL' });
     }
 
-    if (!fs.existsSync(migrationPath)) {
-      return res.status(404).json({ error: `No se encontró el archivo de migración en ${migrationPath}` });
+    if (!fs.existsSync(migrationsDir)) {
+      return res.status(404).json({ error: `No se encontró el directorio de migraciones en ${migrationsDir}` });
+    }
+
+    // Todas las migraciones en orden lexicográfico (0001, 0002, …, 0014). Cada
+    // archivo es idempotente (IF NOT EXISTS / DO $$ guards), así que re-correr es seguro.
+    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+    if (files.length === 0) {
+      return res.status(404).json({ error: `No hay archivos .sql en ${migrationsDir}` });
     }
 
     const client = new Client({
@@ -105,18 +112,22 @@ export function configRouter(): Router {
       ssl: dbUrl.includes('supabase') || dbUrl.includes('localhost') ? { rejectUnauthorized: false } : false,
     });
 
+    const applied: string[] = [];
     try {
       await client.connect();
-      const sqlContent = fs.readFileSync(migrationPath, 'utf8');
-      
-      console.log('🔄 [sync-db] Running migrations...');
-      await client.query(sqlContent);
-      console.log('✅ [sync-db] Migrations completed successfully');
-
-      res.json({ success: true, message: 'Tablas sincronizadas y creadas con éxito.' });
+      console.log(`🔄 [sync-db] Aplicando ${files.length} migraciones…`);
+      for (const file of files) {
+        const sqlContent = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await client.query(sqlContent);
+        applied.push(file);
+        console.log(`  ✓ ${file}`);
+      }
+      console.log('✅ [sync-db] Migraciones completadas');
+      res.json({ success: true, applied, message: `${applied.length} migraciones aplicadas.` });
     } catch (err: any) {
-      console.error('❌ [sync-db] Error:', err);
-      res.status(500).json({ error: err.message });
+      const failed = files[applied.length];
+      console.error(`❌ [sync-db] Error en ${failed}:`, err);
+      res.status(500).json({ error: err.message, failedMigration: failed, applied });
     } finally {
       await client.end().catch(() => {});
     }

@@ -53,16 +53,14 @@ async function bootstrap() {
   const app = createApp(manager, webhookQueue);
   const server = app.listen(PORT, '0.0.0.0', () => console.log(`🚀 server en :${PORT}`));
 
-  // Reconectar cuentas que estaban conectadas
-  await manager.bootstrapExisting().catch((e) => console.error('[bootstrap] reconexión:', e));
-
-  // Recordatorios de citas (20 min antes, dentro de la ventana de 24h)
+  // Recordatorios de citas (20 min antes, dentro de la ventana de 24h).
   const reminders = new ReminderScheduler(manager);
-  reminders.start();
 
   // Apagado limpio (A7): al recibir SIGTERM/SIGINT dejamos de aceptar requests,
   // frenamos los workers, cerramos los clientes de WhatsApp y la conexión Redis.
-  // Con timeout de respaldo por si algo se cuelga.
+  // Con timeout de respaldo por si algo se cuelga. Se registra ANTES de
+  // bootstrapExisting (que puede tardar varios segundos reconectando): así una
+  // señal recibida durante el arranque no se pierde.
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
@@ -85,6 +83,11 @@ async function bootstrap() {
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Reconectar cuentas que estaban conectadas
+  await manager.bootstrapExisting().catch((e) => console.error('[bootstrap] reconexión:', e));
+
+  reminders.start();
 }
 
 bootstrap().catch((e) => {

@@ -15,6 +15,18 @@ const createAppointmentSchema = z.object({
   oficina: z.string().nullish(),
 }).strict();
 
+const updateAppointmentSchema = z.object({
+  nombre: z.string().trim().min(1).optional(),
+  phone: z.string().nullish(),
+  telefono: z.string().nullish(),
+  resumen: z.string().nullish(),
+  status: z.string().nullish(),
+  start_time: z.string().nullish(),
+  end_time: z.string().nullish(),
+  oficina: z.string().nullish(),
+  reminded: z.boolean().optional(),
+}).strict();
+
 export function appointmentsRouter(): Router {
   const r = Router();
 
@@ -58,7 +70,7 @@ export function appointmentsRouter(): Router {
   });
 
   // Actualizar cita (ej. cambiar status)
-  r.put('/:id', async (req, res) => {
+  r.put('/:id', validateBody(updateAppointmentSchema), async (req, res) => {
     try {
       const updated = await AppointmentService.update(req.params.id, req.body);
       res.json(updated);

@@ -39,9 +39,13 @@ export class MessageStore {
       wa_message_id: msg.waMessageId ?? null,
     });
     if (error) {
-      // 23505 = unique_violation sobre wa_message_id: el mensaje ya estaba
-      // persistido (webhook reintentado). Es idempotente: no es un error.
-      if ((error as any).code === '23505') return;
+      // 23505 = unique_violation. Solo lo tragamos si es por el índice de
+      // wa_message_id (webhook reintentado → idempotente). Cualquier otra
+      // violación única se relanza (no enmascarar bugs futuros).
+      const e = error as any;
+      const isWaMsgDup = e.code === '23505'
+        && (e.constraint === 'uq_wamsg_wa_message_id' || /wa_message_id/.test(String(e.message ?? '')));
+      if (isWaMsgDup) return;
       throw error;
     }
   }
