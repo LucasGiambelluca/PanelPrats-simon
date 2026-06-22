@@ -42,6 +42,6 @@ describe('AgentRuntime.handle', () => {
     const rt = new AgentRuntime(deps as any);
     const out = await rt.handle('acc1', '549111', 'loop', {});
     expect(out[0].toLowerCase()).toContain('persona'); // mensaje de cortesía + derivación
-    expect(deps.ai.completeWithTools.mock.calls.length).toBeLessThanOrEqual(6);
+    expect(deps.ai.completeWithTools.mock.calls.length).toBe(5);
   });
 });

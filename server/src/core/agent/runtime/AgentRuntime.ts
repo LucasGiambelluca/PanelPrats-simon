@@ -32,7 +32,7 @@ export class AgentRuntime {
 
     const finish = (reply: string): string[] => {
       this.deps.updateMemory?.(accountId, phone, messages.filter((m) => m.role === 'user' || m.role === 'assistant'))
-        .catch(() => { /* best-effort, fuera del camino de respuesta */ });
+        ?.catch(() => { /* best-effort, fuera del camino de respuesta */ });
       return [reply];
     };
 
