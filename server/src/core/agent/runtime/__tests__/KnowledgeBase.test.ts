@@ -30,4 +30,12 @@ describe('KnowledgeBase.search', () => {
     expect(res.encontrado).toBe(false);
     expect(res.snippets).toEqual([]);
   });
+
+  it('matchea por tag aunque el tag tenga mayúscula/acento', async () => {
+    faqRows.length = 0;
+    faqRows.push({ pregunta: '¿Requisitos?', respuesta: 'Te los detallo en la consulta.', tags: ['Jubilación'] });
+    const kb = new KnowledgeBase();
+    const res = await kb.search('acc1', 'consulta sobre jubilacion');
+    expect(res.encontrado).toBe(true);
+  });
 });

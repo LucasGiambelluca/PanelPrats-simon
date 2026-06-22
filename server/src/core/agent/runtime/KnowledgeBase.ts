@@ -25,7 +25,7 @@ export class KnowledgeBase {
 
     const scored = rows
       .map((r) => {
-        const hay = new Set([...tokens(r.pregunta), ...(r.tags ?? [])]);
+        const hay = new Set([...tokens(r.pregunta), ...tokens((r.tags ?? []).join(' '))]);
         let score = 0;
         for (const t of q) if (hay.has(t)) score++;
         return { r, score };
