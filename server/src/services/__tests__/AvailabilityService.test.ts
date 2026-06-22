@@ -61,3 +61,35 @@ describe('AvailabilityService.hasCapacity', () => {
     expect(await svc.hasCapacity('acc1', 'X', start, end)).toBe(false); // 1 solapada >= cap 1
   });
 });
+
+describe('AvailabilityService.freeSlots', () => {
+  beforeEach(() => { offices.length = 0; offices.push({ ...OFICINA, slot_min: 60, capacidad: 1 }); apptList.mockReset(); apptList.mockResolvedValue([]); });
+
+  it('genera slots dentro del horario y días configurados', async () => {
+    const svc = new AvailabilityService();
+    const slots = await svc.freeSlots('acc1', 'CABA', { now: new Date('2026-06-22T12:00:00.000Z'), max: 3 } as any);
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.length).toBeLessThanOrEqual(3);
+    const d = (new Date(slots[0].end).getTime() - new Date(slots[0].start).getTime()) / 60000;
+    expect(d).toBe(60);
+  });
+
+  it('capacidad 2: un slot con 1 cita sigue ofreciéndose; con 2 no', async () => {
+    offices[0] = { ...OFICINA, slot_min: 60, capacidad: 2 };
+    const now = new Date('2026-06-22T12:00:00.000Z');
+    const svc = new AvailabilityService();
+    const libres = await svc.freeSlots('acc1', 'CABA', { now, max: 10 } as any);
+    const first = libres[0];
+    apptList.mockResolvedValue([
+      { oficina: 'CABA', status: 'pendiente', start_time: first.start, end_time: first.end },
+      { oficina: 'CABA', status: 'confirmada', start_time: first.start, end_time: first.end },
+    ]);
+    const libres2 = await svc.freeSlots('acc1', 'CABA', { now, max: 10 } as any);
+    expect(libres2.find((s) => s.start === first.start)).toBeUndefined();
+  });
+
+  it('oficina inexistente → []', async () => {
+    const svc = new AvailabilityService();
+    expect(await svc.freeSlots('acc1', 'Inexistente', { now: new Date('2026-06-22T12:00:00.000Z') } as any)).toEqual([]);
+  });
+});
