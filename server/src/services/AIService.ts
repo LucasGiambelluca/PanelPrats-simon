@@ -175,6 +175,59 @@ export class AIService {
         throw new Error('No AI provider configured');
     }
 
+  /**
+   * Completion con function-calling (OpenAI/Groq compatible). Para el AgentRuntime.
+   * Devuelve { content } si el modelo respondió texto, o { toolCalls } si pidió tools.
+   * Usa el endpoint OpenAI (primario) o Groq como fallback; Gemini NO se usa acá
+   * (su API de tools difiere; el agente piloto corre sobre OpenAI/Groq).
+   */
+  static async completeWithTools(opts: {
+    systemPrompt: string;
+    messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: string; tool_call_id?: string; name?: string }>;
+    tools: any[];
+    apiKey?: string;
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+  }): Promise<{ content?: string; toolCalls?: Array<{ id: string; name: string; args: any }> }> {
+    const messages = [{ role: 'system', content: opts.systemPrompt }, ...opts.messages];
+    const body: any = {
+      messages,
+      tools: opts.tools,
+      tool_choice: 'auto',
+      max_tokens: opts.maxTokens ?? 1024,
+      temperature: opts.temperature ?? 0.3,
+    };
+
+    const targets: Array<{ url: string; key?: string; model: string }> = [];
+    if (OPENAI_API_KEY || opts.apiKey?.startsWith('sk-')) {
+      targets.push({ url: OPENAI_API_URL, key: opts.apiKey?.startsWith('sk-') ? opts.apiKey : OPENAI_API_KEY, model: opts.model?.includes('gpt') ? opts.model : AIService.OPENAI_MODEL });
+    }
+    if (GROQ_API_KEY) targets.push({ url: GROQ_API_URL, key: GROQ_API_KEY, model: AIService.GROQ_MODEL });
+
+    let lastErr: any;
+    for (const t of targets) {
+      try {
+        const resp = await axios.post(t.url, { ...body, model: t.model },
+          { headers: { Authorization: `Bearer ${t.key}`, 'Content-Type': 'application/json' }, timeout: 25000 });
+        const msg = resp.data?.choices?.[0]?.message ?? {};
+        if (Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+          const toolCalls = msg.tool_calls.map((c: any) => {
+            let args: any = {};
+            try { args = JSON.parse(c.function?.arguments ?? '{}'); } catch { args = {}; }
+            return { id: c.id, name: c.function?.name, args };
+          });
+          return { toolCalls };
+        }
+        return { content: msg.content ?? '' };
+      } catch (err: any) {
+        lastErr = err;
+        logger.warn('[AI] completeWithTools proveedor falló, probando siguiente', { error: err?.response?.data?.error?.message ?? err?.message });
+      }
+    }
+    throw lastErr ?? new Error('Sin proveedor de IA disponible para tools');
+  }
+
     /**
      * Transcribes audio using Groq Whisper.
      */
