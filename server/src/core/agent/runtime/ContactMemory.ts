@@ -63,7 +63,7 @@ export class ContactMemory {
     profile?: Record<string, any>; preferences?: Record<string, any>; summary?: string | null;
   }): Promise<void> {
     const { data } = await supabase
-      .from('contact_memory').select('profile, preferences, long_term_summary')
+      .from('contact_memory').select('profile, preferences, long_term_summary, last_summary_at')
       .eq('account_id', accountId).eq('phone', phone).maybeSingle();
 
     const profile = mergeProfile((data?.profile ?? {}) as any, patch.profile ?? {});
@@ -73,7 +73,7 @@ export class ContactMemory {
       account_id: accountId, phone,
       profile, preferences,
       long_term_summary: patch.summary ?? (data?.long_term_summary as any) ?? null,
-      last_summary_at: patch.summary ? new Date().toISOString() : null,
+      last_summary_at: patch.summary ? new Date().toISOString() : ((data?.last_summary_at as any) ?? null),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'account_id,phone' });
   }
