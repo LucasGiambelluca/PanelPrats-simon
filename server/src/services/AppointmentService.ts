@@ -177,9 +177,13 @@ export const AppointmentService = {
         .select('*')
         .single();
       if (error) {
-        // Constraint de exclusión (migración 0012): slot tomado por otra cita
-        // concurrente. Cierra la ventana TOCTOU del chequeo en app (hasOverlap).
-        if (error.code === '23P01' || (error.message || '').includes('appointments_no_overlap')) {
+        // Constraint de exclusión (migración 0012) o trigger de capacidad (0017):
+        // slot tomado por otra cita concurrente. Cierra la ventana TOCTOU del chequeo en app (hasOverlap).
+        if (
+          error.code === '23P01' ||
+          (error.message || '').includes('appointments_no_overlap') ||
+          (error.message || '').includes('office_capacity_full')
+        ) {
           throw new Error('SLOT_TAKEN');
         }
         throw new Error(error.message);
@@ -228,7 +232,17 @@ export const AppointmentService = {
         .eq('id', id)
         .select('*')
         .single();
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Trigger de capacidad (0017) o constraint (0012): slot tomado.
+        if (
+          error.code === '23P01' ||
+          (error.message || '').includes('appointments_no_overlap') ||
+          (error.message || '').includes('office_capacity_full')
+        ) {
+          throw new Error('SLOT_TAKEN');
+        }
+        throw new Error(error.message);
+      }
       return deserializeAppointment(data);
     }
 
