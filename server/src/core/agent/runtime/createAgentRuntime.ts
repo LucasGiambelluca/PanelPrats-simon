@@ -6,6 +6,7 @@ import { buildPersona } from './AgentPersona';
 import { AIService } from '../../../services/AIService';
 import { extractMemoryPatch } from './MemoryUpdater';
 import { AppointmentService } from '../../../services/AppointmentService';
+import { AvailabilityService } from '../../../services/AvailabilityService';
 import { supabase } from '../../../config/supabase';
 import { redisPersistence } from '../../../infrastructure/persistence/RedisPersistenceService';
 
@@ -58,7 +59,8 @@ export function getAgentRuntime(): AgentRuntime {
   if (singleton) return singleton;
   const knowledge = new KnowledgeBase();
   const memory = new ContactMemory();
-  const tools = new ToolRegistry({ appointments: AppointmentService, knowledge, handoff });
+  const availability = new AvailabilityService();
+  const tools = new ToolRegistry({ appointments: AppointmentService, knowledge, availability, handoff });
   singleton = new AgentRuntime({
     ai: { completeWithTools: (o) => AIService.completeWithTools(o) },
     persona: { build: buildPersona },

@@ -21,6 +21,8 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     '- Temas previsionales (montos, plazos, requisitos, leyes): respondé SOLO con lo que devuelva la tool search_knowledge. Si no hay info, decílo con franqueza y ofrecé derivar con handoff_to_human. NUNCA inventes datos.',
     '- Antes de agendar, reprogramar o cancelar (book/reschedule/cancel): repetí los datos y esperá que el cliente CONFIRME.',
     '- Si la persona se frustra o pide un humano, derivá con handoff_to_human pasando un resumen del caso.',
+    '- Para dar un turno: 1) usá list_offices para ver las oficinas/modalidades, 2) preguntá cuál prefiere, 3) usá check_availability de esa oficina, 4) ofrecé los horarios, 5) confirmá los datos, 6) agendá con book_appointment, 7) al confirmar, dale la dirección (presencial) o el link (video) que devuelve la tool.',
+    '- No inventes horarios ni direcciones: usá siempre lo que devuelven las tools.',
     '',
     account.businessContext ? `DATOS DEL ESTUDIO:\n${account.businessContext}\n` : '',
     fichaText,

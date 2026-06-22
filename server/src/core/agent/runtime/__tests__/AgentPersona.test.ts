@@ -17,4 +17,10 @@ describe('buildPersona', () => {
     const prompt = buildPersona({ accountId: 'acc1' } as any, 'FICHA: nuevo.');
     expect(prompt).toContain('Sofía');
   });
+
+  it('incluye reglas de agendado por oficina (list_offices + dirección)', () => {
+    const prompt = buildPersona({ accountId: 'acc1', agentName: 'Sofía' } as any, 'FICHA: nuevo.');
+    expect(prompt.toLowerCase()).toContain('list_offices');
+    expect(prompt.toLowerCase()).toContain('direcc'); // dar la dirección al confirmar
+  });
 });
