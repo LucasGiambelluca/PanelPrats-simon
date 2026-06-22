@@ -1,7 +1,19 @@
 import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
 import { AppointmentService } from '../../services/AppointmentService';
+import { AvailabilityService } from '../../services/AvailabilityService';
 
 export class AppointmentProposalsExecutor implements NodeExecutor {
+    private formatSlots(slots: { start: string; end: string }[]): string {
+        const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        if (!slots.length) return 'No hay horarios disponibles en los próximos días.';
+        return slots.map((s, i) => {
+            const d = new Date(s.start);
+            const fecha = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            return `${i + 1}) ${dias[d.getDay()]} ${fecha} a las ${hora} hs`;
+        }).join('\n');
+    }
+
     async execute(nodeData: any, context: ExecutionContext): Promise<NodeExecutionResult> {
         const allowedDays: number[] = Array.isArray(nodeData.allowedDays) 
             ? nodeData.allowedDays.map(Number)
@@ -16,6 +28,27 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
         // (solo cuentan los turnos de ESA oficina para el solapamiento).
         const oficinaVar = nodeData.oficinaVar || 'oficina';
         const oficina = String(nodeData.oficina || (context as any)[oficinaVar] || '').trim();
+
+        // Si la oficina está CONFIGURADA en account_offices, delegamos el cálculo de
+        // slots en AvailabilityService (misma fuente que usa el agente). Si no está
+        // configurada, caemos al cálculo inline basado en nodeData (compat hacia atrás).
+        if (oficina) {
+            const availability = new AvailabilityService();
+            const office = await availability.getOffice(context.accountId, oficina);
+            if (office) {
+                const slots = await availability.freeSlots(context.accountId, oficina, { max: Number(nodeData.maxProposals) || 3 });
+                const formatted = this.formatSlots(slots);
+                const delegatedOutputVar = nodeData.outputVariable || 'horarios_disponibles';
+                const message = typeof nodeData.text === 'string' && nodeData.text.trim()
+                    ? nodeData.text.replace(new RegExp(`{{\\s*${delegatedOutputVar}\\s*}}`, 'g'), formatted)
+                    : formatted;
+                return {
+                    messages: [message],
+                    wait_for_input: false,
+                    updatedContext: { [delegatedOutputVar]: formatted, [`${delegatedOutputVar}_array`]: slots },
+                };
+            }
+        }
 
         const [startH, startM] = startHourStr.split(':').map(Number);
         const [endH, endM] = endHourStr.split(':').map(Number);
@@ -91,24 +124,14 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
                 }
             }
 
-            const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-            const formattedLines = proposedSlots.map((slot, index) => {
-                const dayName = diasSemana[slot.start.getDay()];
-                const dateStr = `${String(slot.start.getDate()).padStart(2, '0')}/${String(slot.start.getMonth() + 1).padStart(2, '0')}`;
-                const timeStr = `${String(slot.start.getHours()).padStart(2, '0')}:${String(slot.start.getMinutes()).padStart(2, '0')}`;
-                return `${index + 1}) ${dayName} ${dateStr} a las ${timeStr} hs`;
-            });
-
-            const formattedText = formattedLines.length > 0
-                ? formattedLines.join('\n')
-                : 'No hay horarios disponibles en los próximos días.';
-
-            console.log(`[AppointmentProposalsExecutor] Encontrados ${proposedSlots.length} horarios libres.`);
-
             const slotsArray = proposedSlots.map(slot => ({
                 start: slot.start.toISOString(),
                 end: slot.end.toISOString()
             }));
+
+            const formattedText = this.formatSlots(slotsArray);
+
+            console.log(`[AppointmentProposalsExecutor] Encontrados ${proposedSlots.length} horarios libres.`);
 
             context[outputVar] = formattedText;
             context[`${outputVar}_array`] = slotsArray;

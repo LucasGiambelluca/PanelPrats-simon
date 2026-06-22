@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppointmentProposalsExecutor } from '../AppointmentProposalsExecutor';
 import { AppointmentService } from '../../../services/AppointmentService';
+
+const freeSlots = vi.fn();
+const getOffice = vi.fn();
+vi.mock('../../../services/AvailabilityService', () => ({
+  AvailabilityService: class { freeSlots = (...a: any[]) => freeSlots(...a); getOffice = (...a: any[]) => getOffice(...a); },
+}));
 
 describe('AppointmentProposalsExecutor', () => {
   const accountId = 'fbf99cec-ddc9-4ef2-94d0-8f14d0bcb982';
@@ -106,5 +112,17 @@ describe('AppointmentProposalsExecutor', () => {
     // El slot que antes estaba libre y ahora está reservado, NO debe aparecer en la nueva lista de propuestas
     const newStarts = contextAfter.propuestas_array.map((s: any) => s.start);
     expect(newStarts).not.toContain(firstFreeSlot.start);
+  });
+
+  it('si la oficina está configurada, delega los horarios en AvailabilityService', async () => {
+    getOffice.mockResolvedValue({ nombre: 'CABA', capacidad: 1, slot_min: 60 }); // configurada → delega
+    freeSlots.mockResolvedValue([{ start: '2026-06-22T13:00:00.000Z', end: '2026-06-22T14:00:00.000Z' }]);
+    const exec = new AppointmentProposalsExecutor();
+    const ctx: any = { accountId: 'acc1', oficina: 'CABA' };
+    const res = await exec.execute({ oficinaVar: 'oficina' }, ctx);
+    expect(getOffice).toHaveBeenCalledWith('acc1', 'CABA');
+    expect(freeSlots).toHaveBeenCalledWith('acc1', 'CABA', expect.any(Object));
+    expect(res.messages.length).toBeGreaterThan(0);
+    expect(res.messages[0]).toMatch(/\d{2}:\d{2}/); // formateó el slot delegado
   });
 });
