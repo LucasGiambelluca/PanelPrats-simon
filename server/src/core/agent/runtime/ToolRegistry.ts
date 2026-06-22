@@ -1,18 +1,21 @@
 import type { ToolContext, ToolResult } from './types';
 import type { AppointmentService as ApptSvc } from '../../../services/AppointmentService';
 import type { KnowledgeBase } from './KnowledgeBase';
+import type { AvailabilityService } from '../../../services/AvailabilityService';
 
 export interface ToolDeps {
   appointments: typeof ApptSvc;
   knowledge: KnowledgeBase;
+  availability: AvailabilityService;
   // marca HANDOVER y corta el bot; recibe identidad server-side + payload del modelo.
   handoff: (accountId: string, phone: string, payload: { motivo: string; resumen_caso: string }) => Promise<void>;
 }
 
 // Esquema de tools en formato OpenAI function-calling.
 const SCHEMAS = [
-  { type: 'function', function: { name: 'check_availability', description: 'Lista horarios libres en una ventana de fechas.', parameters: { type: 'object', properties: { desde: { type: 'string' }, hasta: { type: 'string' }, oficina: { type: 'string' } }, required: ['desde', 'hasta'] } } },
-  { type: 'function', function: { name: 'book_appointment', description: 'Agenda una cita. Confirmá los datos con el cliente ANTES de llamar.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, oficina: { type: 'string' }, resumen: { type: 'string' } }, required: ['nombre', 'start_time', 'end_time', 'resumen'] } } },
+  { type: 'function', function: { name: 'list_offices', description: 'Lista las oficinas/modalidades del estudio (presencial y video) con su dirección. Usala antes de ofrecer un turno.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'check_availability', description: 'Lista los horarios LIBRES (no ocupados) de una oficina en una ventana de fechas. Llamá list_offices primero para saber qué oficina pasar.', parameters: { type: 'object', properties: { desde: { type: 'string' }, hasta: { type: 'string' }, oficina: { type: 'string' } }, required: ['desde', 'hasta', 'oficina'] } } },
+  { type: 'function', function: { name: 'book_appointment', description: 'Agenda una cita. Confirmá los datos con el cliente ANTES de llamar.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, oficina: { type: 'string' }, resumen: { type: 'string' } }, required: ['nombre', 'start_time', 'end_time', 'oficina', 'resumen'] } } },
   { type: 'function', function: { name: 'reschedule_appointment', description: 'Reprograma una cita existente.', parameters: { type: 'object', properties: { appointment_id: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' } }, required: ['appointment_id', 'start_time', 'end_time'] } } },
   { type: 'function', function: { name: 'cancel_appointment', description: 'Cancela una cita existente.', parameters: { type: 'object', properties: { appointment_id: { type: 'string' } }, required: ['appointment_id'] } } },
   { type: 'function', function: { name: 'search_knowledge', description: 'Busca en la base del estudio. Usala SIEMPRE antes de responder temas previsionales.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
@@ -28,25 +31,38 @@ export class ToolRegistry {
   async execute(name: string, args: any, ctx: ToolContext): Promise<ToolResult> {
     try {
       switch (name) {
+        case 'list_offices': {
+          const oficinas = (await this.deps.availability.listOffices(ctx.accountId))
+            .map((o) => ({ nombre: o.nombre, modalidad: o.modalidad, direccion: o.direccion ?? null }));
+          return { ok: true, data: { oficinas } };
+        }
         case 'check_availability': {
-          const list = await this.deps.appointments.list(ctx.accountId);
-          const ocupadas = list
-            .filter((a) => a.status !== 'cancelada' && a.start_time && (!args.oficina || (a.oficina || '') === args.oficina))
-            .map((a) => ({ start: a.start_time, end: a.end_time, oficina: a.oficina }));
-          return { ok: true, data: { ocupadas, desde: args.desde, hasta: args.hasta } };
+          const slots = await this.deps.availability.freeSlots(ctx.accountId, args.oficina, { desde: args.desde, hasta: args.hasta, max: 3 });
+          if (!slots.length) {
+            const existe = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
+            return { ok: true, data: { oficina: args.oficina, slots: [], sin_oficina: !existe } };
+          }
+          return { ok: true, data: { oficina: args.oficina, slots } };
         }
         case 'book_appointment': {
+          if (!(await this.deps.availability.hasCapacity(ctx.accountId, args.oficina, args.start_time, args.end_time))) {
+            return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
+          }
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono: ctx.phone,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
           } as any);
-          return { ok: true, data: { appointment_id: appt.id } };
+          const office = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
+          return { ok: true, data: { appointment_id: appt.id, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
         }
         case 'reschedule_appointment': {
           const appt = await this.deps.appointments.getById(args.appointment_id);
           if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
             return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
+          }
+          if (!(await this.deps.availability.hasCapacity(ctx.accountId, appt.oficina ?? '', args.start_time, args.end_time))) {
+            return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
           await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time });
           return { ok: true };
