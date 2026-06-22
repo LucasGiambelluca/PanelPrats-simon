@@ -4,6 +4,7 @@ import { KnowledgeBase } from './KnowledgeBase';
 import { ContactMemory } from './ContactMemory';
 import { buildPersona } from './AgentPersona';
 import { AIService } from '../../../services/AIService';
+import { extractMemoryPatch } from './MemoryUpdater';
 import { AppointmentService } from '../../../services/AppointmentService';
 import { supabase } from '../../../config/supabase';
 import { redisPersistence } from '../../../infrastructure/persistence/RedisPersistenceService';
@@ -65,6 +66,10 @@ export function getAgentRuntime(): AgentRuntime {
     tools: { schemas: () => tools.schemas(), execute: (n, args, ctx) => tools.execute(n, args, ctx) },
     loadAccount,
     history: recentHistory,
+    updateMemory: async (accountId, phone, turns) => {
+      const patch = await extractMemoryPatch({ complete: (o) => AIService.complete(o) }, turns);
+      await memory.merge(accountId, phone, patch);
+    },
   });
   return singleton;
 }
