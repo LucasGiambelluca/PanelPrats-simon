@@ -1,6 +1,7 @@
 import { FlowEngine } from './flow.engine';
 import { supabase } from '../../config/supabase';
 import { SupportAgentService } from '../../services/SupportAgentService';
+import { getAgentRuntime } from '../agent/runtime/createAgentRuntime';
 
 const DEFAULT_HANDOFF_MESSAGE = 'Te derivo con un asesor humano, aguardá un momento por favor. 🙌';
 
@@ -19,6 +20,13 @@ export class ConversationRouter {
   async processMessage(accountId: string, phone: string, text: string, pushName: string, fileCtx: any = {}): Promise<any[]> {
     const t = norm(text);
     const baseCtx = { accountId, phone, pushName, user_message: text, ...fileCtx };
+
+    // Gate IA-primero: si la cuenta está en modo agente, el AgentRuntime conduce.
+    // Las cuentas en 'flows' (default) siguen el camino scripteado de abajo, intacto.
+    const { data: acc } = await supabase.from('accounts').select('agent_mode').eq('id', accountId).maybeSingle();
+    if (acc?.agent_mode === 'ai_first') {
+      return getAgentRuntime().handle(accountId, phone, text, fileCtx);
+    }
 
     // P0 — cancelar explícito
     if (CANCEL_WORDS.includes(t)) {

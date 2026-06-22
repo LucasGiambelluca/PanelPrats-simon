@@ -2,9 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Estado de conversación devuelto por supabase, configurable por test.
 let mockStatus: string | null = 'HANDOVER';
-vi.mock('../../../config/supabase', () => ({
-  supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { status: mockStatus } }) }) }) }) }) },
-}));
+// Cadena tolerante: soporta tanto .eq().maybeSingle() (gate agent_mode en accounts)
+// como .eq().eq().maybeSingle() (status de whatsapp_conversations).
+vi.mock('../../../config/supabase', () => {
+  const leaf = (): any => ({
+    eq: () => leaf(),
+    maybeSingle: () => Promise.resolve({ data: { status: mockStatus } }),
+  });
+  return { supabase: { from: () => ({ select: () => leaf() }) } };
+});
 
 import { ConversationRouter } from '../conversation.router';
 
