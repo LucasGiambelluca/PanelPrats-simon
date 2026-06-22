@@ -31,8 +31,11 @@ export class AgentRuntime {
     const messages: any[] = [...history, { role: 'user', content: text }];
 
     const finish = (reply: string): string[] => {
-      this.deps.updateMemory?.(accountId, phone, messages.filter((m) => m.role === 'user' || m.role === 'assistant'))
-        ?.catch(() => { /* best-effort, fuera del camino de respuesta */ });
+      const turns = messages
+        .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+        .map((m) => ({ role: m.role, content: m.content }));
+      turns.push({ role: 'assistant', content: reply });
+      this.deps.updateMemory?.(accountId, phone, turns)?.catch(() => { /* best-effort */ });
       return [reply];
     };
 

@@ -44,10 +44,18 @@ export class ToolRegistry {
           return { ok: true, data: { appointment_id: appt.id } };
         }
         case 'reschedule_appointment': {
+          const appt = await this.deps.appointments.getById(args.appointment_id);
+          if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
+            return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
+          }
           await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time });
           return { ok: true };
         }
         case 'cancel_appointment': {
+          const appt = await this.deps.appointments.getById(args.appointment_id);
+          if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
+            return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
+          }
           await this.deps.appointments.update(args.appointment_id, { status: 'cancelada' });
           return { ok: true };
         }

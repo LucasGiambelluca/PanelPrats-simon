@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 // Stubs de las dependencias (se inyectan, no se mockea el módulo).
 const apptCreate = vi.fn();
 const apptUpdate = vi.fn();
+const apptGetById = vi.fn();
 const kbSearch = vi.fn();
 const handoff = vi.fn();
 
@@ -10,7 +11,7 @@ import { ToolRegistry } from '../ToolRegistry';
 
 function makeRegistry() {
   return new ToolRegistry({
-    appointments: { create: apptCreate, update: apptUpdate, list: vi.fn().mockResolvedValue([]), hasOverlap: vi.fn() } as any,
+    appointments: { create: apptCreate, update: apptUpdate, getById: apptGetById, list: vi.fn().mockResolvedValue([]), hasOverlap: vi.fn() } as any,
     knowledge: { search: kbSearch } as any,
     handoff,
   });
@@ -59,5 +60,22 @@ describe('ToolRegistry', () => {
     const res = await reg.execute('handoff_to_human', { motivo: 'pide humano', resumen_caso: 'caso X' }, { accountId: 'acc1', phone: 'p' });
     expect(res.ok).toBe(true);
     expect(handoff).toHaveBeenCalledWith('acc1', 'p', expect.objectContaining({ motivo: 'pide humano' }));
+  });
+
+  it('cancel_appointment RECHAZA una cita de otro contacto (anti-IDOR)', async () => {
+    apptGetById.mockResolvedValue({ id: 'x', account_id: 'acc1', phone: 'OTRO' }); // misma cuenta, otro phone
+    const reg = makeRegistry();
+    const res = await reg.execute('cancel_appointment', { appointment_id: 'x' }, { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(apptUpdate).not.toHaveBeenCalled();
+  });
+
+  it('cancel_appointment permite cancelar la cita propia', async () => {
+    apptGetById.mockResolvedValue({ id: 'x', account_id: 'acc1', phone: '549111' });
+    apptUpdate.mockResolvedValue({ id: 'x' });
+    const reg = makeRegistry();
+    const res = await reg.execute('cancel_appointment', { appointment_id: 'x' }, { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(apptUpdate).toHaveBeenCalledWith('x', { status: 'cancelada' });
   });
 });
