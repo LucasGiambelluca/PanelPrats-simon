@@ -35,6 +35,16 @@ describe('AgentRuntime.handle', () => {
     expect(out).toEqual(['Sí, gestionamos moratoria.']);
   });
 
+  it('si la IA falla (sin saldo/caída), degrada con cortesía y NO tira', async () => {
+    const deps = makeDeps([]);
+    deps.ai.completeWithTools = vi.fn().mockRejectedValue(new Error('429 quota'));
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola', {});
+    expect(out).toHaveLength(1);
+    expect(out[0].toLowerCase()).toContain('persona'); // fallback + derivación
+    expect(deps.tools.execute).not.toHaveBeenCalled();
+  });
+
   it('corta y deriva si supera el máximo de iteraciones', async () => {
     const loopResp = { toolCalls: [{ id: 'c', name: 'search_knowledge', args: {} }] };
     const deps = makeDeps(Array(20).fill(loopResp));

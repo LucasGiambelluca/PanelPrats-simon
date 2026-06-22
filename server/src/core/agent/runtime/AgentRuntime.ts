@@ -40,9 +40,16 @@ export class AgentRuntime {
     };
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const res = await this.deps.ai.completeWithTools({
-        systemPrompt, messages, tools, apiKey: account?.apiKey, model: account?.model,
-      });
+      let res: { content?: string; toolCalls?: Array<{ id: string; name: string; args: any }> };
+      try {
+        res = await this.deps.ai.completeWithTools({
+          systemPrompt, messages, tools, apiKey: account?.apiKey, model: account?.model,
+        });
+      } catch {
+        // Todos los proveedores de IA fallaron (sin saldo, caídos, timeout):
+        // nunca colgar al cliente — respondemos con cortesía y derivamos.
+        return finish(FALLBACK);
+      }
 
       if (!res.toolCalls?.length) {
         const reply = res.content && res.content.trim() ? res.content.trim() : FALLBACK;
