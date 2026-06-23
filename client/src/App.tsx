@@ -21,6 +21,7 @@ const Connections = lazy(() => import('./pages/Connections'));
 const Agenda = lazy(() => import('./pages/Agenda'));
 const Sala = lazy(() => import('./pages/Sala'));
 const Team = lazy(() => import('./pages/Team'));
+const Offices = lazy(() => import('./pages/Offices'));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-brand-ivory">
@@ -66,6 +67,7 @@ function App() {
                 <Route path="/builder" element={<BotBuilder />} />
                 <Route path="/connections" element={<Connections />} />
                 <Route path="/team" element={<Team />} />
+                <Route path="/offices" element={<Offices />} />
               </Route>
             </Route>
           </Route>
