@@ -223,3 +223,47 @@ describe('AvailabilityService.freeSlots TZ del estudio', () => {
     expect(first).toBe('09:00');
   });
 });
+
+describe('AvailabilityService.pickProfessional', () => {
+  const start = '2026-06-22T16:00:00.000Z', end = '2026-06-22T17:00:00.000Z';
+  const OFI = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av. 1', dias: [1,2,3,4,5], hora_inicio: '09:00', hora_fin: '18:00', slot_min: 60, capacidad: 5, buffer_min: 0, activa: true, orden: 0 };
+
+  beforeEach(() => {
+    for (const k of Object.keys(db)) db[k].length = 0;
+    apptList.mockReset(); apptList.mockResolvedValue([]);
+    db.account_offices.push(OFI);
+    db.office_professionals.push({ office_id: 'o1', profile_id: 'p1', activa: true }, { office_id: 'o1', profile_id: 'p2', activa: true });
+    db.professional_availability.push(
+      { profile_id: 'p1', office_id: 'o1', dia: 1, hora_inicio: '09:00', hora_fin: '18:00' },
+      { profile_id: 'p2', office_id: 'o1', dia: 1, hora_inicio: '09:00', hora_fin: '18:00' },
+    );
+    db.profiles.push({ id: 'p1', name: 'Ana' }, { id: 'p2', name: 'Beto' });
+  });
+
+  it('elige el prof con menos turnos ese día', async () => {
+    // p1 ya tiene un turno ese día (en otro horario); p2 ninguno → elige p2
+    apptList.mockResolvedValue([{ oficina: 'CABA', status: 'pendiente', start_time: '2026-06-22T13:00:00.000Z', end_time: '2026-06-22T13:30:00.000Z', assigned_profile_id: 'p1' }]);
+    const svc = new AvailabilityService();
+    expect(await svc.pickProfessional(OFI as any, start, end)).toBe('p2');
+  });
+
+  it('empata → desempata por nombre ascendente (Ana < Beto)', async () => {
+    const svc = new AvailabilityService(); // ambos con 0 turnos
+    expect(await svc.pickProfessional(OFI as any, start, end)).toBe('p1');
+  });
+
+  it('devuelve null si no hay prof libre', async () => {
+    apptList.mockResolvedValue([
+      { oficina: 'CABA', status: 'pendiente', start_time: start, end_time: end, assigned_profile_id: 'p1' },
+      { oficina: 'CABA', status: 'pendiente', start_time: start, end_time: end, assigned_profile_id: 'p2' },
+    ]);
+    const svc = new AvailabilityService();
+    expect(await svc.pickProfessional(OFI as any, start, end)).toBeNull();
+  });
+
+  it('devuelve null si la oficina no tiene profes', async () => {
+    db.office_professionals.length = 0;
+    const svc = new AvailabilityService();
+    expect(await svc.pickProfessional(OFI as any, start, end)).toBeNull();
+  });
+});

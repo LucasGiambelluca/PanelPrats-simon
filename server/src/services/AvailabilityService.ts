@@ -183,4 +183,27 @@ export class AvailabilityService {
     const busy = new Set(appts.map((a: any) => a.assigned_profile_id).filter(Boolean));
     return notBlocked.filter((pid) => !busy.has(pid));
   }
+
+  /** Elige el profesional libre con menos turnos ese día (local). Desempate por nombre. */
+  async pickProfessional(office: Office, start: string, end: string): Promise<string | null> {
+    const cand = await this.availableProfessionals(office, start, end);
+    if (cand.length === 0) return null;
+
+    const targetDay = localParts(new Date(start)).dia;
+    const appts = (await AppointmentService.list(office.account_id)).filter((a: any) =>
+      a.status !== 'cancelada' && a.start_time && a.assigned_profile_id &&
+      localParts(new Date(a.start_time)).dia === targetDay);
+    const load = new Map<string, number>();
+    for (const pid of cand) load.set(pid, 0);
+    for (const a of appts as any[]) if (load.has(a.assigned_profile_id)) load.set(a.assigned_profile_id, load.get(a.assigned_profile_id)! + 1);
+
+    const { data } = await supabase.from('profiles').select('id, name');
+    const nameOf = new Map(((data ?? []) as any[]).map((p) => [p.id, p.name ?? '']));
+
+    return cand.slice().sort((a, b) => {
+      const d = (load.get(a) ?? 0) - (load.get(b) ?? 0);
+      if (d !== 0) return d;
+      return String(nameOf.get(a) ?? '').localeCompare(String(nameOf.get(b) ?? ''));
+    })[0];
+  }
 }
