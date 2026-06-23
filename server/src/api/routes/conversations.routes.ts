@@ -10,7 +10,10 @@ export function conversationsRouter(): Router {
     let q = supabase
       .from('whatsapp_conversations')
       .select('*')
-      .order('last_message_at', { ascending: false })
+      // Desempate estable por id: sin él, dos conversaciones con el mismo
+      // last_message_at se reordenan en cada poll (5s) y la lista "salta".
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })
       .limit(500);
     if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
     const { data, error } = await q;

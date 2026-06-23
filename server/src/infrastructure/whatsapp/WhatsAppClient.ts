@@ -55,6 +55,9 @@ export class WhatsAppClient {
     private sendMutex = new Mutex();
     private userSendHistory: Map<string, MessageHistory> = new Map();
     private lastMessages: Map<string, number> = new Map();
+    // lid (@lid de privacidad) → teléfono real. Se aprende de key.senderPn y resuelve
+    // los @lid posteriores sin senderPn, para no partir la conversación en dos.
+    private lidMap: Map<string, string> = new Map();
     private cleanupInterval: NodeJS.Timeout | null = null;
 
     constructor(
@@ -323,11 +326,11 @@ export class WhatsAppClient {
                 const remoteJid = msg.key.remoteJid || '';
                 // WhatsApp puede entregar el chat como @lid (privacidad). El número REAL
                 // viene en key.senderPn → lo usamos como identidad/teléfono para inbox,
-                // citas y llamadas. El reply sigue saliendo por remoteJid (línea de envío).
+                // citas y llamadas. Pero senderPn NO viene en todos los mensajes: cacheamos
+                // lid→phone (this.lidMap) para resolver los @lid posteriores sin él y no
+                // partir la conversación. El reply sigue saliendo por remoteJid (línea de envío).
                 const senderPn = (msg.key as any).senderPn as string | undefined;
-                const phone = PhoneUtils.normalize(
-                    remoteJid.includes('@lid') && senderPn ? senderPn : remoteJid
-                );
+                const phone = PhoneUtils.resolveIdentity(remoteJid, senderPn, this.lidMap);
                 const pushName = msg.pushName || 'Usuario';
 
                 let text = '';
@@ -394,7 +397,7 @@ export class WhatsAppClient {
                     console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
 
                     for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(remoteJid, response);
+                        await this.sendFormattedMessage(PhoneUtils.toJid(phone), response);
                     }
                 } catch (err) {
                     console.error(`[PID:${PID}] Processing Error:`, err);

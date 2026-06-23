@@ -4,7 +4,19 @@ export class PhoneUtils {
     if (phone.includes('@lid')) return phone.trim();
     let clean = phone.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@g.us', '').trim();
     if (clean.includes('@')) return clean;
-    return clean.replace(/[^0-9]/g, '');
+    clean = clean.replace(/[^0-9]/g, '');
+
+    // Unify Argentine numbers: remove mobile prefix '9'
+    // Format: 54 9 XXX XXX XXXX (13 digits) -> remove 9 to become 54 XXXXXXXXXX (12 digits)
+    if (clean.startsWith('549') && clean.length === 13) {
+      clean = '54' + clean.slice(3);
+    }
+    // Unify Mexican numbers: remove mobile prefix '1'
+    // Format: 52 1 XXX XXX XXXX (13 digits) -> remove 1 to become 52 XXXXXXXXXX (12 digits)
+    if (clean.startsWith('521') && clean.length === 13) {
+      clean = '52' + clean.slice(3);
+    }
+    return clean;
   }
 
   static toJid(phone: string): string {
@@ -16,5 +28,28 @@ export class PhoneUtils {
 
   static isLid(phone: string): boolean {
     return phone.includes('@lid');
+  }
+
+  /**
+   * Resuelve el teléfono REAL de un remitente entrante.
+   * WhatsApp a veces entrega el chat como `<id>@lid` (privacidad); el número real
+   * viene en `key.senderPn`, pero NO en todos los mensajes. Cacheamos lid→phone
+   * cuando senderPn aparece y resolvemos los `@lid` posteriores que llegan sin él.
+   * Sin esto, el mismo contacto se parte en dos conversaciones (una `@lid`, otra real).
+   */
+  static resolveIdentity(remoteJid: string, senderPn: string | undefined, lidMap: Map<string, string>): string {
+    if (remoteJid.includes('@lid')) {
+      const lidKey = remoteJid.split('@')[0];
+      if (senderPn) {
+        const pn = this.normalize(senderPn);
+        if (pn) lidMap.set(lidKey, pn);
+        return pn;
+      }
+      const cached = lidMap.get(lidKey);
+      if (cached) return cached;
+      // sin senderPn ni cache: fallback al lid (se unificará al ver senderPn o por merge).
+      return this.normalize(remoteJid);
+    }
+    return this.normalize(remoteJid);
   }
 }
