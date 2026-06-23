@@ -45,15 +45,21 @@ export class ToolRegistry {
           return { ok: true, data: { oficina: args.oficina, slots } };
         }
         case 'book_appointment': {
-          if (!(await this.deps.availability.hasCapacity(ctx.accountId, args.oficina, args.start_time, args.end_time))) {
+          const office = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
+          const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
+          let assigned: string | null = null;
+          if (hasProfs) {
+            assigned = await this.deps.availability.pickProfessional(office!, args.start_time, args.end_time);
+            if (!assigned) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
+          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, args.oficina, args.start_time, args.end_time))) {
             return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono: ctx.phone,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
+            assigned_profile_id: assigned,
           } as any);
-          const office = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
           return { ok: true, data: { appointment_id: appt.id, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
         }
         case 'reschedule_appointment': {
@@ -61,10 +67,16 @@ export class ToolRegistry {
           if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
             return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
           }
-          if (!(await this.deps.availability.hasCapacity(ctx.accountId, appt.oficina ?? '', args.start_time, args.end_time))) {
+          const office = await this.deps.availability.getOffice(ctx.accountId, appt.oficina ?? '');
+          const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
+          let assigned: string | null = null;
+          if (hasProfs) {
+            assigned = await this.deps.availability.pickProfessional(office!, args.start_time, args.end_time);
+            if (!assigned) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
+          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, appt.oficina ?? '', args.start_time, args.end_time))) {
             return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
-          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time });
+          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, assigned_profile_id: assigned });
           return { ok: true };
         }
         case 'cancel_appointment': {

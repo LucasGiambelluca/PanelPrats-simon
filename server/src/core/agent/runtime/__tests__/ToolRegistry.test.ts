@@ -10,6 +10,8 @@ const avListOffices = vi.fn();
 const avGetOffice = vi.fn();
 const avFreeSlots = vi.fn();
 const avHasCapacity = vi.fn();
+const avOfficeHasProfessionals = vi.fn();
+const avPickProfessional = vi.fn();
 
 import { ToolRegistry } from '../ToolRegistry';
 
@@ -17,7 +19,7 @@ function makeRegistry() {
   return new ToolRegistry({
     appointments: { create: apptCreate, update: apptUpdate, getById: apptGetById, list: vi.fn().mockResolvedValue([]), hasOverlap: vi.fn() } as any,
     knowledge: { search: kbSearch } as any,
-    availability: { listOffices: avListOffices, getOffice: avGetOffice, freeSlots: avFreeSlots, hasCapacity: avHasCapacity } as any,
+    availability: { listOffices: avListOffices, getOffice: avGetOffice, freeSlots: avFreeSlots, hasCapacity: avHasCapacity, officeHasProfessionals: avOfficeHasProfessionals, pickProfessional: avPickProfessional } as any,
     handoff,
   });
 }
@@ -25,6 +27,9 @@ function makeRegistry() {
 describe('ToolRegistry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Defaults: oficina sin profesionales => se conserva el chequeo de cupo fijo (hasCapacity).
+    avOfficeHasProfessionals.mockResolvedValue(false);
+    avGetOffice.mockResolvedValue({ nombre: 'CABA', modalidad: 'presencial', direccion: null });
   });
 
   it('expone los esquemas de las tools', () => {
@@ -124,5 +129,59 @@ describe('ToolRegistry', () => {
     expect(res.ok).toBe(true);
     expect(res.data).toMatchObject({ appointment_id: 'appt1', direccion: 'Av. 1' });
     expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: 'acc1', phone: '549111', oficina: 'CABA' }));
+  });
+});
+
+describe('ToolRegistry book_appointment auto-asigna profesional', () => {
+  const ctx = { accountId: 'acc1', phone: '549111' } as any;
+  const office = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1', video_link: null };
+
+  it('oficina con profes: asigna el prof elegido', async () => {
+    const created: any[] = [];
+    const deps: any = {
+      appointments: { create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); } },
+      availability: {
+        getOffice: () => Promise.resolve(office),
+        officeHasProfessionals: () => Promise.resolve(true),
+        pickProfessional: () => Promise.resolve('p2'),
+      },
+      knowledge: {}, handoff: () => Promise.resolve(),
+    };
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment', { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0].assigned_profile_id).toBe('p2');
+  });
+
+  it('oficina con profes sin cupo: error', async () => {
+    const deps: any = {
+      appointments: { create: () => Promise.reject(new Error('no deberia')) },
+      availability: {
+        getOffice: () => Promise.resolve(office),
+        officeHasProfessionals: () => Promise.resolve(true),
+        pickProfessional: () => Promise.resolve(null),
+      },
+      knowledge: {}, handoff: () => Promise.resolve(),
+    };
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment', { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(false);
+  });
+
+  it('oficina sin profes: usa hasCapacity y assigned null', async () => {
+    const created: any[] = [];
+    const deps: any = {
+      appointments: { create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); } },
+      availability: {
+        getOffice: () => Promise.resolve(office),
+        officeHasProfessionals: () => Promise.resolve(false),
+        hasCapacity: () => Promise.resolve(true),
+      },
+      knowledge: {}, handoff: () => Promise.resolve(),
+    };
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment', { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0].assigned_profile_id ?? null).toBeNull();
   });
 });
