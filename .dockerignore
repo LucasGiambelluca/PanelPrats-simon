@@ -1,0 +1,44 @@
+# No mandar al build context: secretos, deps, builds, sesiones, basura local.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+auth/
+**/auth/
+.git
+.gitignore
+.github
+.vscode
+.claude
+*.log
+**/*.log
+
+# secretos / credenciales
+vps.md
+claves.txt
+brand_info.txt
+*.key
+*.pem
+*.ase
+*.pdf
+*.creds
+secrets.*
+
+# scratch / notas / artefactos locales
+ESTADO-APP.md
+chat.md
+sala.md
+Skill.md
+AUDITORIA.md
+artifacts/
+import_clean/
+supabase/seeds/
+tmp_*.ts
+**/tmp_*.ts
+_merge-lid-backup-*.json
+**/_merge-lid-backup-*.json
+**/*-backup-*.json
+Dockerfile
+.dockerignore
+docker-compose.yml

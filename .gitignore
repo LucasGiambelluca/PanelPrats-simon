@@ -17,6 +17,23 @@ claves.txt
 *.pem
 .env.*
 !.env.example
+vps.md
+*.creds
+secrets.*
+
+# scratch / notas locales / artefactos (no versionar)
+_merge-lid-backup-*.json
+*-backup-*.json
+ESTADO-APP.md
+chat.md
+sala.md
+Skill.md
+artifacts/
+import_clean/
+tmp_*.ts
+server/tmp_*.ts
+.vscode/
+.claude/
 
 # assets de marca / archivos pesados locales
 brand_info.txt

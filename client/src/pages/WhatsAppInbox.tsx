@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw,
-  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft
+  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft,
+  Check
 } from 'lucide-react';
 import { useAccounts } from '../context/AccountContext';
 import { conversationsApi, messagesApi } from '../lib/api';
@@ -65,7 +66,20 @@ export default function WhatsAppInbox() {
   const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
   const [loadError, setLoadError] = useState(false); // error en la carga de conversaciones
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [draft, adjustHeight]);
   const pollConvoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -134,16 +148,12 @@ export default function WhatsAppInbox() {
 
   const selectConversation = (c: WhatsAppConversation) => {
     setActiveConvo(c);
-    setTimeout(() => inputRef.current?.focus(), 100);
+    setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
   const send = async () => {
     const acctId = activeConvo?.account_id || activeAccountId;
     if (!activeConvo || !draft.trim() || !acctId || sending) return;
-    if (activeConvo.phone.includes('@lid')) {
-      toast.error('Este contacto no tiene un número de WhatsApp utilizable (privacidad). No se puede responder por acá.');
-      return;
-    }
     const text = draft;
     setSending(true);
     setDraft('');
@@ -175,7 +185,7 @@ export default function WhatsAppInbox() {
       setDraft(text);
     }
     setSending(false);
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
   };
 
   const toggleHandover = async () => {
@@ -411,7 +421,14 @@ export default function WhatsAppInbox() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div 
+              className="flex-1 overflow-y-auto px-6 py-4 relative"
+              style={{ 
+                backgroundColor: '#f4f3ef',
+                backgroundImage: 'radial-gradient(rgba(204, 163, 120, 0.18) 0.8px, #f4f3ef 0.8px)', 
+                backgroundSize: '20px 20px' 
+              }}
+            >
               {loadingMsgs && messages.length === 0 && (
                 <div className="flex justify-center py-8">
                   <RefreshCw size={20} className="text-brand-inkmuted animate-spin" />
@@ -422,39 +439,36 @@ export default function WhatsAppInbox() {
                 <div key={group.date}>
                   {/* Date separator */}
                   <div className="flex items-center justify-center my-4">
-                    <span className="bg-black/[0.03] text-brand-inkmuted text-[10px] font-semibold px-3 py-1 rounded-full border border-brand-hairline">
+                    <span className="bg-white/80 backdrop-blur-sm text-brand-inkmuted text-[10px] font-semibold px-3 py-1 rounded-full border border-brand-hairline shadow-sm">
                       {formatDate(group.date)}
                     </span>
                   </div>
 
                   {/* Messages */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {group.messages.map((m) => (
                       <div
                         key={m.id}
-                        className={`flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
+                        className={`flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'} animate-fade-in`}
                       >
                         <div
-                          className={`max-w-[65%] px-4 py-2.5 text-sm relative group ${
+                          className={`max-w-[65%] px-4 py-2.5 text-sm relative group shadow-sm transition-all duration-150 hover:shadow-md ${
                             m.direction === 'OUTBOUND'
-                              ? 'bg-gradient-to-r from-brand-primary to-brand-accent text-white rounded-2xl rounded-br-md shadow-md shadow-brand-primary/10'
-                              : 'bg-brand-panel border border-brand-hairline text-brand-ink rounded-2xl rounded-bl-md'
+                              ? 'bg-gradient-to-r from-brand-primary to-brand-secondary text-white rounded-2xl rounded-tr-sm'
+                              : 'bg-white border border-brand-hairline text-brand-ink rounded-2xl rounded-tl-sm'
                           }`}
                         >
                           <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
-                          <div className={`flex items-center gap-1 mt-1 ${m.direction === 'OUTBOUND' ? 'justify-end' : ''}`}>
-                            {m.direction === 'OUTBOUND' && m.id.startsWith('opt-') ? (
-                              <>
-                                <RefreshCw size={9} className="text-white/70 animate-spin" />
-                                <span className="text-[9px] text-white/70">enviando…</span>
-                              </>
-                            ) : (
-                              <>
-                                <Clock size={9} className={m.direction === 'OUTBOUND' ? 'text-white/70' : 'text-brand-inkmuted'} />
-                                <span className={`text-[9px] ${m.direction === 'OUTBOUND' ? 'text-white/70' : 'text-brand-inkmuted'}`}>
-                                  {formatTime(m.timestamp)}
-                                </span>
-                              </>
+                          <div className={`flex items-center justify-end gap-1.5 mt-1 text-[9px] ${
+                            m.direction === 'OUTBOUND' ? 'text-white/60' : 'text-brand-inkmuted'
+                          }`}>
+                            <span>{formatTime(m.timestamp)}</span>
+                            {m.direction === 'OUTBOUND' && (
+                              m.id.startsWith('opt-') ? (
+                                <RefreshCw size={9} className="animate-spin text-white/50" />
+                              ) : (
+                                <Check size={13} className="text-white/40" />
+                              )
                             )}
                           </div>
                         </div>
@@ -476,9 +490,10 @@ export default function WhatsAppInbox() {
               )}
               <div className="flex items-end gap-2">
                 <div className="flex-1 relative">
-                  <input
-                    ref={inputRef}
-                    className="w-full bg-white border border-brand-hairline rounded-2xl pl-4 pr-12 py-3.5 text-brand-ink text-sm placeholder-brand-inkmuted focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary/30 transition-all"
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    className="w-full bg-white border border-brand-hairline rounded-2xl px-4 py-3 text-brand-ink text-sm placeholder-brand-inkmuted focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary/30 transition-all resize-none min-h-[46px] max-h-[120px] overflow-y-auto align-bottom"
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}

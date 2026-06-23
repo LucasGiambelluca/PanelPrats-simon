@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import fs from 'fs';
 import type { AccountManager } from '../core/accounts/AccountManager';
 import { accountsRouter } from './routes/accounts.routes';
 import { flowsRouter } from './routes/flows.routes';
@@ -26,8 +28,11 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   // Detrás de un reverse proxy (Render/Nginx) confiamos en el primer X-Forwarded-For
   // para que el rate limiting use la IP real del cliente, no la del proxy.
   app.set('trust proxy', 1);
-  // Cabeceras de seguridad (CSP, HSTS, X-Frame-Options, etc.).
-  app.use(helmet());
+  // Cabeceras de seguridad (HSTS, X-Frame-Options, noSniff, etc.).
+  // CSP desactivada: el SPA (Vite + Supabase + Jitsi) necesita connect/style externos;
+  // una CSP estricta lo rompería. DEUDA: afinar CSP por origen antes de exponer a internet
+  // amplio (allow 'self' + SUPABASE_URL + wss realtime + jitsi). Resto de headers activos.
+  app.use(helmet({ contentSecurityPolicy: false }));
   // CORS: en producción exigir CORS_ORIGIN explícito (no permitir '*'). Si falta,
   // se bloquea el cross-origin (el panel servido en el mismo dominio sigue andando).
   const corsOrigin = process.env.CORS_ORIGIN
@@ -75,6 +80,20 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/offices', authContext, requireRole('admin'), officeProfessionalsRouter());
   app.use('/api/professionals', authContext, requireRole('admin'), professionalsRouter());
   app.use('/api/agenda', authContext, agendaRouter());
+
+  // --- Cliente (SPA) servido por el mismo server en producción ---
+  // El build de Vite se copia a CLIENT_DIST (en el contenedor: /app/public).
+  // Mismo origen → sin problemas de CORS para el panel. Si no existe el dir
+  // (modo dev con vite aparte), no monta nada.
+  const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, '../../public');
+  if (fs.existsSync(clientDist)) {
+    app.use(express.static(clientDist));
+    // Fallback SPA: toda ruta que NO sea /api ni /health devuelve index.html
+    // (React Router resuelve en el cliente). Regex evita capturar la API.
+    app.get(/^(?!\/api|\/health).*/, (_req, res) => {
+      res.sendFile(path.join(clientDist, 'index.html'));
+    });
+  }
 
   return app;
 }
