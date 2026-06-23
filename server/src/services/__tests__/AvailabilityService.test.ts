@@ -157,3 +157,40 @@ describe('AvailabilityService.availableProfessionals', () => {
     expect(await svc.availableProfessionals(OFI as any, start, end)).toEqual([]);
   });
 });
+
+describe('AvailabilityService.hasCapacity con profesionales', () => {
+  const start = '2026-06-22T16:00:00.000Z', end = '2026-06-22T17:00:00.000Z';
+  const OFI = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av. 1', dias: [1,2,3,4,5], hora_inicio: '09:00', hora_fin: '18:00', slot_min: 60, capacidad: 5, buffer_min: 0, activa: true, orden: 0 };
+
+  beforeEach(() => {
+    for (const k of Object.keys(db)) db[k].length = 0;
+    apptList.mockReset(); apptList.mockResolvedValue([]);
+    db.account_offices.push(OFI);
+    db.office_professionals.push({ office_id: 'o1', profile_id: 'p1', activa: true });
+    db.professional_availability.push({ profile_id: 'p1', office_id: 'o1', dia: 1, hora_inicio: '09:00', hora_fin: '18:00' });
+  });
+
+  it('hay cupo si queda al menos un prof libre', async () => {
+    const svc = new AvailabilityService();
+    expect(await svc.hasCapacity('acc1', 'CABA', start, end)).toBe(true);
+  });
+
+  it('no hay cupo si el único prof ya está asignado', async () => {
+    apptList.mockResolvedValue([{ oficina: 'CABA', status: 'pendiente', start_time: start, end_time: end, assigned_profile_id: 'p1' }]);
+    const svc = new AvailabilityService();
+    expect(await svc.hasCapacity('acc1', 'CABA', start, end)).toBe(false);
+  });
+
+  it('una cita legacy (sin prof) consume cupo genérico', async () => {
+    apptList.mockResolvedValue([{ oficina: 'CABA', status: 'pendiente', start_time: start, end_time: end, assigned_profile_id: null }]);
+    const svc = new AvailabilityService(); // 1 prof disponible - 1 legacy = 0 → lleno
+    expect(await svc.hasCapacity('acc1', 'CABA', start, end)).toBe(false);
+  });
+
+  it('oficina SIN profes usa capacidad fija (fallback)', async () => {
+    db.office_professionals.length = 0; db.professional_availability.length = 0;
+    apptList.mockResolvedValue([{ oficina: 'CABA', status: 'pendiente', start_time: start, end_time: end, assigned_profile_id: null }]); // 1 < capacidad 5
+    const svc = new AvailabilityService();
+    expect(await svc.hasCapacity('acc1', 'CABA', start, end)).toBe(true);
+  });
+});

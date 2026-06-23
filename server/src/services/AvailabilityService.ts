@@ -49,11 +49,32 @@ export class AvailabilityService {
     ).length;
   }
 
+  /** Cuenta citas solapantes de la oficina con assigned_profile_id null (legacy). */
+  private async countLegacyOverlap(accountId: string, nombre: string, start: string, end: string): Promise<number> {
+    const reqS = new Date(start).getTime(), reqE = new Date(end).getTime();
+    const appts = await AppointmentService.list(accountId);
+    return appts.filter((a: any) =>
+      a.status !== 'cancelada' && a.start_time && a.end_time &&
+      !a.assigned_profile_id &&
+      norm(a.oficina || '') === norm(nombre) &&
+      overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), reqS, reqE),
+    ).length;
+  }
+
   async hasCapacity(accountId: string, nombre: string, start: string, end: string): Promise<boolean> {
     const office = await this.getOffice(accountId, nombre);
-    const cap = office?.capacidad ?? 1; // no configurada → 1 (comportamiento viejo)
-    const ocupadas = await this.countOverlap(accountId, nombre, start, end);
-    return ocupadas < cap;
+    if (!office) {
+      // Oficina no configurada → capacidad 1 (comportamiento viejo).
+      return (await this.countOverlap(accountId, nombre, start, end)) < 1;
+    }
+    const profIds = await this.officeProfIds(office.id);
+    if (profIds.length === 0) {
+      const cap = office.capacidad ?? 1;
+      return (await this.countOverlap(accountId, nombre, start, end)) < cap;
+    }
+    const disponibles = (await this.availableProfessionals(office, start, end)).length;
+    const legacy = await this.countLegacyOverlap(accountId, nombre, start, end);
+    return disponibles - legacy > 0;
   }
 
   async freeSlots(accountId: string, nombre: string, opts: { desde?: string; hasta?: string; max?: number; now?: Date } = {}): Promise<Slot[]> {
@@ -67,23 +88,20 @@ export class AvailabilityService {
     const [eh, em] = office.hora_fin.split(':').map(Number);
     const slotMs = office.slot_min * 60000;
 
-    const appts = (await AppointmentService.list(accountId)).filter((a: any) =>
-      a.status !== 'cancelada' && a.start_time && a.end_time && norm(a.oficina || '') === norm(office.nombre));
-    const countAt = (s: number, e: number) => appts.filter((a: any) =>
-      overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), s, e)).length;
-
     const out: Slot[] = [];
     for (let dayOffset = 0; dayOffset < 14 && out.length < max; dayOffset++) {
       const day = new Date(now.getTime() + dayOffset * 86400000);
-      if (!office.dias.includes(day.getDay())) continue;
+      const { dia } = localParts(day);
+      if (!office.dias.includes(dia)) continue;
       const workStart = new Date(day); workStart.setHours(sh || 9, sm || 0, 0, 0);
       const workEnd = new Date(day); workEnd.setHours(eh || 18, em || 0, 0, 0);
 
       for (let t = new Date(workStart); t.getTime() + slotMs <= workEnd.getTime() && out.length < max; t = new Date(t.getTime() + slotMs)) {
         const s = t.getTime(), e = s + slotMs;
         if (s < minStart.getTime()) continue;
-        if (countAt(s, e) >= office.capacidad) continue;
-        out.push({ start: new Date(s).toISOString(), end: new Date(e).toISOString() });
+        const startIso = new Date(s).toISOString(), endIso = new Date(e).toISOString();
+        if (!(await this.hasCapacity(accountId, office.nombre, startIso, endIso))) continue;
+        out.push({ start: startIso, end: endIso });
       }
     }
     return out;
