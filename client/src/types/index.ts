@@ -65,3 +65,48 @@ export interface Profile {
   email?: string | null;
   created_at?: string;
 }
+
+export interface Office {
+  id: string;
+  account_id: string;
+  nombre: string;
+  modalidad: 'presencial' | 'video';
+  direccion: string | null;
+  video_link: string | null;
+  dias: number[];
+  hora_inicio: string;
+  hora_fin: string;
+  slot_min: number;
+  capacidad: number;
+  buffer_min: number;
+  activa: boolean;
+  orden: number;
+}
+
+export interface OfficeProfessional {
+  profile_id: string;
+  name: string | null;
+  role: Role | null;
+  activa: boolean;
+}
+
+export interface AvailabilityWindow {
+  id?: string;
+  dia: number;          // 0-6
+  hora_inicio: string;  // HH:MM
+  hora_fin: string;     // HH:MM
+}
+
+export interface ProfessionalBlock {
+  id: string;
+  office_id: string | null;
+  start_time: string;   // ISO
+  end_time: string;     // ISO
+  motivo: string | null;
+}
+
+export interface ProfessionalLite {
+  id: string;
+  name: string | null;
+  role: Role;
+}

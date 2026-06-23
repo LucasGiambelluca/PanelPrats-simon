@@ -256,5 +256,41 @@ export const teamApi = {
     api<{ ok: boolean }>(`/api/team/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
 };
 
+// ── Oficinas & Profesionales (Agenda) ───────────────────────
+import type { Office, OfficeProfessional, AvailabilityWindow, ProfessionalBlock, ProfessionalLite } from '../types';
+
+export const officesApi = {
+  list: (accountId: string) =>
+    api<Office[]>(`/api/offices?account_id=${encodeURIComponent(accountId)}`),
+  create: (body: Partial<Office> & { account_id: string; nombre: string; modalidad: string; hora_inicio: string; hora_fin: string }) =>
+    api<Office>('/api/offices', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, updates: Partial<Office>) =>
+    api<Office>(`/api/offices/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  remove: (id: string) =>
+    api<{ ok: boolean }>(`/api/offices/${id}`, { method: 'DELETE' }),
+
+  professionals: (officeId: string) =>
+    api<OfficeProfessional[]>(`/api/offices/${officeId}/professionals`),
+  assign: (officeId: string, profileId: string) =>
+    api<OfficeProfessional>(`/api/offices/${officeId}/professionals`, { method: 'POST', body: JSON.stringify({ profile_id: profileId }) }),
+  unassign: (officeId: string, profileId: string) =>
+    api<{ ok: boolean }>(`/api/offices/${officeId}/professionals/${profileId}`, { method: 'DELETE' }),
+};
+
+export const professionalsApi = {
+  list: () => api<ProfessionalLite[]>('/api/professionals'),
+  getAvailability: (profileId: string, officeId: string) =>
+    api<AvailabilityWindow[]>(`/api/professionals/${profileId}/availability?office_id=${encodeURIComponent(officeId)}`),
+  setAvailability: (profileId: string, officeId: string, ventanas: AvailabilityWindow[]) =>
+    api<AvailabilityWindow[]>(`/api/professionals/${profileId}/availability?office_id=${encodeURIComponent(officeId)}`,
+      { method: 'PUT', body: JSON.stringify({ ventanas: ventanas.map(({ dia, hora_inicio, hora_fin }) => ({ dia, hora_inicio, hora_fin })) }) }),
+  getBlocks: (profileId: string) =>
+    api<ProfessionalBlock[]>(`/api/professionals/${profileId}/blocks`),
+  addBlock: (profileId: string, body: { office_id?: string | null; start_time: string; end_time: string; motivo?: string | null }) =>
+    api<ProfessionalBlock>(`/api/professionals/${profileId}/blocks`, { method: 'POST', body: JSON.stringify(body) }),
+  removeBlock: (profileId: string, blockId: string) =>
+    api<{ ok: boolean }>(`/api/professionals/${profileId}/blocks/${blockId}`, { method: 'DELETE' }),
+};
+
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
 export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
