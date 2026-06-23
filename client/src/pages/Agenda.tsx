@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAccounts } from '../context/AccountContext';
-import { appointmentsApi, Appointment } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { appointmentsApi, professionalsApi, agendaApi, Appointment } from '../lib/api';
+import type { ProfessionalLite } from '../types';
 import CallReminderModal from '../components/CallReminderModal';
 import CallActions from '../components/CallActions';
 import { toast } from 'sonner';
@@ -36,7 +38,10 @@ const HOUR_HEIGHT = 68; // height in pixels of an hour row
 
 export default function Agenda() {
   const { activeAccountId, accounts } = useAccounts();
+  const { user, role } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
+  const [profFilter, setProfFilter] = useState<string>(''); // '' = todos
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -124,6 +129,15 @@ export default function Agenda() {
     return () => clearInterval(interval);
   }, [activeAccountId]);
 
+  // Load professionals (admin) o bloquear a la agenda propia (empleada)
+  useEffect(() => {
+    if (role === 'admin') {
+      professionalsApi.list().then(setProfessionals).catch(() => {});
+    } else if (user) {
+      setProfFilter(user.id); // empleada: agenda propia
+    }
+  }, [role, user]);
+
   // Synchronize mini calendar selected month when main calendar date changes
   useEffect(() => {
     setMiniDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
@@ -152,6 +166,17 @@ export default function Agenda() {
       loadAppointments(true);
     } catch (err: any) {
       toast.error('Error al eliminar cita: ' + err.message);
+    }
+  };
+
+  const handleAssign = async (appointmentId: string, profileId: string | null) => {
+    try {
+      await agendaApi.assign(appointmentId, profileId);
+      toast.success(profileId ? 'Profesional asignado' : 'Cita sin asignar');
+      loadAppointments(true);
+      setSelectedApp((prev) => prev ? { ...prev, assigned_profile_id: profileId } : prev);
+    } catch (err: any) {
+      toast.error('No se pudo reasignar: ' + err.message);
     }
   };
 
@@ -188,7 +213,8 @@ export default function Agenda() {
     if (app.status === 'no_asistio' && filterNoShow) matchesStatusFilter = true;
     if (app.status === 'cerrado' && filterClosed) matchesStatusFilter = true;
 
-    return matchesSearch && matchesStatusFilter;
+    const matchesProf = !profFilter || app.assigned_profile_id === profFilter;
+    return matchesSearch && matchesStatusFilter && matchesProf;
   });
 
   // Calculate Month Days (Sunday first for Google Calendar)
@@ -838,6 +864,21 @@ export default function Agenda() {
               {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
             </button>
 
+            {/* Professional filter (admin only) */}
+            {role === 'admin' && (
+              <select
+                value={profFilter}
+                onChange={(e) => setProfFilter(e.target.value)}
+                className={`border rounded-xl px-3 py-1.5 text-xs font-bold ${theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-white/5 border-white/10 text-brand-textLight'}`}
+                title="Filtrar por profesional"
+              >
+                <option value="">Todos los profesionales</option>
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
+
             {/* View Switcher Tabs */}
             <div className={`border rounded-xl p-1 flex gap-0.5 ${
               theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'
@@ -1193,6 +1234,11 @@ export default function Agenda() {
                               <Phone size={12} className={theme === 'light' ? 'text-brand-primary' : 'text-brand-secondary/70'} />
                               <span>{app.phone}</span>
                             </div>
+                            {app.assigned_profile_id && (
+                              <div className={`text-[10px] mt-1 ${theme === 'light' ? 'text-brand-primary' : 'text-brand-secondary'}`}>
+                                {professionals.find((p) => p.id === app.assigned_profile_id)?.name || 'Asignada'}
+                              </div>
+                            )}
                           </div>
 
                           <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider ${
@@ -1522,6 +1568,26 @@ export default function Agenda() {
                   placeholder="Detalles sobre la consulta del cliente..."
                 />
               </div>
+
+              {/* Profesional asignado (reasignar — solo admin, citas existentes) */}
+              {selectedApp && role === 'admin' && (
+                <div className="space-y-1">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'}`}>
+                    <User size={10} />
+                    <span>Profesional asignado</span>
+                  </label>
+                  <select
+                    value={selectedApp.assigned_profile_id ?? ''}
+                    onChange={(e) => handleAssign(selectedApp.id, e.target.value || null)}
+                    className={`w-full border rounded-xl px-3 py-2 text-xs ${theme === 'light' ? 'bg-brand-ivory border-brand-hairline text-brand-ink' : 'bg-brand-dark/60 border-white/10 text-white'}`}
+                  >
+                    <option value="">Sin asignar</option>
+                    {professionals.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Llamar / Videollamar (solo en citas existentes) */}
               {selectedApp && (
