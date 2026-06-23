@@ -5,6 +5,17 @@
 # ---- 1. Build del cliente (Vite -> client/dist) ----
 FROM node:20-bookworm-slim AS client
 WORKDIR /app/client
+# Vite hornea las VITE_* en build-time. Sin ellas el front entra en DEV MODE
+# (login mock, sin Supabase). EasyPanel debe pasarlas como build args:
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (anon, no service), VITE_API_URL
+#   VITE_API_URL = dominio público del panel (mismo origen) -> URL correcta del
+#   webhook de Meta en la UI y llamadas absolutas al API.
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_API_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_API_URL=$VITE_API_URL
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
