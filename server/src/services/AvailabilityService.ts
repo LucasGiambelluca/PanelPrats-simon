@@ -26,6 +26,30 @@ function localParts(d: Date): { dia: number; hhmm: string } {
   return { dia: WD[wd], hhmm: `${hh}:${mm}` };
 }
 
+// Minutos que el huso del estudio está adelantado respecto de UTC en ese instante
+// (negativo para Argentina, -180). Robusto ante cambios de offset.
+function studioOffsetMinutes(d: Date): number {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(d);
+  const get = (t: string) => Number(p.find((x) => x.type === t)!.value);
+  let hh = get('hour'); if (hh === 24) hh = 0;
+  const asUTC = Date.UTC(get('year'), get('month') - 1, get('day'), hh, get('minute'));
+  return Math.round((asUTC - d.getTime()) / 60000);
+}
+
+// Instante UTC para la fecha-calendario local del estudio de `day`, a las HH:MM locales.
+function studioDateAt(day: Date, hh: number, mm: number): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(day); // 'YYYY-MM-DD'
+  const [y, m, d] = ymd.split('-').map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const offMin = studioOffsetMinutes(probe);
+  return new Date(Date.UTC(y, m - 1, d, hh, mm) - offMin * 60000);
+}
+
 export class AvailabilityService {
   async listOffices(accountId: string): Promise<Office[]> {
     const { data } = await supabase.from('account_offices')
@@ -93,8 +117,8 @@ export class AvailabilityService {
       const day = new Date(now.getTime() + dayOffset * 86400000);
       const { dia } = localParts(day);
       if (!office.dias.includes(dia)) continue;
-      const workStart = new Date(day); workStart.setHours(sh || 9, sm || 0, 0, 0);
-      const workEnd = new Date(day); workEnd.setHours(eh || 18, em || 0, 0, 0);
+      const workStart = studioDateAt(day, sh || 9, sm || 0);
+      const workEnd = studioDateAt(day, eh || 18, em || 0);
 
       for (let t = new Date(workStart); t.getTime() + slotMs <= workEnd.getTime() && out.length < max; t = new Date(t.getTime() + slotMs)) {
         const s = t.getTime(), e = s + slotMs;

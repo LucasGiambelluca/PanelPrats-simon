@@ -194,3 +194,32 @@ describe('AvailabilityService.hasCapacity con profesionales', () => {
     expect(await svc.hasCapacity('acc1', 'CABA', start, end)).toBe(true);
   });
 });
+
+describe('AvailabilityService.freeSlots TZ del estudio', () => {
+  const OFI = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av. 1', dias: [1,2,3,4,5], hora_inicio: '09:00', hora_fin: '18:00', slot_min: 60, capacidad: 5, buffer_min: 0, activa: true, orden: 0 };
+  beforeEach(() => {
+    for (const k of Object.keys(db)) db[k].length = 0;
+    apptList.mockReset(); apptList.mockResolvedValue([]);
+    db.account_offices.push(OFI);
+    // prof disponible todos los días hábiles 09:00-18:00
+    for (const dia of [1,2,3,4,5]) db.professional_availability.push({ profile_id: 'p1', office_id: 'o1', dia, hora_inicio: '09:00', hora_fin: '18:00' });
+    db.office_professionals.push({ office_id: 'o1', profile_id: 'p1', activa: true });
+  });
+
+  it('los slots empiezan en horas locales del estudio (09:00 ART), no en hora del server', async () => {
+    // now = un lunes 06:00 UTC (= 03:00 ART, antes de abrir)
+    const now = new Date('2026-06-22T06:00:00.000Z');
+    const svc = new AvailabilityService();
+    const slots = await svc.freeSlots('acc1', 'CABA', { now, max: 3 });
+    expect(slots.length).toBeGreaterThan(0);
+    // el primer slot debe caer dentro de 09:00-18:00 hora del estudio
+    for (const s of slots) {
+      // reconstruct studio-local HH:MM of each slot start via Intl (host-tz independent)
+      const local = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false, hour: '2-digit', minute: '2-digit' }).format(new Date(s.start));
+      expect(local >= '09:00' && local < '18:00').toBe(true);
+    }
+    // primer slot exactamente 09:00 ART
+    const first = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false, hour: '2-digit', minute: '2-digit' }).format(new Date(slots[0].start));
+    expect(first).toBe('09:00');
+  });
+});
