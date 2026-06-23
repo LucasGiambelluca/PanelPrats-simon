@@ -396,8 +396,13 @@ export class WhatsAppClient {
                     const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
                     console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
 
+                    // El reply sale por el remoteJid ORIGINAL: preserva el JID exacto que
+                    // entregó WhatsApp (incl. el '9' de los móviles AR). Reconstruir el JID
+                    // desde `phone` normalizado (sin 9) genera una dirección inexistente y el
+                    // mensaje no se entrega. Solo si vino como @lid usamos el teléfono resuelto.
+                    const replyJid = remoteJid.includes('@lid') ? PhoneUtils.toJid(phone) : remoteJid;
                     for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(PhoneUtils.toJid(phone), response);
+                        await this.sendFormattedMessage(replyJid, response);
                     }
                 } catch (err) {
                     console.error(`[PID:${PID}] Processing Error:`, err);
