@@ -38,6 +38,7 @@ const CHECKS = {
   '0018_office_professionals': { office_professionals: ['office_id', 'profile_id', 'activa'] },
   '0019_professional_availability': { professional_availability: ['id', 'profile_id', 'office_id', 'dia', 'hora_inicio', 'hora_fin'] },
   '0020_professional_blocks': { professional_blocks: ['id', 'profile_id', 'office_id', 'start_time', 'end_time'] },
+  '0021_appointment_assigned_professional': { appointments: ['assigned_profile_id'] },
 };
 
 // No verificables por REST (necesitan acceso SQL directo):
@@ -45,6 +46,7 @@ const NO_REST = {
   '0014_webhook_idempotency': 'unique index uq_wamsg_wa_message_id (whatsapp_messages.wa_message_id)',
   '0017_office_capacity': 'function check_office_capacity + trigger trg_office_capacity',
   '0012_appointment_no_overlap': 'constraint appointments_no_overlap (REEMPLAZADO por 0017)',
+  '0021_appointment_assigned_professional': 'function check_office_capacity (reescrita: no-overlap por profesional + fallback fija) + trigger trg_office_capacity',
 };
 
 async function probe(table, column) {
