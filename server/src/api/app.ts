@@ -17,6 +17,7 @@ import { teamRouter } from './routes/team.routes';
 import { officesRouter } from './routes/offices.routes';
 import { officeProfessionalsRouter } from './routes/office-professionals.routes';
 import { professionalsRouter } from './routes/professionals.routes';
+import { agendaRouter } from './routes/agenda.routes';
 import { authContext, requireRole } from './middleware/auth';
 import type { WebhookQueue } from '../services/WebhookQueue';
 
@@ -73,6 +74,7 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/offices', authContext, requireRole('admin'), officesRouter());
   app.use('/api/offices', authContext, requireRole('admin'), officeProfessionalsRouter());
   app.use('/api/professionals', authContext, requireRole('admin'), professionalsRouter());
+  app.use('/api/agenda', authContext, agendaRouter());
 
   return app;
 }
