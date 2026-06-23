@@ -12,6 +12,20 @@ export interface Slot { start: string; end: string; }
 const norm = (s: string) => (s || '').trim().toLowerCase();
 const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) => aStart < bEnd && aEnd > bStart;
 
+const TZ = 'America/Argentina/Buenos_Aires';
+const WD: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+// Interpreta una fecha en hora local del estudio → { dia: 0-6, hhmm: 'HH:MM' }.
+function localParts(d: Date): { dia: number; hhmm: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const wd = parts.find((p) => p.type === 'weekday')!.value;
+  let hh = parts.find((p) => p.type === 'hour')!.value;
+  const mm = parts.find((p) => p.type === 'minute')!.value;
+  if (hh === '24') hh = '00';
+  return { dia: WD[wd], hhmm: `${hh}:${mm}` };
+}
+
 export class AvailabilityService {
   async listOffices(accountId: string): Promise<Office[]> {
     const { data } = await supabase.from('account_offices')
@@ -73,5 +87,58 @@ export class AvailabilityService {
       }
     }
     return out;
+  }
+
+  /** profile_ids de profes ACTIVOS asignados a la oficina. */
+  private async officeProfIds(officeId: string): Promise<string[]> {
+    const { data } = await supabase.from('office_professionals')
+      .select('profile_id, activa, office_id').eq('office_id', officeId);
+    return ((data ?? []) as any[]).filter((r) => r.activa).map((r) => r.profile_id);
+  }
+
+  private async windowsForOffice(officeId: string): Promise<Array<{ profile_id: string; dia: number; hora_inicio: string; hora_fin: string }>> {
+    const { data } = await supabase.from('professional_availability')
+      .select('profile_id, office_id, dia, hora_inicio, hora_fin').eq('office_id', officeId);
+    return (data ?? []) as any[];
+  }
+
+  private async blocksForOffice(officeId: string): Promise<Array<{ profile_id: string; office_id: string | null; start_time: string; end_time: string }>> {
+    // Trae todos los bloqueos; se filtra en memoria por office_id null | officeId.
+    const { data } = await supabase.from('professional_blocks')
+      .select('profile_id, office_id, start_time, end_time');
+    return (data ?? []) as any[];
+  }
+
+  async officeHasProfessionals(office: Office): Promise<boolean> {
+    return (await this.officeProfIds(office.id)).length > 0;
+  }
+
+  /** profile_ids que pueden tomar el slot [start,end): ventana cubre + sin bloqueo + no asignados. */
+  async availableProfessionals(office: Office, start: string, end: string): Promise<string[]> {
+    const profIds = await this.officeProfIds(office.id);
+    if (profIds.length === 0) return [];
+
+    const { dia, hhmm: startHHMM } = localParts(new Date(start));
+    const { hhmm: endHHMM } = localParts(new Date(end));
+    const windows = await this.windowsForOffice(office.id);
+    const withWindow = profIds.filter((pid) =>
+      windows.some((w) => w.profile_id === pid && w.dia === dia &&
+        w.hora_inicio <= startHHMM && w.hora_fin >= endHHMM));
+    if (withWindow.length === 0) return [];
+
+    const s = new Date(start).getTime(), e = new Date(end).getTime();
+    const blocks = await this.blocksForOffice(office.id);
+    const notBlocked = withWindow.filter((pid) =>
+      !blocks.some((b) => b.profile_id === pid &&
+        (b.office_id === null || b.office_id === office.id) &&
+        new Date(b.start_time).getTime() < e && new Date(b.end_time).getTime() > s));
+    if (notBlocked.length === 0) return [];
+
+    const appts = (await AppointmentService.list(office.account_id)).filter((a: any) =>
+      a.status !== 'cancelada' && a.start_time && a.end_time &&
+      norm(a.oficina || '') === norm(office.nombre) &&
+      overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), s, e));
+    const busy = new Set(appts.map((a: any) => a.assigned_profile_id).filter(Boolean));
+    return notBlocked.filter((pid) => !busy.has(pid));
   }
 }
