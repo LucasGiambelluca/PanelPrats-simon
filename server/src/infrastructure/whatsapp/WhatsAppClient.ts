@@ -396,18 +396,14 @@ export class WhatsAppClient {
                     const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
                     console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
 
-                    // Destino de envío. Si el chat vino como @lid (privacidad), enviar al
-                    // @lid produce sesiones Signal desincronizadas (Bad MAC) y el destinatario
-                    // NO puede descifrar (parece que escribe pero no llega). Usamos el JID de
-                    // teléfono real que entrega WhatsApp en senderPn (con el '9' de AR). Para
-                    // chats normales, el remoteJid directo. `phone` (normalizado, sin 9) es solo
+                    // Responder al remoteJid EXACTO que WhatsApp usó para direccionarnos.
+                    // En cuentas LID el chat se direcciona por @lid; enviar al JID de teléfono
+                    // (@s.whatsapp.net) recibe wa_id pero WhatsApp no lo entrega al dispositivo.
+                    // baileys 6.7 cifra/rutea @lid nativamente. `phone` (normalizado) es solo
                     // identidad de inbox/citas, NUNCA línea de envío.
-                    const replyJid = remoteJid.includes('@lid')
-                        ? (senderPn ? PhoneUtils.toJid(senderPn) : remoteJid)
-                        : remoteJid;
-                    console.log(`[PID:${PID}] Reply -> ${replyJid} (lid=${remoteJid.includes('@lid')}, senderPn=${senderPn || 'none'})`);
+                    console.log(`[PID:${PID}] Reply -> ${remoteJid} (senderPn=${senderPn || 'none'})`);
                     for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(replyJid, response);
+                        await this.sendFormattedMessage(remoteJid, response);
                     }
                 } catch (err) {
                     console.error(`[PID:${PID}] Processing Error:`, err);
