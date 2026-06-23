@@ -396,13 +396,13 @@ export class WhatsAppClient {
                     const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
                     console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
 
-                    // El reply sale por el remoteJid ORIGINAL: preserva el JID exacto que
-                    // entregó WhatsApp (incl. el '9' de los móviles AR). Reconstruir el JID
-                    // desde `phone` normalizado (sin 9) genera una dirección inexistente y el
-                    // mensaje no se entrega. Solo si vino como @lid usamos el teléfono resuelto.
-                    const replyJid = remoteJid.includes('@lid') ? PhoneUtils.toJid(phone) : remoteJid;
+                    // El reply sale SIEMPRE por el remoteJid ORIGINAL que entregó WhatsApp
+                    // (sea @s.whatsapp.net o @lid). baileys 6.7 rutea @lid nativamente.
+                    // NUNCA reconstruir el JID desde `phone` normalizado: pierde el '9' de
+                    // los móviles AR -> dirección inexistente y el mensaje no se entrega.
+                    // `phone` es solo identidad para inbox/citas, no línea de envío.
                     for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(replyJid, response);
+                        await this.sendFormattedMessage(remoteJid, response);
                     }
                 } catch (err) {
                     console.error(`[PID:${PID}] Processing Error:`, err);
