@@ -15,6 +15,7 @@ export interface Appointment {
   end_time?: string;
   reminded?: boolean; // recordatorio 20' antes ya enviado (idempotencia del scheduler)
   oficina?: string;   // modalidad/oficina: pool de disponibilidad independiente (Videollamada, CABA, Quilmes, Haedo…)
+  assigned_profile_id?: string | null; // profesional asignado (Fase 2); null = legacy/pool
 }
 
 const isSupabaseConfigured = !!(
@@ -47,6 +48,7 @@ function deserializeAppointment(app: any): Appointment {
       end_time: app.end_time || plus30(app.start_time),
       reminded: !!app.reminded,
       oficina: app.oficina || '',
+      assigned_profile_id: app.assigned_profile_id ?? null,
     };
   }
   // 2) Legacy (pre-0011): envelope JSON empaquetado en resumen.
@@ -75,6 +77,7 @@ function deserializeAppointment(app: any): Appointment {
     end_time: app.end_time || plus30(app.created_at),
     reminded: !!app.reminded,
     oficina: app.oficina || '',
+    assigned_profile_id: app.assigned_profile_id ?? null,
   };
 }
 
@@ -173,6 +176,7 @@ export const AppointmentService = {
           end_time: appointment.end_time || null,
           reminded: !!appointment.reminded,
           oficina: appointment.oficina || null,
+          assigned_profile_id: appointment.assigned_profile_id ?? null,
         })
         .select('*')
         .single();
@@ -182,7 +186,8 @@ export const AppointmentService = {
         if (
           error.code === '23P01' ||
           (error.message || '').includes('appointments_no_overlap') ||
-          (error.message || '').includes('office_capacity_full')
+          (error.message || '').includes('office_capacity_full') ||
+          (error.message || '').includes('professional_busy')
         ) {
           throw new Error('SLOT_TAKEN');
         }
@@ -227,12 +232,17 @@ export const AppointmentService = {
           end_time: merged.end_time || null,
           reminded: !!merged.reminded,
           oficina: merged.oficina || null,
+          assigned_profile_id: merged.assigned_profile_id ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
         .select('*')
         .single();
       if (error) {
+        // Reasignación a un profesional ya ocupado (trigger 0021): error específico.
+        if ((error.message || '').includes('professional_busy')) {
+          throw new Error('PROFESSIONAL_BUSY');
+        }
         // Trigger de capacidad (0017) o constraint (0012): slot tomado.
         if (
           error.code === '23P01' ||
