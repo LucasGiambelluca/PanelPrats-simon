@@ -396,13 +396,18 @@ export class WhatsAppClient {
                     const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
                     console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
 
-                    // El reply sale SIEMPRE por el remoteJid ORIGINAL que entregó WhatsApp
-                    // (sea @s.whatsapp.net o @lid). baileys 6.7 rutea @lid nativamente.
-                    // NUNCA reconstruir el JID desde `phone` normalizado: pierde el '9' de
-                    // los móviles AR -> dirección inexistente y el mensaje no se entrega.
-                    // `phone` es solo identidad para inbox/citas, no línea de envío.
+                    // Destino de envío. Si el chat vino como @lid (privacidad), enviar al
+                    // @lid produce sesiones Signal desincronizadas (Bad MAC) y el destinatario
+                    // NO puede descifrar (parece que escribe pero no llega). Usamos el JID de
+                    // teléfono real que entrega WhatsApp en senderPn (con el '9' de AR). Para
+                    // chats normales, el remoteJid directo. `phone` (normalizado, sin 9) es solo
+                    // identidad de inbox/citas, NUNCA línea de envío.
+                    const replyJid = remoteJid.includes('@lid')
+                        ? (senderPn ? PhoneUtils.toJid(senderPn) : remoteJid)
+                        : remoteJid;
+                    console.log(`[PID:${PID}] Reply -> ${replyJid} (lid=${remoteJid.includes('@lid')}, senderPn=${senderPn || 'none'})`);
                     for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(remoteJid, response);
+                        await this.sendFormattedMessage(replyJid, response);
                     }
                 } catch (err) {
                     console.error(`[PID:${PID}] Processing Error:`, err);
