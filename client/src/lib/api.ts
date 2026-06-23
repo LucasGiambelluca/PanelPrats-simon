@@ -190,6 +190,7 @@ export interface Appointment {
   start_time?: string;
   end_time?: string;
   oficina?: string; // modalidad/oficina (Videollamada, Presencial CABA…)
+  assigned_profile_id?: string | null;
 }
 
 export const appointmentsApi = {
@@ -290,6 +291,17 @@ export const professionalsApi = {
     api<ProfessionalBlock>(`/api/professionals/${profileId}/blocks`, { method: 'POST', body: JSON.stringify(body) }),
   removeBlock: (profileId: string, blockId: string) =>
     api<{ ok: boolean }>(`/api/professionals/${profileId}/blocks/${blockId}`, { method: 'DELETE' }),
+};
+
+export const agendaApi = {
+  office: (officeId: string, from: string, to: string) =>
+    api<{ profesionales: { profile_id: string; name: string }[]; appointments: Appointment[]; unassigned: Appointment[] }>(
+      `/api/agenda/offices/${officeId}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  professional: (profileId: string, accountId: string, from: string, to: string) =>
+    api<{ appointments: Appointment[] }>(
+      `/api/agenda/professionals/${profileId}?account_id=${encodeURIComponent(accountId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  assign: (appointmentId: string, profileId: string | null) =>
+    api<Appointment>(`/api/agenda/appointments/${appointmentId}/assign`, { method: 'PATCH', body: JSON.stringify({ profile_id: profileId }) }),
 };
 
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
