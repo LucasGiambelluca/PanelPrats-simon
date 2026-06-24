@@ -56,6 +56,8 @@ export default function Accounts() {
   const [editAiApiKey, setEditAiApiKey] = useState('');
   const [editAiModel, setEditAiModel] = useState('gpt-4o-mini');
   const [editAiPrompt, setEditAiPrompt] = useState('');
+  const [editAgentMode, setEditAgentMode] = useState<'flows' | 'ai_first'>('flows');
+  const [editBusinessContext, setEditBusinessContext] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Flows listing state
@@ -137,6 +139,8 @@ export default function Accounts() {
     setEditAiApiKey(acc.ai_api_key || '');
     setEditAiModel(acc.ai_model || 'gpt-4o-mini');
     setEditAiPrompt(acc.ai_support_prompt || '');
+    setEditAgentMode(acc.agent_mode === 'ai_first' ? 'ai_first' : 'flows');
+    setEditBusinessContext(acc.business_context || '');
   };
 
   const handleSaveEdit = async () => {
@@ -156,6 +160,8 @@ export default function Accounts() {
         ai_api_key: editAiApiKey.trim() || null,
         ai_model: editAiModel.trim() || 'gpt-4o-mini',
         ai_support_prompt: editAiPrompt.trim() || null,
+        agent_mode: editAgentMode,
+        business_context: editBusinessContext.trim() || null,
       });
       toast.success('Configuración guardada correctamente');
       setEditingAccount(null);
@@ -807,6 +813,47 @@ export default function Accounts() {
                 <p className="text-[10px] text-brand-inkmuted mt-1">
                   Se envía solo si el cliente escribió en las últimas 24h (ventana de WhatsApp).
                 </p>
+              </div>
+
+              {/* Modo del agente */}
+              <div className="space-y-2 border-t border-brand-hairline pt-4">
+                <div className="flex items-center gap-2">
+                  <Bot size={15} className="text-[#101820]" />
+                  <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider">Modo del agente</label>
+                </div>
+                <div className="bg-black/[0.03] border border-brand-hairline p-1 rounded-xl flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditAgentMode('flows')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${editAgentMode === 'flows' ? 'bg-brand-secondary text-white shadow-md font-bold' : 'text-brand-inkmuted hover:text-brand-ink'}`}
+                  >
+                    Flujos (menú)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditAgentMode('ai_first')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${editAgentMode === 'ai_first' ? 'bg-brand-secondary text-white shadow-md font-bold' : 'text-brand-inkmuted hover:text-brand-ink'}`}
+                  >
+                    Agente siempre presente
+                  </button>
+                </div>
+                <p className="text-[10px] text-brand-inkmuted -mt-0.5">
+                  {editAgentMode === 'ai_first'
+                    ? 'El agente IA conduce TODA la conversación (atención de calidad). Requiere API key con saldo + contexto cargado abajo.'
+                    : 'El menú/flujos guían; el agente de soporte solo interviene off-script.'}
+                </p>
+              </div>
+
+              {/* Contexto del negocio — fuente de datos que el agente puede responder */}
+              <div className="space-y-1.5 border-t border-brand-hairline pt-4">
+                <label className="text-xs text-brand-inkmuted font-bold uppercase tracking-wider block">Contexto del negocio</label>
+                <textarea
+                  className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm min-h-[90px] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#24365a]/30 resize-none leading-relaxed"
+                  placeholder="Datos que el agente puede usar para responder: qué hace el estudio, horarios, servicios, precios, dirección… (el agente NUNCA inventa lo que no esté acá)."
+                  value={editBusinessContext}
+                  onChange={(e) => setEditBusinessContext(e.target.value)}
+                />
+                <p className="text-[10px] text-brand-inkmuted">Esta es la fuente de verdad del agente para responder preguntas generales. El "prompt" define el tono; esto define los datos.</p>
               </div>
 
               {/* Agente IA de soporte global */}

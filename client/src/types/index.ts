@@ -18,6 +18,9 @@ export interface Account {
   ai_api_key?: string | null;
   ai_model?: string | null;
   ai_support_prompt?: string | null;
+  // Modo del agente: 'flows' (menú + soporte off-script) | 'ai_first' (agente siempre presente)
+  agent_mode?: 'flows' | 'ai_first';
+  business_context?: string | null;
   created_at: string;
 }
 

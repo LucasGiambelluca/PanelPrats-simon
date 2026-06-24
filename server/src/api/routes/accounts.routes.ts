@@ -39,6 +39,8 @@ const updateAccountSchema = z.object({
   ai_api_key: z.string().nullish(),
   ai_model: z.string().nullish(),
   ai_support_prompt: z.string().nullish(),
+  agent_mode: z.enum(['flows', 'ai_first']).nullish(),
+  business_context: z.string().nullish(),
 }).strict();
 
 const AUTH_BASE_PATH = process.env.AUTH_BASE_PATH || './auth';
@@ -230,7 +232,7 @@ export function accountsRouter(manager: AccountManager): Router {
   // Actualizar cuenta (por ejemplo: cambiar flujo, proveedor o credenciales)
   r.put('/:id', requireRole('admin'), validateBody(updateAccountSchema), async (req, res) => {
     const { name, phone_number, channel, external_id, access_token, app_secret, verify_token, provider, flow_id, reminder_minutes,
-            ai_support_enabled, ai_api_key, ai_model, ai_support_prompt } = req.body;
+            ai_support_enabled, ai_api_key, ai_model, ai_support_prompt, agent_mode, business_context } = req.body;
     const accountId = req.params.id;
 
     const memAcc = memoryAccounts.get(accountId);
@@ -260,6 +262,8 @@ export function accountsRouter(manager: AccountManager): Router {
       if (ai_api_key !== undefined) patch.ai_api_key = ai_api_key || null;
       if (ai_model !== undefined) patch.ai_model = ai_model || 'gpt-4o-mini';
       if (ai_support_prompt !== undefined) patch.ai_support_prompt = ai_support_prompt || null;
+      if (agent_mode !== undefined) patch.agent_mode = agent_mode || 'flows';
+      if (business_context !== undefined) patch.business_context = business_context || null;
 
       const { data, error } = await supabase
         .from('accounts')
