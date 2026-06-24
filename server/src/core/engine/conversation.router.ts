@@ -79,7 +79,7 @@ export class ConversationRouter {
       // arriesgar derivar un "hola" a un flujo equivocado).
       if (GLOBAL_BREAKERS.includes(t)) return runWildcardMenu();
 
-      const decision = await SupportAgentService.resolve({ accountId, text, pushName });
+      const decision = await SupportAgentService.resolve({ accountId, text, pushName, phone });
       if (decision.action === 'answer' && decision.reply) {
         // Responde la duda y, como respaldo, muestra el menú para que pueda avanzar.
         const menu = await runWildcardMenu();
@@ -108,7 +108,7 @@ export class ConversationRouter {
 
       // Sin decisión previa (off-script al inicio, o poll sin supervisor): el Agente
       // de soporte global decide a qué flujo rutear o si deriva.
-      const decision = await SupportAgentService.resolve({ accountId, text, pushName });
+      const decision = await SupportAgentService.resolve({ accountId, text, pushName, phone });
 
       if (decision.action === 'answer' && decision.reply) {
         return [decision.reply];

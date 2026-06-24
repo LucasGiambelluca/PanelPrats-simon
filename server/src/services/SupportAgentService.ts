@@ -45,11 +45,33 @@ export class SupportAgentService {
         accountId: string;
         text: string;
         pushName?: string;
+        phone?: string;
     }): Promise<SupportDecision> {
-        const { accountId, text } = params;
+        const { accountId, text, phone } = params;
         if (!text || !text.trim()) return { action: 'none' };
 
         const { flows, config } = await SupportAgentService.loadAccountContext(accountId);
+
+        // Historial reciente para que el conductor SIGA el hilo (sin esto era stateless:
+        // veía cada mensaje aislado, repetía empatía y reseteaba el contexto).
+        let history = '';
+        if (phone) {
+            try {
+                const { data: hist } = await supabase
+                    .from('whatsapp_messages')
+                    .select('direction, content, created_at')
+                    .eq('account_id', accountId)
+                    .eq('phone', phone)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                if (hist?.length) {
+                    history = hist
+                        .reverse()
+                        .map((m: any) => `${m.direction === 'INBOUND' ? 'Cliente' : 'Asistente'}: ${(m.content || '').replace(/\s+/g, ' ').slice(0, 220)}`)
+                        .join('\n');
+                }
+            } catch { /* sin historial: seguimos con solo el mensaje actual */ }
+        }
 
         if (!config.apiKey) {
             logger.info('[SupportAgent] sin API key disponible (ni cuenta ni nodo) → none');
@@ -72,15 +94,15 @@ ${menu}
 
 DATOS DEL ESTUDIO (única fuente para responder preguntas generales):
 ${ctx || '(no hay datos cargados)'}
-
-El usuario escribió un mensaje. Decidí UNA acción y respondé SOLO con JSON válido:
+${history ? `\nCONVERSACIÓN HASTA AHORA (seguí el hilo; NO reinicies, NO repitas saludos, NO vuelvas a preguntar lo ya dicho):\n${history}\n` : ''}
+El usuario escribió un último mensaje. Considerando TODA la conversación de arriba, decidí UNA acción y respondé SOLO con JSON válido:
 { "action": "answer" | "route" | "handoff", "reply": "<texto o null>", "trigger": "<trigger exacto o null>" }
 
 REGLAS:
-- "answer": SOLO si es una pregunta general respondible con los DATOS DEL ESTUDIO de arriba. En "reply" poné la respuesta en rol de atención: humana, breve, voseo argentino, máx 1 emoji, sin sonar robot. Si conviene, ofrecé avanzar ("¿Te agendo?"). NUNCA inventes datos que no estén arriba.
-- "route": si revela una gestión que encaja con un flujo. En "trigger" el valor EXACTO del flujo.
-- "handoff": si pide una persona, está molesto, o no podés responder con los datos de arriba. "trigger"=null.
-- Ante la duda entre answer y handoff cuando el dato no está arriba, elegí handoff.`;
+- "route": apenas la conversación revele una gestión que encaja con un flujo, RUTEÁ (no te quedes charlando). En "trigger" el valor EXACTO del flujo. Ej: despido/me echaron/indemnización → el flujo laboral; jubilarme/aportes → jubilación.
+- "answer": SOLO para una pregunta general respondible con los DATOS DEL ESTUDIO de arriba. En "reply" respondé en rol de atención: humana, breve, voseo argentino, máx 1 emoji, sin sonar robot, SIN repetir lo ya dicho. Si ya quedó clara la gestión, mejor "route" que seguir charlando.
+- "handoff": si pide una persona, está muy molesto, o no podés ni responder ni rutear. "trigger"=null.
+- NUNCA inventes datos que no estén arriba. NUNCA reinicies la charla con un saludo si ya venían hablando.`;
 
         let parsed: { action?: string; trigger?: string | null; reply?: string | null } | null = null;
         try {
