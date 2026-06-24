@@ -832,7 +832,13 @@ export class FlowEngine {
             );
         }
 
-        FlowEngine.flowListCache.set(accountId, { data: activeFlows, timestamp: now });
+        // No cachear una lista vacía: un hipo transitorio de la query (o un fetch
+        // antes de que existan los flujos) cachearía vacío por CACHE_TTL y dejaría
+        // al bot mudo ("No flow matched") durante esa ventana. Si vino vacío, no
+        // pisamos el cache: el próximo mensaje reintenta la query.
+        if (activeFlows.length > 0) {
+            FlowEngine.flowListCache.set(accountId, { data: activeFlows, timestamp: now });
+        }
         return { data: activeFlows };
     }
 
