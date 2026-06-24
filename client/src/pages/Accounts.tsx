@@ -827,20 +827,20 @@ export default function Accounts() {
                     onClick={() => setEditAgentMode('flows')}
                     className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${editAgentMode === 'flows' ? 'bg-brand-secondary text-white shadow-md font-bold' : 'text-brand-inkmuted hover:text-brand-ink'}`}
                   >
-                    Flujos (menú)
+                    Flujos + conductor IA
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditAgentMode('ai_first')}
                     className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${editAgentMode === 'ai_first' ? 'bg-brand-secondary text-white shadow-md font-bold' : 'text-brand-inkmuted hover:text-brand-ink'}`}
                   >
-                    Agente siempre presente
+                    Agente solo (sin flujos)
                   </button>
                 </div>
                 <p className="text-[10px] text-brand-inkmuted -mt-0.5">
                   {editAgentMode === 'ai_first'
-                    ? 'El agente IA conduce TODA la conversación (atención de calidad). Requiere API key con saldo + contexto cargado abajo.'
-                    : 'El menú/flujos guían; el agente de soporte solo interviene off-script.'}
+                    ? '⚠️ El agente IA conduce TODO y NO usa tus flujos (los reemplaza). Sólo para atención 100% conversacional.'
+                    : 'Tus flujos guían la conversación y el conductor IA entiende al cliente y lo rencauza al flujo correcto. (Recomendado)'}
                 </p>
               </div>
 
