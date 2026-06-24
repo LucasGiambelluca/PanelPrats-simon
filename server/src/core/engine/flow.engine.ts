@@ -504,7 +504,7 @@ export class FlowEngine {
                         input,
                         expectedOptions: stripped,
                         retryCount,
-                        maxRetries: parseInt(currentNode.data?.max_retries ?? '1', 10),
+                        maxRetries: parseInt(currentNode.data?.max_retries ?? '0', 10),
                         synonyms: currentNode.data?.synonyms,
                     });
 
@@ -562,7 +562,7 @@ export class FlowEngine {
                     const retryCount = parseInt(session.getVariable(retryKey) || '0', 10);
                     const gate = evaluate({
                         input, expectedOptions: expected, retryCount,
-                        maxRetries: parseInt(currentNode.data?.max_retries ?? '1', 10),
+                        maxRetries: parseInt(currentNode.data?.max_retries ?? '0', 10),
                         synonyms: currentNode.data?.synonyms,
                     });
                     const question = currentNode.data?.question || currentNode.data?.label || 'el paso anterior';
