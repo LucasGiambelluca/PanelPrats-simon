@@ -32,6 +32,8 @@ type MetaStatus = 'connected' | 'disconnected';
  */
 export class MetaClient implements ChannelClient {
   private status: MetaStatus = 'disconnected';
+  // Cache PSID/IGSID -> nombre del perfil (evita pedir a Graph en cada mensaje).
+  private profileNames = new Map<string, string>();
 
   constructor(
     private accountId: string,
@@ -118,6 +120,33 @@ export class MetaClient implements ChannelClient {
   }
 
   /**
+   * Resuelve el nombre real del perfil (Messenger PSID / Instagram IGSID) vía
+   * Graph API y lo cachea. Meta NO incluye el nombre en el webhook (solo el id),
+   * por eso el inbox mostraba números. Requiere que el token tenga permisos de
+   * mensajería. Si falla (token inválido/sin permiso), cae al id como fallback.
+   */
+  private async resolveProfileName(psid: string): Promise<string> {
+    const cached = this.profileNames.get(psid);
+    if (cached) return cached;
+    if (!this.config.accessToken) return psid;
+    try {
+      const fields = this.channel === 'instagram' ? 'name,username' : 'name';
+      const { data } = await axios.get(`${GRAPH_BASE}/${encodeURIComponent(psid)}`, {
+        params: { fields, access_token: this.config.accessToken },
+        timeout: 8000,
+      });
+      const name = data?.name || data?.username;
+      if (name) {
+        this.profileNames.set(psid, name);
+        return name;
+      }
+    } catch (err: any) {
+      logger.info(`[MetaClient:${this.accountId}] no pude resolver nombre de ${psid}: ${err?.response?.data?.error?.message ?? err?.message ?? err}`);
+    }
+    return psid;
+  }
+
+  /**
    * Procesa un `entry` del webhook de Meta. Extrae los items inbound de texto,
    * los persiste como INBOUND, los enruta por `onMessage` y devuelve las
    * respuestas vía `sendMessage`. Robusto ante echoes / eventos sin texto.
@@ -131,16 +160,17 @@ export class MetaClient implements ChannelClient {
         continue;
       }
       try {
+        const pushName = await this.resolveProfileName(senderId);
         await this.store.record({
           accountId: this.accountId,
           phone: senderId,
           direction: 'INBOUND',
           content: text,
-          contactName: senderId,
+          contactName: pushName,
           waMessageId: mid,
         });
 
-        const responses = await this.onMessage(this.accountId, senderId, text, senderId, {});
+        const responses = await this.onMessage(this.accountId, senderId, text, pushName, {});
         for (const response of responses ?? []) {
           const msg = MetaClient.coerceText(response);
           if (msg) await this.sendMessage(senderId, msg);
