@@ -85,6 +85,12 @@ export default function WhatsAppInbox() {
 
   const activeConvoId = activeConvo?.id;
 
+  // Ref del convo activo: lo lee el poll de conversaciones SIN entrar como dependencia
+  // del callback (si entrara, seleccionar un chat recrearía el callback y re-suscribiría
+  // el intervalo, reseteando el spinner en cada selección).
+  const activeConvoIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => { activeConvoIdRef.current = activeConvoId; }, [activeConvoId]);
+
   // Load conversations
   const loadConversations = useCallback(async () => {
     try {
@@ -98,16 +104,27 @@ export default function WhatsAppInbox() {
       }
       setConversations(data);
       setLoadError(false);
-      // Update active convo status if it changed
-      if (activeConvoId) {
-        const updated = data.find(c => c.id === activeConvoId);
-        if (updated) setActiveConvo(updated);
+      // Refrescar el convo activo SOLO si cambió algo relevante. Pisarlo con un objeto
+      // nuevo en cada poll (cada 5s) re-renderiza y hace "saltar" el panel de mensajes.
+      const id = activeConvoIdRef.current;
+      if (id) {
+        const updated = data.find(c => c.id === id);
+        if (updated) {
+          setActiveConvo(prev =>
+            prev &&
+            prev.status === updated.status &&
+            prev.last_message === updated.last_message &&
+            prev.last_message_at === updated.last_message_at
+              ? prev
+              : updated
+          );
+        }
       }
     } catch (err) {
       // Marcamos error: la UI lo muestra solo si no hay nada cargado (empty-state).
       setLoadError(true);
     }
-  }, [allLines, accounts, activeAccountId, activeConvoId]);
+  }, [allLines, activeAccountId]);
 
   useEffect(() => {
     setLoadingConvos(true);
