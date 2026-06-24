@@ -98,11 +98,16 @@ ${history ? `\nCONVERSACIÓN HASTA AHORA (seguí el hilo; NO reinicies, NO repit
 El usuario escribió un último mensaje. Considerando TODA la conversación de arriba, decidí UNA acción y respondé SOLO con JSON válido:
 { "action": "answer" | "route" | "handoff", "reply": "<texto o null>", "trigger": "<trigger exacto o null>" }
 
-REGLAS:
-- "route": apenas la conversación revele una gestión que encaja con un flujo, RUTEÁ (no te quedes charlando). En "trigger" el valor EXACTO del flujo. Ej: despido/me echaron/indemnización → el flujo laboral; jubilarme/aportes → jubilación.
-- "answer": SOLO para una pregunta general respondible con los DATOS DEL ESTUDIO de arriba. En "reply" respondé en rol de atención: humana, breve, voseo argentino, máx 1 emoji, sin sonar robot, SIN repetir lo ya dicho. Si ya quedó clara la gestión, mejor "route" que seguir charlando.
-- "handoff": si pide una persona, está muy molesto, o no podés ni responder ni rutear. "trigger"=null.
-- NUNCA inventes datos que no estén arriba. NUNCA reinicies la charla con un saludo si ya venían hablando.`;
+REGLAS (en orden de prioridad):
+1. "route" es la acción PRINCIPAL. Si el mensaje o la conversación tratan de un tema/gestión que coincide con el PROPÓSITO de algún flujo de la lista —aunque el cliente lo diga con palabras coloquiales, sinónimos, errores de tipeo o con emoción—, action="route" con el "trigger" EXACTO de ese flujo. Mapeá por SIGNIFICADO, no por la palabra literal del trigger. Ejemplos de mapeo:
+   • "me echaron" / "me despidieron" / "me rajaron" / "quiero mi indemnización" / "cuánto me corresponde por el trabajo" → flujo laboral/despido.
+   • "me quiero jubilar" / "tengo X años de aportes" / "trámite de ANSES" → flujo de jubilación.
+   • "tuve un choque" / "accidente de auto" / "me chocaron" → accidente de tránsito.
+   • "me lastimé en el trabajo" / "accidente laboral" / "ART" → ART.
+   • "falleció mi marido y cobraba" / "pensión" → pensión por viudez.
+2. "answer": SOLO si NINGÚN flujo aplica al tema y es una consulta general respondible con los DATOS DEL ESTUDIO (horarios, dirección, qué hacen). En "reply": voseo argentino, humano, breve, máx 1 emoji, sin repetir lo ya dicho. Una empatía corta está bien PERO si hay flujo relacionado, igual RUTEÁ (no te quedes solo charlando).
+3. "handoff": pide una persona, está muy molesto, o no podés ni rutear ni responder. "trigger"=null.
+NUNCA inventes datos que no estén arriba. NUNCA reinicies con un saludo si ya venían hablando. Ante la duda entre answer y route cuando hay un flujo relacionado, elegí SIEMPRE route.`;
 
         let parsed: { action?: string; trigger?: string | null; reply?: string | null } | null = null;
         try {
@@ -123,6 +128,7 @@ REGLAS:
         if (!parsed || !parsed.action) {
             return { action: 'handoff', reason: 'IA sin respuesta' };
         }
+        logger.info(`[SupportAgent] decisión IA: action=${parsed.action} trigger=${parsed.trigger ?? '-'}`);
 
         // answer: validar que haya contexto (anti-alucinación) y reply no vacío.
         if (parsed.action === 'answer') {
