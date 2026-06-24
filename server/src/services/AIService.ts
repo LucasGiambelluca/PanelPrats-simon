@@ -49,8 +49,11 @@ export class AIService {
         ];
         const wantsJson = jsonMode || systemPrompt.includes('JSON');
 
-        // Try OpenAI FIRST si hay key (formato OpenAI estándar).
-        if (OPENAI_API_KEY) {
+        // Try OpenAI FIRST si hay key (env GLOBAL o key por-cuenta sk-...). Sin el
+        // OR, una cuenta con su propia OpenAI key quedaba sin proveedor ("No AI
+        // provider configured") porque la rama exigía la env var. El conductor IA
+        // del soporte usa esta ruta -> sin esto nunca decidía answer/route.
+        if (OPENAI_API_KEY || options.apiKey?.startsWith('sk-')) {
             try {
                 // Key/model inyectados desde el nodo solo si parecen de OpenAI.
                 const apiKey = options.apiKey?.startsWith('sk-') ? options.apiKey : OPENAI_API_KEY;
