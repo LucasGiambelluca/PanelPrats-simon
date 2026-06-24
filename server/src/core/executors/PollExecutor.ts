@@ -42,10 +42,13 @@ export class PollExecutor implements NodeExecutor {
             }
         };
 
-        const isOfficial = !!(process.env.WHATSAPP_CLOUD_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
-
+        // Mensaje unificado: cada cliente decide cómo renderizarlo.
+        //  - WhatsApp Cloud API oficial → usa `interactive` (botones ≤3 / lista ≤10).
+        //  - Baileys u otros canales   → usa `text` (viñetas, sin números).
+        // El id de cada botón/fila es (idx+1); el motor resuelve ese número al
+        // handle `option-{idx}` (ver flow.engine handleInput de pollNode).
         return {
-            messages: isOfficial ? [{ interactive: interactiveObj }] : [menuText],
+            messages: [{ text: menuText, interactive: interactiveObj }],
             wait_for_input: true
         };
     }

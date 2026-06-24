@@ -85,7 +85,9 @@ export class WhatsAppOfficialClient implements ChannelClient {
     const messages = value?.messages || [];
 
     for (const msg of messages) {
-      if (msg.type !== 'text' && !msg.text?.body) continue;
+      const { routingText, displayText } = WhatsAppOfficialClient.parseIncoming(msg);
+      // Acepta texto y respuestas de botón/lista interactivas; ignora el resto.
+      if (!routingText && !displayText) continue;
 
       // Idempotencia: Meta reintenta webhooks; no reprocesar el mismo mensaje.
       if (!(await claimWebhookMessage(msg.id))) {
@@ -94,7 +96,6 @@ export class WhatsAppOfficialClient implements ChannelClient {
       }
 
       const from = msg.from;
-      const text = msg.text?.body;
       const contact = contacts.find((c: any) => c.wa_id === from);
       const pushName = contact?.profile?.name || from;
 
@@ -103,19 +104,95 @@ export class WhatsAppOfficialClient implements ChannelClient {
           accountId: this.accountId,
           phone: from,
           direction: 'INBOUND',
-          content: text,
+          content: displayText,
           contactName: pushName,
           waMessageId: msg.id,
         });
 
-        const responses = await this.onMessage(this.accountId, from, text, pushName, {});
+        // routingText = id del botón/fila (número) para que el pollNode lo resuelva
+        // al option-{idx} correcto; para texto plano es el cuerpo del mensaje.
+        const responses = await this.onMessage(this.accountId, from, routingText, pushName, {});
         for (const response of responses ?? []) {
-          const msgText = WhatsAppOfficialClient.coerceText(response);
-          if (msgText) await this.sendMessage(from, msgText);
+          await this.sendResponse(from, response);
         }
       } catch (err: any) {
         logger.error(`[WhatsAppOfficialClient:${this.accountId}] Error al procesar webhook de entrada para ${from}: ${err?.message ?? err}`);
       }
+    }
+  }
+
+  /**
+   * Normaliza un mensaje entrante de Cloud API a:
+   *  - routingText: lo que consume el motor (id de la opción para botón/lista, o el texto).
+   *  - displayText: lo que se guarda/muestra en el inbox (título de la opción o el texto).
+   */
+  static parseIncoming(msg: any): { routingText: string; displayText: string } {
+    if (msg?.type === 'interactive') {
+      const i = msg.interactive || {};
+      const reply = i.button_reply || i.list_reply || {};
+      const id = reply.id ?? '';
+      const title = reply.title ?? '';
+      return { routingText: String(id || title), displayText: String(title || id) };
+    }
+    // Botón de plantilla (quick reply) llega como type 'button'.
+    if (msg?.type === 'button') {
+      const payload = msg.button?.payload ?? msg.button?.text ?? '';
+      return { routingText: String(payload), displayText: String(msg.button?.text ?? payload) };
+    }
+    const body = msg?.text?.body ?? '';
+    return { routingText: String(body), displayText: String(body) };
+  }
+
+  /** Envía una respuesta del motor: interactiva (botones/lista) o texto. */
+  private async sendResponse(to: string, response: any): Promise<void> {
+    if (response && typeof response === 'object' && response.interactive) {
+      await this.sendInteractive(to, response.interactive);
+      return;
+    }
+    const msgText = WhatsAppOfficialClient.coerceText(response);
+    if (msgText) await this.sendMessage(to, msgText);
+  }
+
+  /** Envía un mensaje interactivo (botones ≤3 / lista ≤10) por Cloud API. */
+  async sendInteractive(to: string, interactive: any): Promise<void> {
+    if (!this.config.accessToken || !this.config.phone_number_id) {
+      logger.warn(`[WhatsAppOfficialClient:${this.accountId}] Falta accessToken o phone_number_id, no se puede enviar interactivo.`);
+      return;
+    }
+    if (!interactive) return;
+    const cleanPhone = to.replace('@s.whatsapp.net', '');
+
+    try {
+      await withRetry(
+        () => axios.post(
+          `${GRAPH_BASE}/${this.config.phone_number_id}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'interactive',
+            interactive,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${this.config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        ),
+        { label: `WhatsAppOfficialClient:${this.accountId} sendInteractive` },
+      );
+
+      const summary = interactive?.body?.text ? `[menú] ${interactive.body.text}` : '[menú interactivo]';
+      await this.store.record({
+        accountId: this.accountId,
+        phone: cleanPhone,
+        direction: 'OUTBOUND',
+        content: summary,
+        messageType: 'interactive',
+      });
+    } catch (err: any) {
+      logger.error(`[WhatsAppOfficialClient:${this.accountId}] Error enviando interactivo a ${cleanPhone}: ${err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err}`);
     }
   }
 
