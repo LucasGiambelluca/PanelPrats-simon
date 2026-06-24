@@ -211,7 +211,7 @@ export default function WhatsAppInbox() {
   const isAccountConnected = (convoAccount || activeAccount)?.status === 'connected';
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] lg:h-screen bg-brand-ivory">
+    <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden bg-brand-ivory">
       {/* Conversation List — en móvil ocupa todo; se oculta al abrir un chat */}
       <div className={`w-full lg:w-[340px] border-r border-brand-hairline flex-col bg-brand-surface ${activeConvo ? 'hidden lg:flex' : 'flex'}`}>
         {/* Header */}
