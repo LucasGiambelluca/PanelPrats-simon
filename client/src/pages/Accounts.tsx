@@ -3,10 +3,11 @@ import { useAccounts } from '../context/AccountContext';
 import { accountsApi, flowsApi, apiBase } from '../lib/api';
 import type { Account, Flow } from '../types';
 import { toast } from 'sonner';
+import { CopyButton, metaWebhookUrl, generateVerifyToken } from '../components/CopyButton';
 import {
   Plus, Wifi, WifiOff, QrCode, Loader2, Smartphone,
   RefreshCw, X, CheckCircle, Signal, PhoneOff,
-  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle, Trash2, Bot
+  MessageCircle, Facebook, Instagram, Settings2, Check, HelpCircle, Trash2, Bot, Sparkles, Plug
 } from 'lucide-react';
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
@@ -60,6 +61,7 @@ export default function Accounts() {
   // Flows listing state
   const [allFlows, setAllFlows] = useState<Flow[]>([]);
 
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [connectStatus, setConnectStatus] = useState<string>('');
@@ -214,6 +216,26 @@ export default function Accounts() {
     } catch (err: any) {
       toast.error('Error al conectar: ' + (err.message || ''));
       setConnectingId(null);
+    }
+  };
+
+  // Prueba la conexión de una línea Meta/oficial: valida el token en vivo y
+  // actualiza el badge (connected/disconnected) con el motivo si falla.
+  const handleVerifyMeta = async (accountId: string) => {
+    setVerifyingId(accountId);
+    try {
+      const r = await accountsApi.verifyMeta(accountId);
+      if (r.ok) {
+        const name = r.info?.verified_name || r.info?.display_phone_number || r.info?.name;
+        toast.success(`Conexión activa ✅${name ? ` — ${name}` : ''}`);
+      } else {
+        toast.error(`Sin conexión: ${r.reason || 'token inválido'}`, { duration: 8000 });
+      }
+      reload();
+    } catch (err: any) {
+      toast.error('Error al probar conexión: ' + (err.message || ''));
+    } finally {
+      setVerifyingId(null);
     }
   };
 
@@ -388,12 +410,22 @@ export default function Accounts() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-brand-inkmuted font-semibold">Verify Token</label>
-                  <input
-                    className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/30 transition-all"
-                    placeholder="Token de verificación arbitrario para configurar webhook"
-                    value={verifyToken}
-                    onChange={(e) => setVerifyToken(e.target.value)}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/30 transition-all"
+                      placeholder="Lo inventás vos o tocá Generar"
+                      value={verifyToken}
+                      onChange={(e) => setVerifyToken(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setVerifyToken(generateVerifyToken())}
+                      title="Generar un token seguro automáticamente"
+                      className="flex items-center gap-1.5 px-3 rounded-xl border border-brand-secondary/20 bg-brand-secondary/10 text-brand-secondary text-xs font-semibold hover:bg-brand-secondary/15 transition-all whitespace-nowrap"
+                    >
+                      <Sparkles size={13} /> Generar
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -501,6 +533,18 @@ export default function Accounts() {
                       {deletingId === a.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                     </button>
 
+                    {(isMeta || isOfficial) && (
+                      <button
+                        onClick={() => handleVerifyMeta(a.id)}
+                        disabled={verifyingId === a.id}
+                        title="Probar conexión con Meta (valida el token en vivo)"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-600 text-xs font-semibold rounded-xl border border-emerald-500/20 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {verifyingId === a.id ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                        Probar conexión
+                      </button>
+                    )}
+
                     {a.status === 'connected' ? (
                       <button
                         onClick={() => handleDisconnect(a.id)}
@@ -545,16 +589,28 @@ export default function Accounts() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL</p>
-                        <code className="block bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-[#101820] text-xs font-mono break-all">
-                          {apiBase}/api/webhooks/meta
-                        </code>
+                        <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL (Callback URL)</p>
+                        <div className="flex items-stretch gap-2">
+                          <code className="flex-1 bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-[#101820] text-xs font-mono break-all">
+                            {metaWebhookUrl(apiBase)}
+                          </code>
+                          <CopyButton value={metaWebhookUrl(apiBase)} label="Webhook URL" />
+                        </div>
                       </div>
                       <div>
                         <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Verify Token</p>
-                        <code className="block bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-brand-secondary text-xs font-mono break-all">
-                          {a.verify_token || '— (definí un Verify Token al configurar la línea)'}
-                        </code>
+                        {a.verify_token ? (
+                          <div className="flex items-stretch gap-2">
+                            <code className="flex-1 bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-brand-secondary text-xs font-mono break-all">
+                              {a.verify_token}
+                            </code>
+                            <CopyButton value={a.verify_token} label="Verify Token" />
+                          </div>
+                        ) : (
+                          <code className="block bg-brand-panel border border-brand-hairline rounded-lg px-3 py-2.5 text-slate-400 text-xs font-mono break-all">
+                            — Definí un Verify Token con el botón ⚙ Configurar de la línea
+                          </code>
+                        )}
                       </div>
                     </div>
 
@@ -844,12 +900,22 @@ export default function Accounts() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-brand-inkmuted font-semibold">Verify Token</label>
-                    <input
-                      className="w-full bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/30"
-                      placeholder="Token de verificación webhook"
-                      value={editVerifyToken}
-                      onChange={(e) => setEditVerifyToken(e.target.value)}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 bg-white border border-brand-hairline rounded-xl px-4 py-2.5 text-brand-ink text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-secondary/30"
+                        placeholder="Lo inventás vos o tocá Generar"
+                        value={editVerifyToken}
+                        onChange={(e) => setEditVerifyToken(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditVerifyToken(generateVerifyToken())}
+                        title="Generar un token seguro automáticamente"
+                        className="flex items-center gap-1.5 px-3 rounded-xl border border-brand-secondary/20 bg-brand-secondary/10 text-brand-secondary text-xs font-semibold hover:bg-brand-secondary/15 transition-all whitespace-nowrap"
+                      >
+                        <Sparkles size={13} /> Generar
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { logger } from '../../utils/logger';
+import { supabase } from '../../config/supabase';
 import type { MessageStore } from '../../services/MessageStore';
 import type { ChannelClient } from '../../core/channels/ChannelClient';
 import { claimWebhookMessage } from '../../services/idempotency';
@@ -76,7 +77,28 @@ export class WhatsAppOfficialClient implements ChannelClient {
         messageType: 'text',
       });
     } catch (err: any) {
-      logger.error(`[WhatsAppOfficialClient:${this.accountId}] Error enviando mensaje a ${cleanPhone}: ${err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err}`);
+      await this.handleSendError(err, `enviando mensaje a ${cleanPhone}`);
+    }
+  }
+
+  /**
+   * Maneja errores de envío. Si el error es de auth (HTTP 401 o code 190 =
+   * token vencido/inválido), marca la línea DESCONECTADA en la DB para que el
+   * panel deje de mostrarla verde con el bot mudo (P0). Otros errores solo se
+   * loguean. No relanza: el envío individual ya falló, no tumbamos el proceso.
+   */
+  private async handleSendError(err: any, ctx: string): Promise<void> {
+    const e = err?.response?.data?.error;
+    const http = err?.response?.status;
+    logger.error(`[WhatsAppOfficialClient:${this.accountId}] Error ${ctx}: ${e ? JSON.stringify(e) : err?.message ?? err}`);
+    if (http === 401 || e?.code === 190) {
+      this.status = 'disconnected';
+      try {
+        await supabase.from('accounts').update({ status: 'disconnected' }).eq('id', this.accountId);
+        logger.warn(`[WhatsAppOfficialClient:${this.accountId}] token inválido/vencido (code ${e?.code ?? http}) → línea marcada DESCONECTADA`);
+      } catch (e2: any) {
+        logger.warn(`[WhatsAppOfficialClient:${this.accountId}] no pude persistir disconnected: ${e2?.message ?? e2}`);
+      }
     }
   }
 
@@ -192,7 +214,7 @@ export class WhatsAppOfficialClient implements ChannelClient {
         messageType: 'interactive',
       });
     } catch (err: any) {
-      logger.error(`[WhatsAppOfficialClient:${this.accountId}] Error enviando interactivo a ${cleanPhone}: ${err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err}`);
+      await this.handleSendError(err, `enviando interactivo a ${cleanPhone}`);
     }
   }
 

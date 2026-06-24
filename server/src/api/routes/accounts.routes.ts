@@ -9,6 +9,7 @@ import { authDir } from '../../lib/account-keys';
 import { memoryAccounts, memoryFlows } from '../../core/accounts/memoryStore';
 import { requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import { validateMetaToken } from '../../infrastructure/meta/validateMetaToken';
 
 const createAccountSchema = z.object({
   name: z.string().trim().min(1),
@@ -166,6 +167,46 @@ export function accountsRouter(manager: AccountManager): Router {
                  : rawStatus === 'STOPPED' ? 'disconnected'
                  : rawStatus;
     res.json({ qr, status });
+  });
+
+  // Probar conexión con Meta (token en vivo contra Graph API).
+  // Valida que el access_token sea válido y tenga acceso al external_id.
+  // OK -> marca la línea 'connected'; falla -> 'disconnected' + motivo.
+  r.post('/:id/verify-meta', requireRole('admin'), async (req, res) => {
+    const accountId = req.params.id;
+
+    // Cargar cuenta (memoria o Supabase).
+    const memAcc = memoryAccounts.get(accountId);
+    let acc: any = memAcc;
+    if (!memAcc && isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, channel, provider, external_id, access_token')
+        .eq('id', accountId)
+        .maybeSingle();
+      if (error) return res.status(400).json({ error: error.message });
+      acc = data;
+    }
+    if (!acc) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+    const channel = acc.channel || 'whatsapp';
+    const provider = acc.provider || 'baileys';
+    const isMeta = channel === 'facebook' || channel === 'instagram' || (channel === 'whatsapp' && provider === 'official');
+    if (!isMeta) {
+      return res.status(400).json({ error: 'Esta línea no usa la API de Meta (es Baileys/QR). Conectala con el código QR.' });
+    }
+
+    const result = await validateMetaToken({ externalId: acc.external_id, accessToken: acc.access_token });
+    const newStatus = result.ok ? 'connected' : 'disconnected';
+
+    // Persistir el estado resultante para que el badge del panel sea honesto.
+    if (memAcc) {
+      memAcc.status = newStatus;
+    } else if (isSupabaseConfigured) {
+      await supabase.from('accounts').update({ status: newStatus }).eq('id', accountId);
+    }
+
+    return res.json({ ok: result.ok, status: newStatus, reason: result.reason, info: result.info });
   });
 
   // Estado (solo admin)

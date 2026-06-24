@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { logger } from '../../utils/logger';
+import { supabase } from '../../config/supabase';
 import type { MessageStore } from '../../services/MessageStore';
 import type { ChannelClient } from '../../core/channels/ChannelClient';
 import { claimWebhookMessage } from '../../services/idempotency';
@@ -92,7 +93,27 @@ export class MetaClient implements ChannelClient {
         messageType: 'text',
       });
     } catch (err: any) {
-      logger.error(`[MetaClient:${this.accountId}] error al enviar a ${to}: ${err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err}`);
+      await this.handleSendError(err, `al enviar a ${to}`);
+    }
+  }
+
+  /**
+   * Maneja errores de envío. Si es de auth (HTTP 401 o code 190 = Page token
+   * vencido/inválido), marca la línea DESCONECTADA en la DB (P0) para que el
+   * panel no la muestre verde con el bot mudo. Otros errores solo se loguean.
+   */
+  private async handleSendError(err: any, ctx: string): Promise<void> {
+    const e = err?.response?.data?.error;
+    const http = err?.response?.status;
+    logger.error(`[MetaClient:${this.accountId}] error ${ctx}: ${e ? JSON.stringify(e) : err?.message ?? err}`);
+    if (http === 401 || e?.code === 190) {
+      this.status = 'disconnected';
+      try {
+        await supabase.from('accounts').update({ status: 'disconnected' }).eq('id', this.accountId);
+        logger.warn(`[MetaClient:${this.accountId}] token inválido/vencido (code ${e?.code ?? http}) → línea marcada DESCONECTADA`);
+      } catch (e2: any) {
+        logger.warn(`[MetaClient:${this.accountId}] no pude persistir disconnected: ${e2?.message ?? e2}`);
+      }
     }
   }
 

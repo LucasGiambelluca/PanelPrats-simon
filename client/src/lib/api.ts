@@ -97,6 +97,11 @@ export const accountsApi = {
   status: (id: string) =>
     api<{ status: string }>(`/api/accounts/${id}/status`),
 
+  // Prueba el token de una línea Meta/oficial contra la Graph API en vivo.
+  verifyMeta: (id: string) =>
+    api<{ ok: boolean; status: string; reason?: string; info?: { verified_name?: string; display_phone_number?: string; name?: string } }>(
+      `/api/accounts/${id}/verify-meta`, { method: 'POST' }),
+
   delete: (id: string) =>
     api<{ ok: boolean }>(`/api/accounts/${id}`, { method: 'DELETE' }),
 };

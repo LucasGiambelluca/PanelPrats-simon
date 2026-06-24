@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { QrCode, CheckCircle, ArrowLeft, Smartphone, Loader2, WifiOff, RefreshCw, Facebook, Instagram } from 'lucide-react';
 import { accountsApi, apiBase } from '../lib/api';
 import { useAccounts } from '../context/AccountContext';
+import { CopyButton, metaWebhookUrl } from '../components/CopyButton';
 import { toast } from 'sonner';
 
 export default function WhatsAppConnect() {
@@ -125,16 +126,28 @@ export default function WhatsAppConnect() {
 
             <div className="space-y-3 text-left">
               <div>
-                <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL</p>
-                <code className="block bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-emerald-400 text-xs font-mono break-all">
-                  {apiBase}/api/webhooks/meta
-                </code>
+                <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Webhook URL (Callback URL)</p>
+                <div className="flex items-stretch gap-2">
+                  <code className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-emerald-400 text-xs font-mono break-all">
+                    {metaWebhookUrl(apiBase)}
+                  </code>
+                  <CopyButton value={metaWebhookUrl(apiBase)} label="Webhook URL" className="border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10" />
+                </div>
               </div>
               <div>
                 <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide mb-1">Verify Token</p>
-                <code className="block bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-amber-400 text-xs font-mono break-all">
-                  {account?.verify_token || '— (definí un Verify Token al crear la cuenta)'}
-                </code>
+                {account?.verify_token ? (
+                  <div className="flex items-stretch gap-2">
+                    <code className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-amber-400 text-xs font-mono break-all">
+                      {account.verify_token}
+                    </code>
+                    <CopyButton value={account.verify_token} label="Verify Token" className="border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10" />
+                  </div>
+                ) : (
+                  <code className="block bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-slate-500 text-xs font-mono break-all">
+                    — Definí un Verify Token al configurar la cuenta
+                  </code>
+                )}
               </div>
               <p className="text-slate-500 text-xs leading-relaxed">
                 Pegá la Webhook URL y el Verify Token en la configuración de tu app de Meta.
