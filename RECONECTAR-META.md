@@ -61,6 +61,12 @@ Instagram DM se maneja con el **Page token de la página de Facebook vinculada a
 - Permisos: `instagram_basic`, `instagram_manage_messages`, `pages_messaging`, `pages_show_list`.
 - Copiá el token **completo**.
 
+> ⚠️ **CRÍTICO — tipo de token.** Tiene que empezar con **`EAA…`** (Page token de la
+> Graph API de Facebook). Si empieza con **`IGAA…`** es de "Instagram Login API"
+> (graph.instagram.com) y **NO sirve** — la Graph API de Facebook no lo puede parsear y
+> da `code 190 "Cannot parse access token"`. Generá el **Page token** de la página de
+> Facebook vinculada, no el de "Instagram con Instagram".
+
 ### C) Suscribir
 - Meta App → **Webhooks** → producto **Instagram** → suscribí la cuenta al campo **`messages`**.
 
@@ -91,6 +97,7 @@ después de pegar un token.
 | Error / síntoma | Causa | Solución |
 |---|---|---|
 | `code 190` / "Cannot parse access token" / "Session expired" | Token **vencido o inválido** (o pegado incompleto) | Regenerá el token (paso A) y pegalo entero |
+| `code 190` en Instagram + token empieza con `IGAA…` | Token de **Instagram Login API** (no soportado) | Generá el **Page token `EAA…`** de la página de FB vinculada (sección 2.B) |
 | `code 100` "nonexisting field" / "missing permissions" | Token **sin permisos** (`pages_messaging` / `pages_manage_metadata` / `instagram_manage_messages`) | Regenerá el token pidiendo esos permisos |
 | Llega el mensaje pero el bot NO responde | Token sin permiso de envío, o línea desconectada | Token correcto + "Probar conexión" verde |
 | NO llega ningún mensaje (inbox vacío) | La página/cuenta **no está suscrita** al webhook `messages` | Paso B (FB) / C (IG): suscribir `messages` |

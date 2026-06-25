@@ -27,6 +27,13 @@ export async function validateMetaToken(p: { externalId?: string | null; accessT
   if (!p.accessToken) return { ok: false, reason: 'Falta el Access Token' };
   if (!p.externalId) return { ok: false, reason: 'Falta el ID (Page ID / phone_number_id)' };
 
+  // Token de "Instagram Login API" (graph.instagram.com): no lo soporta la Graph API
+  // de Facebook que usa el sistema. Hay que usar el Page token (EAA) de la página
+  // vinculada. Detectarlo da un mensaje claro en vez del 190 "cannot parse" genérico.
+  if (/^IG"?AA/i.test(p.accessToken.trim()) || p.accessToken.trim().startsWith('IGAA')) {
+    return { ok: false, reason: 'Ese token es de "Instagram Login" (IGAA…), no compatible. Usá el Page Access Token (EAA…) de la página de Facebook vinculada, con instagram_manage_messages + pages_messaging.' };
+  }
+
   let data: any;
   try {
     const r = await axios.get(`${GRAPH_BASE}/debug_token`, {
