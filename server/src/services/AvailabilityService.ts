@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import { AppointmentService } from './AppointmentService';
 
 export interface Office {
-  id: string; account_id: string; nombre: string; modalidad: 'presencial' | 'video';
+  id: string; account_id: string; nombre: string; modalidad: 'presencial' | 'video' | 'ambas';
   direccion?: string | null; video_link?: string | null; dias: number[];
   hora_inicio: string; hora_fin: string; slot_min: number; capacidad: number;
   buffer_min: number; activa: boolean; orden: number;
@@ -163,9 +163,15 @@ export class AvailabilityService {
     const { dia, hhmm: startHHMM } = localParts(new Date(start));
     const { hhmm: endHHMM } = localParts(new Date(end));
     const windows = await this.windowsForOffice(office.id);
-    const withWindow = profIds.filter((pid) =>
-      windows.some((w) => w.profile_id === pid && w.dia === dia &&
-        w.hora_inicio <= startHHMM && w.hora_fin >= endHHMM));
+    const withWindow = profIds.filter((pid) => {
+      const myWindows = windows.filter((w) => w.profile_id === pid);
+      // Sin ventanas propias cargadas → la disponibilidad es el horario de la oficina.
+      // Así una agenda 1-profesional funciona sin tener que cargar professional_availability.
+      if (myWindows.length === 0) {
+        return office.dias.includes(dia) && office.hora_inicio <= startHHMM && office.hora_fin >= endHHMM;
+      }
+      return myWindows.some((w) => w.dia === dia && w.hora_inicio <= startHHMM && w.hora_fin >= endHHMM);
+    });
     if (withWindow.length === 0) return [];
 
     const s = new Date(start).getTime(), e = new Date(end).getTime();
@@ -205,5 +211,46 @@ export class AvailabilityService {
       if (d !== 0) return d;
       return String(nameOf.get(a) ?? '').localeCompare(String(nameOf.get(b) ?? ''));
     })[0];
+  }
+
+  /**
+   * MOTOR de asignación: propone horarios en CASCADA por prioridad (`orden`),
+   * filtrando por modalidad (video/presencial) y, en presencial, por zona.
+   * Respeta inmediatez (mínimo `minLeadMin` minutos hacia adelante, default 60).
+   * Llena la agenda de mayor prioridad primero; si no alcanza, baja a la siguiente.
+   * Cada slot vuelve etiquetado con `oficina` + `profileId` (la chica de esa agenda).
+   */
+  async proposeCascade(
+    accountId: string,
+    opts: { modalidad: 'presencial' | 'video'; zona?: string; minLeadMin?: number; max?: number; now?: Date },
+  ): Promise<Array<Slot & { oficina: string; profileId: string | null }>> {
+    const now = opts.now ?? new Date();
+    const leadNow = new Date(now.getTime() + (opts.minLeadMin ?? 60) * 60000);
+    const max = opts.max ?? 3;
+
+    let offices = await this.listOffices(accountId); // activas, ordenadas por `orden`
+    // Filtrar por modalidad que la agenda acepta ('ambas' acepta las dos).
+    offices = offices.filter((o) =>
+      opts.modalidad === 'presencial'
+        ? o.modalidad === 'presencial' || o.modalidad === 'ambas'
+        : o.modalidad === 'video' || o.modalidad === 'ambas');
+    // Presencial + zona: priorizar agendas cuya zona coincide (nombre o dirección).
+    if (opts.modalidad === 'presencial' && opts.zona) {
+      const z = norm(opts.zona);
+      const byZona = offices.filter((o) => norm(o.nombre).includes(z) || norm(o.direccion || '').includes(z));
+      if (byZona.length) offices = byZona;
+    }
+
+    const out: Array<Slot & { oficina: string; profileId: string | null }> = [];
+    for (const o of offices) {
+      if (out.length >= max) break;
+      const slots = await this.freeSlots(accountId, o.nombre, { max: max - out.length, now: leadNow });
+      for (const s of slots) {
+        if (out.length >= max) break;
+        const profileId = await this.pickProfessional(o, s.start, s.end);
+        out.push({ ...s, oficina: o.nombre, profileId });
+      }
+    }
+    return out;
   }
 }

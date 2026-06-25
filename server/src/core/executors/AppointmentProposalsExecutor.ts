@@ -29,6 +29,37 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
         const oficinaVar = nodeData.oficinaVar || 'oficina';
         const oficina = String(nodeData.oficina || (context as any)[oficinaVar] || '').trim();
 
+        // ── MOTOR EN CASCADA ──────────────────────────────────────────────────────
+        // Si el flujo capturó la modalidad (video/presencial), proponemos en cascada
+        // por prioridad (`orden`) entre TODAS las agendas que la aceptan, con inmediatez
+        // (mínimo +1h). Cada slot vuelve con su agenda (oficina) + chica (profileId), que
+        // el nodo de agendar usa para asignar el turno a la profesional correcta.
+        const modalidadRaw = String(nodeData.modalidad || (context as any)[nodeData.modalidadVar || 'modalidad'] || '').trim().toLowerCase();
+        const modalidad: 'presencial' | 'video' | '' =
+            modalidadRaw.startsWith('pres') ? 'presencial'
+            : (modalidadRaw.includes('vid') || modalidadRaw.includes('virtual')) ? 'video'
+            : '';
+        if (modalidad) {
+            const zona = String((context as any)[nodeData.zonaVar || 'zona'] || nodeData.zona || '').trim();
+            const availability = new AvailabilityService();
+            const slots = await availability.proposeCascade(context.accountId, {
+                modalidad,
+                zona: zona || undefined,
+                minLeadMin: Number(nodeData.minLeadMin) || 60,
+                max: Number(nodeData.maxProposals) || 3,
+            });
+            const formatted = this.formatSlots(slots);
+            const outVar = nodeData.outputVariable || 'horarios_disponibles';
+            const message = typeof nodeData.text === 'string' && nodeData.text.trim()
+                ? nodeData.text.replace(new RegExp(`{{\\s*${outVar}\\s*}}`, 'g'), formatted)
+                : formatted;
+            return {
+                messages: [message],
+                wait_for_input: false,
+                updatedContext: { [outVar]: formatted, [`${outVar}_array`]: slots },
+            };
+        }
+
         // Si la oficina está CONFIGURADA en account_offices, delegamos el cálculo de
         // slots en AvailabilityService (misma fuente que usa el agente). Si no está
         // configurada, caemos al cálculo inline basado en nodeData (compat hacia atrás).

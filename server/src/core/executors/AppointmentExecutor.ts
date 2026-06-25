@@ -64,9 +64,14 @@ export class AppointmentExecutor implements NodeExecutor {
 
         let start_time: string | undefined;
         let end_time: string | undefined;
+        let assignedProfileId: string | null = null;
+        let slotOficina = '';
         if (Array.isArray(slotsArr) && choiceIdx >= 0 && slotsArr[choiceIdx]?.start) {
             start_time = slotsArr[choiceIdx].start;
             end_time = slotsArr[choiceIdx].end;
+            // Slot del motor en cascada: trae la chica (profileId) y la agenda (oficina).
+            assignedProfileId = slotsArr[choiceIdx].profileId ?? null;
+            if (slotsArr[choiceIdx].oficina) slotOficina = String(slotsArr[choiceIdx].oficina);
         } else {
             start_time = buildISO(fecha, horaInicio);
             // Fin: hora_fin si hay; si no, +1h del inicio.
@@ -86,7 +91,8 @@ export class AppointmentExecutor implements NodeExecutor {
                 status: 'pendiente',
                 start_time,
                 end_time,
-                oficina,
+                oficina: slotOficina || oficina,
+                assigned_profile_id: assignedProfileId,
             });
 
             // ── Notificación a la operadora (línea del estudio) ───────────────────
