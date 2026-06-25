@@ -8,6 +8,9 @@ import { withRetry } from '../../utils/retry';
 
 const GRAPH_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+// Instagram API "con Instagram Login" (tokens IGAA…): NO usa graph.facebook.com,
+// va contra graph.instagram.com con el mismo shape de mensajería.
+const GRAPH_IG = `https://graph.instagram.com/${GRAPH_VERSION}`;
 
 export type MetaChannel = 'facebook' | 'instagram';
 
@@ -61,6 +64,16 @@ export class MetaClient implements ChannelClient {
     return null;
   }
 
+  /** True si la línea IG usa la "Instagram Login API" (token IGAA → graph.instagram.com). */
+  private get isIgLogin(): boolean {
+    return this.channel === 'instagram' && /^IG/i.test(this.config.accessToken || '');
+  }
+
+  /** Base de Graph API según el tipo de token (FB Page vs Instagram Login). */
+  private get base(): string {
+    return this.isIgLogin ? GRAPH_IG : GRAPH_BASE;
+  }
+
   /** Envía un mensaje de texto al usuario (PSID/IGSID) y lo persiste como OUTBOUND. */
   async sendMessage(to: string, text: string): Promise<void> {
     if (!this.config.accessToken) {
@@ -74,14 +87,17 @@ export class MetaClient implements ChannelClient {
       // requiere /{ig-id}/messages; usamos externalId si está. Para IG vinculado
       // vía Facebook Login (Page token), /me/messages también funciona, pero
       // /{ig-id}/messages es válido en ambos casos cuando hay externalId.
-      const path =
-        this.channel === 'instagram' && this.config.externalId
-          ? `/${encodeURIComponent(this.config.externalId)}/messages`
-          : '/me/messages';
+      // Instagram Login (IGAA): graph.instagram.com/me/messages.
+      // Facebook / IG vía Page token: graph.facebook.com con /{ig-id}/messages o /me/messages.
+      const path = this.isIgLogin
+        ? '/me/messages'
+        : (this.channel === 'instagram' && this.config.externalId
+            ? `/${encodeURIComponent(this.config.externalId)}/messages`
+            : '/me/messages');
 
       await withRetry(
         () => axios.post(
-          `${GRAPH_BASE}${path}?access_token=${encodeURIComponent(this.config.accessToken)}`,
+          `${this.base}${path}?access_token=${encodeURIComponent(this.config.accessToken)}`,
           { recipient: { id: to }, message: { text } },
         ),
         { label: `MetaClient:${this.accountId} sendMessage` },
@@ -131,7 +147,7 @@ export class MetaClient implements ChannelClient {
     if (!this.config.accessToken) return psid;
     try {
       const fields = this.channel === 'instagram' ? 'name,username' : 'name';
-      const { data } = await axios.get(`${GRAPH_BASE}/${encodeURIComponent(psid)}`, {
+      const { data } = await axios.get(`${this.base}/${encodeURIComponent(psid)}`, {
         params: { fields, access_token: this.config.accessToken },
         timeout: 8000,
       });

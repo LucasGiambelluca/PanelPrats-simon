@@ -27,11 +27,25 @@ export async function validateMetaToken(p: { externalId?: string | null; accessT
   if (!p.accessToken) return { ok: false, reason: 'Falta el Access Token' };
   if (!p.externalId) return { ok: false, reason: 'Falta el ID (Page ID / phone_number_id)' };
 
-  // Token de "Instagram Login API" (graph.instagram.com): no lo soporta la Graph API
-  // de Facebook que usa el sistema. Hay que usar el Page token (EAA) de la página
-  // vinculada. Detectarlo da un mensaje claro en vez del 190 "cannot parse" genérico.
-  if (/^IG"?AA/i.test(p.accessToken.trim()) || p.accessToken.trim().startsWith('IGAA')) {
-    return { ok: false, reason: 'Ese token es de "Instagram Login" (IGAA…), no compatible. Usá el Page Access Token (EAA…) de la página de Facebook vinculada, con instagram_manage_messages + pages_messaging.' };
+  // Token de "Instagram Login API" (IGAA…): va contra graph.instagram.com, no
+  // graph.facebook.com. Se valida con GET /me y se chequea que el user_id coincida
+  // con el external_id configurado. El sistema lo soporta (MetaClient enruta a IG).
+  if (/^IG/i.test(p.accessToken.trim())) {
+    try {
+      const r = await axios.get(`https://graph.instagram.com/${GRAPH_VERSION}/me`, {
+        params: { fields: 'user_id,username,name', access_token: p.accessToken },
+        timeout: 10_000,
+      });
+      const uid = String(r.data?.user_id ?? '');
+      if (uid && String(p.externalId) && uid !== String(p.externalId)) {
+        return { ok: false, reason: `El token IG es de otra cuenta (user_id ${uid}). Configuraste ${p.externalId}. Poné ${uid} como External ID.` };
+      }
+      return { ok: true, info: { type: 'INSTAGRAM_LOGIN', username: r.data?.username, name: r.data?.name } };
+    } catch (err: any) {
+      const e = err?.response?.data?.error;
+      if (e?.code === 190) return { ok: false, reason: 'Token de Instagram inválido o vencido — regeneralo en Meta (Instagram → API setup).' };
+      return { ok: false, reason: e ? `${e.message} (code ${e.code})` : (err?.message ?? 'Error contactando a Instagram') };
+    }
   }
 
   let data: any;
