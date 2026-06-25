@@ -24,13 +24,27 @@ export default memo(({ data, isConnectable }: any) => {
             onChange={(e) => data.onChangeVariable?.(e.target.value)}
             placeholder="respuesta"
            />
-             <label className="block text-xs font-medium text-gray-500 mb-1">Es igual a:</label>
+             <label className="block text-xs font-medium text-gray-500 mb-1">Operador:</label>
+           <select
+            className="w-full text-xs p-1 border rounded mb-2 bg-white"
+            value={data.operator || 'equals'}
+            onChange={(e) => data.onChangeValue?.('operator', e.target.value)}
+           >
+             <option value="equals">= (igual a)</option>
+             <option value="not_equals">≠ (distinto de)</option>
+             <option value="contains">contiene</option>
+             <option value="greater_than">&gt; (mayor que)</option>
+             <option value="less_than">&lt; (menor que)</option>
+             <option value="greater_or_equal">≥ (mayor o igual)</option>
+             <option value="less_or_equal">≤ (menor o igual)</option>
+           </select>
+             <label className="block text-xs font-medium text-gray-500 mb-1">Valor:</label>
            <input
             type="text"
             className="w-full text-xs p-1 border rounded font-mono"
             value={data.expectedValue}
-            onChange={(e) => data.onChangeValue?.(e.target.value)}
-            placeholder="si"
+            onChange={(e) => data.onChangeValue?.('expectedValue', e.target.value)}
+            placeholder="ej: 62  ·  sí  ·  {{otra_var}}"
            />
         </div>
         

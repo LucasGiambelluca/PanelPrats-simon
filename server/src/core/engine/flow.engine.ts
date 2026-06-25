@@ -595,6 +595,12 @@ export class FlowEngine {
             }
             session.setVariable(varName, processedInput);
             session.setVariable(`${varName}_raw`, input);
+            // Mirror al namespace compartido: las variables se scopean por flowId, así que
+            // sin esto un cambio de flujo (flowLink a "Agendar Cita", etc.) "perdía" datos
+            // como {{nombre}}. Solo variables reales, no las internas (_gate_retries, etc.).
+            if (varName && !varName.startsWith('_')) {
+                session.setGlobalVariable(varName, processedInput);
+            }
         }
 
         session.logInteraction(session.currentNodeId, input);

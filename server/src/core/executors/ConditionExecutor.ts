@@ -29,7 +29,16 @@ function safeArith(expr: string): number | null {
 
 export class ConditionExecutor implements NodeExecutor {
     async execute(data: any, context: ExecutionContext, engine: any): Promise<NodeExecutionResult> {
-        const { variable, operator = 'equals', expectedValue } = data;
+        const { variable, operator: rawOp = 'equals', expectedValue } = data;
+        // Normaliza operadores simbólicos a nombrados (acepta >, <, >=, <=, ==, !=).
+        const OP_ALIAS: Record<string, string> = {
+            '>': 'greater_than', '<': 'less_than',
+            '>=': 'greater_or_equal', '=>': 'greater_or_equal',
+            '<=': 'less_or_equal', '=<': 'less_or_equal',
+            '==': 'equals', '===': 'equals', '=': 'equals',
+            '!=': 'not_equals', '!==': 'not_equals', '<>': 'not_equals',
+        };
+        const operator = OP_ALIAS[String(rawOp).trim()] || rawOp;
         const variableName = data.variable ? data.variable.trim() : '';
         const actualValue = variableName ? context[variableName] : undefined;
         const actualValueRaw = variableName ? context[`${variableName}_raw`] : undefined;
@@ -78,13 +87,16 @@ export class ConditionExecutor implements NodeExecutor {
             result = (val1 !== val2 && valRaw !== val2 && !isNumericMatch && valIndex !== val2);
         } else if (operator === 'contains') {
             result = val1.includes(val2) || valRaw.includes(val2);
-        } else if (operator === 'greater_than' || operator === 'less_than') {
+        } else if (['greater_than', 'less_than', 'greater_or_equal', 'less_or_equal'].includes(operator)) {
             const a = Number(val1); const b = Number(val2);
             if (isNaN(a) || isNaN(b)) {
                 console.warn(`[ConditionExecutor] Non-numeric compare "${val1}" ${operator} "${val2}" → false`);
                 result = false;
             } else {
-                result = operator === 'greater_than' ? a > b : a < b;
+                result = operator === 'greater_than' ? a > b
+                       : operator === 'less_than' ? a < b
+                       : operator === 'greater_or_equal' ? a >= b
+                       : a <= b;
             }
         } else {
             // Unknown operator → safest default is equals semantics
