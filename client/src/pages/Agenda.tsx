@@ -40,6 +40,7 @@ export default function Agenda() {
   const { activeAccountId, accounts } = useAccounts();
   const { user, role } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
   const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
   const [profFilter, setProfFilter] = useState<string>(''); // '' = todos
   const [loading, setLoading] = useState(true);
@@ -107,12 +108,12 @@ export default function Agenda() {
     }
   }, [view]);
 
-  // Load appointments
+  // Load appointments. allLines=true => agenda unificada (todas las líneas del estudio).
   const loadAppointments = async (silent = false) => {
-    if (!activeAccountId) { setLoading(false); return; }
+    if (!allLines && !activeAccountId) { setLoading(false); return; }
     if (!silent) setLoading(true);
     try {
-      const data = await appointmentsApi.list(activeAccountId);
+      const data = await appointmentsApi.list(allLines ? 'all' : activeAccountId!);
       setAppointments(data);
     } catch (err: any) {
       toast.error('Error al cargar la agenda: ' + err.message);
@@ -127,7 +128,7 @@ export default function Agenda() {
       if (!document.hidden) loadAppointments(true);
     }, 10000);
     return () => clearInterval(interval);
-  }, [activeAccountId]);
+  }, [activeAccountId, allLines]);
 
   // Load professionals (admin) o bloquear a la agenda propia (empleada)
   useEffect(() => {
@@ -779,7 +780,20 @@ export default function Agenda() {
                 theme === 'light' ? 'text-slate-800' : 'text-white'
               }`}>Agenda</span>
             </div>
-            
+
+            {/* Toggle: todas las líneas vs línea activa */}
+            <button
+              onClick={() => setAllLines(v => !v)}
+              title={allLines ? 'Mostrando TODAS las líneas (todos los canales)' : 'Mostrando solo la línea activa'}
+              className={`ml-1 px-3 py-1 text-xs font-bold rounded-lg border transition whitespace-nowrap ${
+                allLines
+                  ? (theme === 'light' ? 'bg-[#1a73e8]/10 text-[#1a73e8] border-[#1a73e8]/30' : 'bg-brand-secondary/15 text-brand-secondary border-brand-secondary/30')
+                  : (theme === 'light' ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/5 text-brand-textMuted border-white/10')
+              }`}
+            >
+              {allLines ? 'Todas las líneas' : 'Línea activa'}
+            </button>
+
             {/* Navigation buttons */}
             <div className={`flex items-center ml-4 gap-1.5 border rounded-xl p-1 transition-all ${
               theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'

@@ -33,9 +33,9 @@ export function appointmentsRouter(): Router {
   // Listar citas (requiere account_id para no exponer todas las cuentas)
   r.get('/', async (req, res) => {
     try {
+      // account_id ausente o 'all' => agenda unificada (todas las líneas del estudio).
       const accountId = req.query.account_id as string;
-      if (!accountId) return res.status(400).json({ error: 'Falta account_id' });
-      const list = await AppointmentService.list(accountId);
+      const list = await AppointmentService.list(accountId && accountId !== 'all' ? accountId : undefined);
       res.json(list);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
