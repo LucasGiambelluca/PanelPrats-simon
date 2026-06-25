@@ -821,10 +821,12 @@ export class FlowEngine {
 
         if (useSupabase) {
             try {
+                // ORG-WIDE: los flujos son del estudio (single-org), compartidos por todos
+                // los canales (WhatsApp/FB/IG). No se filtra por account_id: una cuenta sin
+                // flujos propios (p.ej. FB/IG recién conectados) usa los mismos del estudio.
                 const { data } = await this.db
                     .from('flows')
                     .select('id, name, trigger_word, is_active, nodes')
-                    .eq('account_id', accountId)
                     .eq('is_active', true);
                 if (data) activeFlows = data;
             } catch (err) {
@@ -865,10 +867,11 @@ export class FlowEngine {
 
         if (useSupabase) {
             try {
+                // ORG-WIDE: se resuelve el flujo por id sin atar a account_id, para que los
+                // flowLink (router → sub-flujos) funcionen desde cualquier canal del estudio.
                 const { data } = await this.db
                     .from('flows')
                     .select('*')
-                    .eq('account_id', accountId)
                     .eq('id', flowId)
                     .maybeSingle();
                 if (data) flow = data;
