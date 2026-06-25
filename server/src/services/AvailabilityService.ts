@@ -51,9 +51,12 @@ function studioDateAt(day: Date, hh: number, mm: number): Date {
 }
 
 export class AvailabilityService {
-  async listOffices(accountId: string): Promise<Office[]> {
+  // ORG-WIDE: las agendas (y sus turnos) son del estudio, compartidas por todos los
+  // canales (WhatsApp/FB/IG). No filtramos por account_id: un booking de cualquier
+  // canal ve las mismas agendas y respeta los turnos ya tomados en otros canales.
+  async listOffices(_accountId?: string): Promise<Office[]> {
     const { data } = await supabase.from('account_offices')
-      .select('*').eq('account_id', accountId).order('orden', { ascending: true });
+      .select('*').order('orden', { ascending: true });
     return ((data ?? []) as Office[]).filter((o) => o.activa);
   }
 
@@ -65,7 +68,7 @@ export class AvailabilityService {
   /** Cuenta citas activas de esa oficina que solapan [start,end). */
   private async countOverlap(accountId: string, nombre: string, start: string, end: string): Promise<number> {
     const reqS = new Date(start).getTime(), reqE = new Date(end).getTime();
-    const appts = await AppointmentService.list(accountId);
+    const appts = await AppointmentService.list();
     return appts.filter((a: any) =>
       a.status !== 'cancelada' && a.start_time && a.end_time &&
       norm(a.oficina || '') === norm(nombre) &&
@@ -76,7 +79,7 @@ export class AvailabilityService {
   /** Cuenta citas solapantes de la oficina con assigned_profile_id null (legacy). */
   private async countLegacyOverlap(accountId: string, nombre: string, start: string, end: string): Promise<number> {
     const reqS = new Date(start).getTime(), reqE = new Date(end).getTime();
-    const appts = await AppointmentService.list(accountId);
+    const appts = await AppointmentService.list();
     return appts.filter((a: any) =>
       a.status !== 'cancelada' && a.start_time && a.end_time &&
       !a.assigned_profile_id &&
@@ -182,7 +185,7 @@ export class AvailabilityService {
         new Date(b.start_time).getTime() < e && new Date(b.end_time).getTime() > s));
     if (notBlocked.length === 0) return [];
 
-    const appts = (await AppointmentService.list(office.account_id)).filter((a: any) =>
+    const appts = (await AppointmentService.list()).filter((a: any) =>
       a.status !== 'cancelada' && a.start_time && a.end_time &&
       norm(a.oficina || '') === norm(office.nombre) &&
       overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), s, e));
@@ -196,7 +199,7 @@ export class AvailabilityService {
     if (cand.length === 0) return null;
 
     const targetDay = localParts(new Date(start)).dia;
-    const appts = (await AppointmentService.list(office.account_id)).filter((a: any) =>
+    const appts = (await AppointmentService.list()).filter((a: any) =>
       a.status !== 'cancelada' && a.start_time && a.assigned_profile_id &&
       localParts(new Date(a.start_time)).dia === targetDay);
     const load = new Map<string, number>();
