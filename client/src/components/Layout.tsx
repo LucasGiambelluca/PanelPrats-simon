@@ -73,6 +73,7 @@ export default function Layout() {
               value={activeAccountId ?? ''}
               onChange={(e) => setActiveAccountId(e.target.value)}
             >
+              <option value="all" className="bg-brand-primary text-brand-textLight">🗂️ Todas las líneas</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id} className="bg-brand-primary text-brand-textLight">
                   {a.name}

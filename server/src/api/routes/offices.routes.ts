@@ -30,9 +30,11 @@ export function officesRouter(): Router {
   const r = Router();
 
   r.get('/', async (req, res) => {
+    // account_id ausente o 'all' => todas las agendas del estudio (vista unificada).
     const accountId = req.query.account_id as string;
-    if (!accountId) return res.status(400).json({ error: 'Falta account_id' });
-    const { data, error } = await supabase.from('account_offices').select('*').eq('account_id', accountId).order('orden', { ascending: true });
+    let q = supabase.from('account_offices').select('*').order('orden', { ascending: true });
+    if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
+    const { data, error } = await q;
     if (error) return res.status(400).json({ error: error.message });
     res.json(data ?? []);
   });

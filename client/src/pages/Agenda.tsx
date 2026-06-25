@@ -108,12 +108,13 @@ export default function Agenda() {
     }
   }, [view]);
 
-  // Load appointments. allLines=true => agenda unificada (todas las líneas del estudio).
+  // Load appointments. allLines (toggle) o cuenta activa = 'all' => agenda unificada.
   const loadAppointments = async (silent = false) => {
-    if (!allLines && !activeAccountId) { setLoading(false); return; }
+    const useAll = allLines || activeAccountId === 'all';
+    if (!useAll && !activeAccountId) { setLoading(false); return; }
     if (!silent) setLoading(true);
     try {
-      const data = await appointmentsApi.list(allLines ? 'all' : activeAccountId!);
+      const data = await appointmentsApi.list(useAll ? 'all' : activeAccountId!);
       setAppointments(data);
     } catch (err: any) {
       toast.error('Error al cargar la agenda: ' + err.message);

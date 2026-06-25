@@ -55,7 +55,10 @@ export default function Offices() {
         video_link: form.video_link.trim() || null,
       };
       if (editingId) await officesApi.update(editingId, payload as any);
-      else await officesApi.create({ account_id: activeAccountId, ...payload } as any);
+      else {
+        if (!activeAccountId || activeAccountId === 'all') { toast.error('Elegí una línea específica (no "Todas") para crear una agenda'); setSaving(false); return; }
+        await officesApi.create({ account_id: activeAccountId, ...payload } as any);
+      }
       toast.success(editingId ? 'Oficina actualizada' : 'Oficina creada');
       reset(); load();
     } catch (e: any) { toast.error('Error: ' + e.message); }
