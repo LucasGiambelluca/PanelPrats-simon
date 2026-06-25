@@ -82,7 +82,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // Mantener la cuenta activa siempre válida: si la actual ya no existe
   // (p.ej. fue eliminada), pasar a la primera disponible.
   useEffect(() => {
-    if (activeAccountId && !accounts.some(a => a.id === activeAccountId)) {
+    // 'all' = vista unificada (todas las líneas) — es válido, no resetear.
+    if (activeAccountId && activeAccountId !== 'all' && !accounts.some(a => a.id === activeAccountId)) {
       setActiveAccountId(accounts[0]?.id ?? null);
     }
   }, [accounts, activeAccountId]);
