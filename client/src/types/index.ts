@@ -73,7 +73,7 @@ export interface Office {
   id: string;
   account_id: string;
   nombre: string;
-  modalidad: 'presencial' | 'video';
+  modalidad: 'presencial' | 'video' | 'ambas';
   direccion: string | null;
   video_link: string | null;
   dias: number[];

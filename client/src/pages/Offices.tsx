@@ -7,7 +7,7 @@ import { Building2, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import OfficeDetail from '../components/offices/OfficeDetail';
 
 const emptyForm = {
-  nombre: '', modalidad: 'presencial' as 'presencial' | 'video', direccion: '', video_link: '',
+  nombre: '', modalidad: 'ambas' as 'presencial' | 'video' | 'ambas', direccion: '', video_link: '',
   hora_inicio: '09:00', hora_fin: '18:00', slot_min: 60, capacidad: 1, buffer_min: 0,
   dias: [1, 2, 3, 4, 5] as number[], activa: true, orden: 0,
 };
@@ -45,7 +45,7 @@ export default function Offices() {
   const save = async () => {
     if (!activeAccountId) { toast.error('Elegí una cuenta'); return; }
     if (!form.nombre.trim()) { toast.error('Falta el nombre'); return; }
-    if (form.modalidad === 'presencial' && !form.direccion.trim()) { toast.error('Una oficina presencial necesita dirección'); return; }
+    if ((form.modalidad === 'presencial' || form.modalidad === 'ambas') && !form.direccion.trim()) { toast.error('Una agenda que acepta presencial necesita dirección'); return; }
     if (form.hora_fin <= form.hora_inicio) { toast.error('hora_fin debe ser posterior a hora_inicio'); return; }
     setSaving(true);
     try {
@@ -90,10 +90,25 @@ export default function Offices() {
               <h2 className="text-brand-ink font-serif font-bold text-lg mb-4">{editingId ? 'Editar oficina' : 'Nueva oficina'}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input aria-label="Nombre" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm" placeholder="Nombre (ej. CABA)" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
-                <select aria-label="Modalidad" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm" value={form.modalidad} onChange={e => setForm({ ...form, modalidad: e.target.value as any })}>
-                  <option value="presencial">Presencial</option>
-                  <option value="video">Video</option>
-                </select>
+                <div className="flex items-center gap-4 bg-white border border-brand-hairline rounded-xl px-4 py-3">
+                  <span className="text-xs text-brand-inkmuted font-semibold">Acepta:</span>
+                  {(() => {
+                    const pres = form.modalidad === 'presencial' || form.modalidad === 'ambas';
+                    const vid = form.modalidad === 'video' || form.modalidad === 'ambas';
+                    const setMod = (p: boolean, v: boolean) =>
+                      setForm({ ...form, modalidad: (p && v ? 'ambas' : v ? 'video' : 'presencial') as any });
+                    return (
+                      <>
+                        <label className="flex items-center gap-1.5 text-sm text-brand-ink cursor-pointer">
+                          <input type="checkbox" checked={pres} onChange={e => setMod(e.target.checked, vid)} /> Presencial
+                        </label>
+                        <label className="flex items-center gap-1.5 text-sm text-brand-ink cursor-pointer">
+                          <input type="checkbox" checked={vid} onChange={e => setMod(pres, e.target.checked)} /> Virtual
+                        </label>
+                      </>
+                    );
+                  })()}
+                </div>
                 <input aria-label="Dirección" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm" placeholder="Dirección (presencial)" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
                 <input aria-label="Link de video" className="bg-white border border-brand-hairline rounded-xl px-4 py-3 text-brand-ink text-sm" placeholder="Link de video (opcional)" value={form.video_link} onChange={e => setForm({ ...form, video_link: e.target.value })} />
                 <div className="flex gap-2">
@@ -104,6 +119,14 @@ export default function Offices() {
                   <input aria-label="Duración del turno (min)" type="number" min={1} className="bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm flex-1" placeholder="Slot min" value={form.slot_min} onChange={e => setForm({ ...form, slot_min: Number(e.target.value) })} />
                   <input aria-label="Capacidad" type="number" min={1} className="bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm flex-1" placeholder="Capacidad" value={form.capacidad} onChange={e => setForm({ ...form, capacidad: Number(e.target.value) })} />
                   <input aria-label="Buffer (min)" type="number" min={0} className="bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm flex-1" placeholder="Buffer min" value={form.buffer_min} onChange={e => setForm({ ...form, buffer_min: Number(e.target.value) })} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <input aria-label="Orden de prioridad" type="number" min={0} className="w-full bg-white border border-brand-hairline rounded-xl px-3 py-3 text-brand-ink text-sm" placeholder="Orden de prioridad (menor = primero)" value={form.orden} onChange={e => setForm({ ...form, orden: Number(e.target.value) })} />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-brand-ink cursor-pointer bg-white border border-brand-hairline rounded-xl px-4 py-3 whitespace-nowrap">
+                    <input type="checkbox" checked={form.activa} onChange={e => setForm({ ...form, activa: e.target.checked })} /> Agenda activa
+                  </label>
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-4">

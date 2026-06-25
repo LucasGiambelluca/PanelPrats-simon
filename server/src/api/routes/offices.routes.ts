@@ -6,7 +6,7 @@ import { validateBody } from '../middleware/validate';
 const createOfficeSchema = z.object({
   account_id: z.string().min(1),
   nombre: z.string().trim().min(1),
-  modalidad: z.enum(['presencial', 'video']),
+  modalidad: z.enum(['presencial', 'video', 'ambas']),
   direccion: z.string().nullish(),
   video_link: z.string().url().nullish(),
   dias: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
@@ -21,7 +21,7 @@ const createOfficeSchema = z.object({
 const updateOfficeSchema = createOfficeSchema.partial().strict();
 
 function coherencia(b: any): string | null {
-  if (b.modalidad === 'presencial' && !(b.direccion && String(b.direccion).trim())) return 'Una oficina presencial necesita dirección.';
+  if ((b.modalidad === 'presencial' || b.modalidad === 'ambas') && !(b.direccion && String(b.direccion).trim())) return 'Una agenda que acepta presencial necesita dirección.';
   if (b.hora_inicio && b.hora_fin && b.hora_fin <= b.hora_inicio) return 'hora_fin debe ser posterior a hora_inicio.';
   return null;
 }
