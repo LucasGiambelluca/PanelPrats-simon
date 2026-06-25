@@ -146,12 +146,15 @@ export class MetaClient implements ChannelClient {
     if (cached) return cached;
     if (!this.config.accessToken) return psid;
     try {
-      const fields = this.channel === 'instagram' ? 'name,username' : 'name';
+      // Messenger devuelve first_name/last_name (NO 'name'); Instagram devuelve name/username.
+      const fields = this.channel === 'instagram' ? 'name,username' : 'first_name,last_name';
       const { data } = await axios.get(`${this.base}/${encodeURIComponent(psid)}`, {
         params: { fields, access_token: this.config.accessToken },
         timeout: 8000,
       });
-      const name = data?.name || data?.username;
+      const name = this.channel === 'instagram'
+        ? (data?.name || data?.username)
+        : ([data?.first_name, data?.last_name].filter(Boolean).join(' ') || data?.name);
       if (name) {
         this.profileNames.set(psid, name);
         return name;
