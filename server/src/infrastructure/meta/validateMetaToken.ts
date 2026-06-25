@@ -5,20 +5,21 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 export interface MetaTokenCheck {
   ok: boolean;
-  reason?: string;   // motivo legible si falla (token vencido, sin acceso, etc.)
-  info?: any;        // datos del objeto si OK (verified_name, display_phone_number, name)
+  reason?: string;   // motivo legible si falla (token vencido, sin permiso, etc.)
+  info?: any;        // datos del token si OK (tipo, scopes, id, expiración)
 }
 
 /**
- * Valida un access token de Meta contra la Graph API, en vivo.
+ * Valida un access token de Meta usando `debug_token` (introspección del token).
  *
- * Hace `GET /{external_id}` con el token: un 200 prueba que el token es válido
- * Y que tiene acceso al objeto configurado (Page ID / phone_number_id). Sin pedir
- * `fields` específicos (cada tipo de nodo tiene fields distintos; pedir uno
- * inexistente devolvería error #100 y haría ver un token bueno como malo).
+ * Por qué debug_token y NO `GET /{page}`: un Page token de Messenger suele tener
+ * solo `pages_messaging` (alcanza para que el bot ENVÍE), pero `GET /{page}` exige
+ * `pages_read_engagement` → daba un falso "code 100" con un token que en realidad
+ * funciona. debug_token sirve con cualquier token y devuelve: validez, expiración,
+ * tipo (PAGE/USER), el id del objeto (profile_id) y los scopes otorgados.
  *
- * Distingue el caso que nos mordió: token temporal vencido → OAuthException
- * code 190 ("Session has expired").
+ * Chequea: token válido + no vencido + que sea del ID configurado + que tenga el
+ * permiso de mensajería del canal (pages_messaging / instagram_manage_messages).
  *
  * Reutilizado por el endpoint "Probar conexión" y por el health-check.
  */
@@ -26,22 +27,44 @@ export async function validateMetaToken(p: { externalId?: string | null; accessT
   if (!p.accessToken) return { ok: false, reason: 'Falta el Access Token' };
   if (!p.externalId) return { ok: false, reason: 'Falta el ID (Page ID / phone_number_id)' };
 
+  let data: any;
   try {
-    const r = await axios.get(`${GRAPH_BASE}/${encodeURIComponent(p.externalId)}`, {
-      headers: { Authorization: `Bearer ${p.accessToken}` },
+    const r = await axios.get(`${GRAPH_BASE}/debug_token`, {
+      params: { input_token: p.accessToken, access_token: p.accessToken },
       timeout: 10_000,
     });
-    return { ok: true, info: r.data };
+    data = r.data?.data;
   } catch (err: any) {
+    // El token está tan roto que ni autentica la introspección.
     const e = err?.response?.data?.error;
-    if (e) {
-      const sub = e.error_subcode ? `/${e.error_subcode}` : '';
-      // Mensajes claros para los casos más comunes.
-      if (e.code === 190) return { ok: false, reason: `Token vencido o inválido — regeneralo en Meta (code 190${sub})` };
-      if (e.code === 100) return { ok: false, reason: `El token no tiene acceso a ese ID, o el ID es incorrecto (code 100${sub})` };
-      if (e.code === 10 || e.code === 200) return { ok: false, reason: `Faltan permisos en el token (code ${e.code}${sub})` };
-      return { ok: false, reason: `${e.message} (code ${e.code}${sub})` };
-    }
-    return { ok: false, reason: err?.message ?? 'Error de red al contactar a Meta' };
+    if (e?.code === 190) return { ok: false, reason: `Token vencido o inválido — regeneralo en Meta (code 190)` };
+    return { ok: false, reason: e ? `${e.message} (code ${e.code})` : (err?.message ?? 'Error de red al contactar a Meta') };
   }
+
+  if (!data) return { ok: false, reason: 'No se pudo inspeccionar el token (respuesta vacía de Meta)' };
+  if (!data.is_valid) {
+    return { ok: false, reason: `Token inválido o vencido${data.error?.message ? ` — ${data.error.message}` : ' — regeneralo en Meta'}` };
+  }
+
+  // El token tiene que ser del ID configurado (Page ID / IG ID).
+  const tokenId = String(data.profile_id ?? data.user_id ?? '');
+  if (tokenId && String(p.externalId) && tokenId !== String(p.externalId)) {
+    return { ok: false, reason: `El token es de OTRO ID (${tokenId}). Configuraste ${p.externalId}. Usá el token de esa página/cuenta, o corregí el ID.` };
+  }
+
+  // Tiene que poder mensajear (FB: pages_messaging | IG: instagram_manage_messages).
+  const scopes: string[] = Array.isArray(data.scopes) ? data.scopes : [];
+  const puedeMensajear = scopes.includes('pages_messaging') || scopes.includes('instagram_manage_messages');
+  if (scopes.length && !puedeMensajear) {
+    return { ok: false, reason: `Al token le falta el permiso de mensajería (pages_messaging / instagram_manage_messages). Regeneralo con ese scope.` };
+  }
+
+  return {
+    ok: true,
+    info: {
+      type: data.type,
+      scopes,
+      expira: data.expires_at ? new Date(data.expires_at * 1000).toISOString() : 'nunca',
+    },
+  };
 }
