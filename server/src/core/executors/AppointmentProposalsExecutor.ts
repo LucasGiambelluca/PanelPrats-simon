@@ -34,13 +34,23 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
         // por prioridad (`orden`) entre TODAS las agendas que la aceptan, con inmediatez
         // (mínimo +1h). Cada slot vuelve con su agenda (oficina) + chica (profileId), que
         // el nodo de agendar usa para asignar el turno a la profesional correcta.
-        const modalidadRaw = String(nodeData.modalidad || (context as any)[nodeData.modalidadVar || 'modalidad'] || '').trim().toLowerCase();
+        let modalidadRaw = String(nodeData.modalidad || (context as any)[nodeData.modalidadVar || 'modalidad'] || '').trim().toLowerCase();
+        let zona = String((context as any)[nodeData.zonaVar || 'zona'] || nodeData.zona || '').trim();
+        // Si no vino modalidad explícita, la derivamos de la elección del cliente
+        // (pollNode q_oficina: "Videollamada" / "Presencial CABA" / "Presencial Quilmes"…).
+        if (!modalidadRaw) {
+            const choice = String((context as any)[oficinaVar] || '').trim().toLowerCase();
+            if (/video|virtual|llamada/.test(choice)) modalidadRaw = 'video';
+            else if (choice.includes('presencial')) {
+                modalidadRaw = 'presencial';
+                if (!zona) zona = choice.replace(/.*presencial\s*/, '').trim(); // "presencial caba" → "caba"
+            }
+        }
         const modalidad: 'presencial' | 'video' | '' =
             modalidadRaw.startsWith('pres') ? 'presencial'
             : (modalidadRaw.includes('vid') || modalidadRaw.includes('virtual')) ? 'video'
             : '';
         if (modalidad) {
-            const zona = String((context as any)[nodeData.zonaVar || 'zona'] || nodeData.zona || '').trim();
             const availability = new AvailabilityService();
             const slots = await availability.proposeCascade(context.accountId, {
                 modalidad,
