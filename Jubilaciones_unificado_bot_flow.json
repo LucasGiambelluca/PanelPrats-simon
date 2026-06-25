@@ -1,0 +1,733 @@
+{
+  "version": "1.0",
+  "name": "Jubilaciones (unificado)",
+  "trigger_word": "jubilacion",
+  "is_active": true,
+  "nodes": [
+    {
+      "id": "start",
+      "data": {
+        "label": "Inicio"
+      },
+      "type": "input",
+      "style": {
+        "color": "white",
+        "border": "none",
+        "background": "#9c7a55",
+        "fontWeight": "bold"
+      },
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "width": 150,
+      "height": 40,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 0
+      }
+    },
+    {
+      "id": "welcome",
+      "data": {
+        "text": "¡Hola! 👋 Soy del estudio jubilatorio *Prats & Simón*. Te hago unas pocas preguntas para ver si tu caso entra en la *consulta gratuita* con un abogado (por videollamada o presencial). Es rapidito 🙂"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 300,
+        "y": 120
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 120
+      }
+    },
+    {
+      "id": "q_nombre",
+      "data": {
+        "question": "Para arrancar, ¿cómo te llamás? (con tu nombre de pila alcanza 🙂)",
+        "variable": "nombre"
+      },
+      "type": "questionNode",
+      "position": {
+        "x": 300,
+        "y": 320
+      },
+      "width": 256,
+      "height": 200,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 320
+      }
+    },
+    {
+      "id": "q_edad",
+      "data": {
+        "question": "¡Gracias, {{nombre}}! ¿Qué edad tenés? Escribí solo el número, por ejemplo: 64",
+        "variable": "edad"
+      },
+      "type": "questionNode",
+      "position": {
+        "x": 300,
+        "y": 560
+      },
+      "width": 256,
+      "height": 200,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 560
+      }
+    },
+    {
+      "id": "c_edad63",
+      "data": {
+        "operator": "greater_than",
+        "variable": "edad",
+        "expectedValue": "62"
+      },
+      "type": "conditionNode",
+      "position": {
+        "x": 300,
+        "y": 800
+      },
+      "width": 256,
+      "height": 192,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 800
+      }
+    },
+    {
+      "id": "q_nac",
+      "data": {
+        "options": [
+          "Argentino/a",
+          "Extranjero/a"
+        ],
+        "question": "¿Tenés nacionalidad argentina o sos extranjero/a?",
+        "variable": "nacionalidad"
+      },
+      "type": "pollNode",
+      "position": {
+        "x": 60,
+        "y": 1030
+      },
+      "width": 280,
+      "height": 293,
+      "positionAbsolute": {
+        "x": 60,
+        "y": 1030
+      }
+    },
+    {
+      "id": "q_anio_dni",
+      "data": {
+        "question": "Una cosa importante: necesito el año que figura *en tu DNI* como fecha de ingreso al país (suele ser distinto al ingreso real). ¿Qué año figura? Escribí solo el año, por ejemplo: 2005",
+        "variable": "anio_dni"
+      },
+      "type": "questionNode",
+      "position": {
+        "x": -260,
+        "y": 1360
+      },
+      "width": 256,
+      "height": 200,
+      "positionAbsolute": {
+        "x": -260,
+        "y": 1360
+      }
+    },
+    {
+      "id": "c_resid",
+      "data": {
+        "operator": "less_than",
+        "variable": "anio_dni",
+        "expectedValue": "2009"
+      },
+      "type": "conditionNode",
+      "position": {
+        "x": -260,
+        "y": 1600
+      },
+      "width": 256,
+      "height": 192,
+      "positionAbsolute": {
+        "x": -260,
+        "y": 1600
+      }
+    },
+    {
+      "id": "c_edad60",
+      "data": {
+        "operator": "greater_than",
+        "variable": "edad",
+        "expectedValue": "59"
+      },
+      "type": "conditionNode",
+      "position": {
+        "x": 620,
+        "y": 1030
+      },
+      "width": 256,
+      "height": 192,
+      "positionAbsolute": {
+        "x": 620,
+        "y": 1030
+      }
+    },
+    {
+      "id": "q_aportes",
+      "data": {
+        "question": "¿Cuántos años de aportes tenés, más o menos? Escribí solo el número, por ejemplo: 22",
+        "variable": "aportes"
+      },
+      "type": "questionNode",
+      "position": {
+        "x": 620,
+        "y": 1260
+      },
+      "width": 256,
+      "height": 200,
+      "positionAbsolute": {
+        "x": 620,
+        "y": 1260
+      }
+    },
+    {
+      "id": "c_aportes",
+      "data": {
+        "operator": "greater_than",
+        "variable": "aportes",
+        "expectedValue": "14"
+      },
+      "type": "conditionNode",
+      "position": {
+        "x": 620,
+        "y": 1500
+      },
+      "width": 256,
+      "height": 192,
+      "positionAbsolute": {
+        "x": 620,
+        "y": 1500
+      }
+    },
+    {
+      "id": "viable",
+      "data": {
+        "text": "✅ ¡Buenísimo, {{nombre}}! Por lo que me contás, tu caso da para la *consulta gratuita* con un abogado. Coordinemos el turno 👇"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 300,
+        "y": 1820
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 1820
+      }
+    },
+    {
+      "id": "q_zona",
+      "data": {
+        "options": [
+          "Videollamada",
+          "Presencial CABA",
+          "Presencial Quilmes",
+          "Presencial Haedo"
+        ],
+        "question": "¿Cómo preferís la consulta?",
+        "variable": "oficina"
+      },
+      "type": "pollNode",
+      "position": {
+        "x": 300,
+        "y": 2010
+      },
+      "width": 280,
+      "height": 340,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 2010
+      }
+    },
+    {
+      "id": "proposals",
+      "data": {
+        "text": "📅 Estos son los próximos horarios disponibles, {{nombre}}:\n\n{{horarios}}",
+        "endHour": "18:00",
+        "startHour": "09:00",
+        "allowedDays": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "maxProposals": 3,
+        "slotDuration": 30,
+        "outputVariable": "horarios"
+      },
+      "type": "appointmentProposalsNode",
+      "position": {
+        "x": 300,
+        "y": 2380
+      },
+      "width": 288,
+      "height": 335,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 2380
+      }
+    },
+    {
+      "id": "q_choice",
+      "data": {
+        "question": "Decime el *número* de la opción que más te sirve (1, 2 o 3):",
+        "variable": "opcion_horario"
+      },
+      "type": "questionNode",
+      "position": {
+        "x": 300,
+        "y": 2750
+      },
+      "width": 256,
+      "height": 200,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 2750
+      }
+    },
+    {
+      "id": "book",
+      "data": {
+        "text": "✅ ¡Listo, {{nombre}}! Tu consulta quedó agendada. Te paso los detalles y, si es videollamada, el link antes del turno. ¡Gracias! 🙌",
+        "slotsVar": "horarios_array",
+        "nombreVar": "nombre",
+        "resumenVar": "resumen",
+        "telefonoVar": "",
+        "slotChoiceVar": "opcion_horario"
+      },
+      "type": "appointmentNode",
+      "position": {
+        "x": 300,
+        "y": 2990
+      },
+      "width": 288,
+      "height": 763,
+      "positionAbsolute": {
+        "x": 300,
+        "y": 2990
+      }
+    },
+    {
+      "id": "noviable_ext",
+      "data": {
+        "text": "Por los años de residencia que figuran en tu DNI, hoy no entrás directo en la consulta gratuita, {{nombre}}. Igual podríamos ver otras vías según tu caso (por ejemplo la PUAM al cumplir los requisitos) o hacerte un análisis previsional completo. ¿Querés que un abogado te contacte?"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": -260,
+        "y": 1830
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": -260,
+        "y": 1830
+      }
+    },
+    {
+      "id": "too_young",
+      "data": {
+        "text": "Por tu edad todavía no entrás en la consulta jubilatoria gratuita, {{nombre}}. Pero hay alternativas para ir ordenando tus aportes desde antes de la edad de retiro (como el plan para *comprar aportes*). ¿Querés que un abogado te asesore sobre eso?"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 960,
+        "y": 1260
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 960,
+        "y": 1260
+      }
+    },
+    {
+      "id": "proyeccion",
+      "data": {
+        "text": "Por lo que me contás, hoy no entrás directo en la consulta gratuita, {{nombre}}. Pero podemos hacerte un *análisis previsional completo* y proyectar tu mejor jubilación posible (consulta de *$29.000*). ¿Querés que un abogado te contacte para eso?"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 620,
+        "y": 1720
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 620,
+        "y": 1720
+      }
+    },
+    {
+      "id": "q_proy",
+      "data": {
+        "options": [
+          "Sí, me interesa",
+          "No, gracias"
+        ],
+        "question": "¿Querés que un abogado del estudio te contacte?",
+        "variable": "quiere_proyeccion"
+      },
+      "type": "pollNode",
+      "position": {
+        "x": 1000,
+        "y": 1700
+      },
+      "width": 280,
+      "height": 293,
+      "positionAbsolute": {
+        "x": 1000,
+        "y": 1700
+      }
+    },
+    {
+      "id": "lead_ok",
+      "data": {
+        "text": "¡Genial, {{nombre}}! Un abogado se va a comunicar con vos dentro del horario de atención (lunes a viernes de 9 a 18 hs). ¡Gracias por escribirnos! 🙌"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 860,
+        "y": 1960
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 860,
+        "y": 1960
+      }
+    },
+    {
+      "id": "close_ok",
+      "data": {
+        "text": "Sin problema, {{nombre}}. Cualquier cosa que necesites sobre tu jubilación, acá estamos. ¡Que estés muy bien! 🙏"
+      },
+      "type": "messageNode",
+      "position": {
+        "x": 1160,
+        "y": 1960
+      },
+      "width": 256,
+      "height": 162,
+      "positionAbsolute": {
+        "x": 1160,
+        "y": 1960
+      }
+    }
+  ],
+  "edges": [
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_start_welcome",
+      "source": "start",
+      "target": "welcome"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_welcome_nombre",
+      "source": "welcome",
+      "target": "q_nombre"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_nombre_edad",
+      "source": "q_nombre",
+      "target": "q_edad"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_edad_c63",
+      "source": "q_edad",
+      "target": "c_edad63"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_c63_nac",
+      "source": "c_edad63",
+      "target": "q_nac",
+      "sourceHandle": "true"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_c63_c60",
+      "source": "c_edad63",
+      "target": "c_edad60",
+      "sourceHandle": "false"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_nac_arg_viable",
+      "source": "q_nac",
+      "target": "viable",
+      "sourceHandle": "option-0"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_nac_ext_dni",
+      "source": "q_nac",
+      "target": "q_anio_dni",
+      "sourceHandle": "option-1"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_dni_resid",
+      "source": "q_anio_dni",
+      "target": "c_resid"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_resid_viable",
+      "source": "c_resid",
+      "target": "viable",
+      "sourceHandle": "true"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_resid_noviable",
+      "source": "c_resid",
+      "target": "noviable_ext",
+      "sourceHandle": "false"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_c60_aportes",
+      "source": "c_edad60",
+      "target": "q_aportes",
+      "sourceHandle": "true"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_c60_young",
+      "source": "c_edad60",
+      "target": "too_young",
+      "sourceHandle": "false"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_aportes_cond",
+      "source": "q_aportes",
+      "target": "c_aportes"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_aportes_viable",
+      "source": "c_aportes",
+      "target": "viable",
+      "sourceHandle": "true"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_aportes_proy",
+      "source": "c_aportes",
+      "target": "proyeccion",
+      "sourceHandle": "false"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_viable_zona",
+      "source": "viable",
+      "target": "q_zona"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_zona_prop_0",
+      "source": "q_zona",
+      "target": "proposals",
+      "sourceHandle": "option-0"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_zona_prop_1",
+      "source": "q_zona",
+      "target": "proposals",
+      "sourceHandle": "option-1"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_zona_prop_2",
+      "source": "q_zona",
+      "target": "proposals",
+      "sourceHandle": "option-2"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_zona_prop_3",
+      "source": "q_zona",
+      "target": "proposals",
+      "sourceHandle": "option-3"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_prop_choice",
+      "source": "proposals",
+      "target": "q_choice"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_choice_book",
+      "source": "q_choice",
+      "target": "book"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_noviableext_proy",
+      "source": "noviable_ext",
+      "target": "q_proy"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_young_proy",
+      "source": "too_young",
+      "target": "q_proy"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_proy_qproy",
+      "source": "proyeccion",
+      "target": "q_proy"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_qproy_lead",
+      "source": "q_proy",
+      "target": "lead_ok",
+      "sourceHandle": "option-0"
+    },
+    {
+      "animated": true,
+      "style": {
+        "strokeWidth": 2,
+        "stroke": "#9c7a55"
+      },
+      "id": "e_qproy_close",
+      "source": "q_proy",
+      "target": "close_ok",
+      "sourceHandle": "option-1"
+    }
+  ]
+}

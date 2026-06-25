@@ -2,6 +2,15 @@ import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
 import { AppointmentService } from '../../services/AppointmentService';
 import { AvailabilityService } from '../../services/AvailabilityService';
 
+/** Reemplaza {{variable}} con el valor del contexto (vacío si no existe). */
+function interp(text: string, context: any): string {
+    if (typeof text !== 'string') return text;
+    return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, v) => {
+        const val = context?.[v];
+        return val === undefined || val === null ? '' : String(val);
+    });
+}
+
 export class AppointmentProposalsExecutor implements NodeExecutor {
     private formatSlots(slots: { start: string; end: string }[]): string {
         const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -60,9 +69,9 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
             });
             const formatted = this.formatSlots(slots);
             const outVar = nodeData.outputVariable || 'horarios_disponibles';
-            const message = typeof nodeData.text === 'string' && nodeData.text.trim()
+            const message = interp(typeof nodeData.text === 'string' && nodeData.text.trim()
                 ? nodeData.text.replace(new RegExp(`{{\\s*${outVar}\\s*}}`, 'g'), formatted)
-                : formatted;
+                : formatted, context as any);
             return {
                 messages: [message],
                 wait_for_input: false,
@@ -80,9 +89,9 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
                 const slots = await availability.freeSlots(context.accountId, oficina, { max: Number(nodeData.maxProposals) || 3 });
                 const formatted = this.formatSlots(slots);
                 const delegatedOutputVar = nodeData.outputVariable || 'horarios_disponibles';
-                const message = typeof nodeData.text === 'string' && nodeData.text.trim()
+                const message = interp(typeof nodeData.text === 'string' && nodeData.text.trim()
                     ? nodeData.text.replace(new RegExp(`{{\\s*${delegatedOutputVar}\\s*}}`, 'g'), formatted)
-                    : formatted;
+                    : formatted, context as any);
                 return {
                     messages: [message],
                     wait_for_input: false,
@@ -180,9 +189,9 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
             // Emitir el listado como mensaje: el nodo "sugerir horarios" debe MOSTRAR
             // los horarios, no solo guardarlos en una variable (antes quedaba mudo).
             // Si data.text trae plantilla, se usa esa con {{outputVar}} reemplazado.
-            const message = typeof nodeData.text === 'string' && nodeData.text.trim()
+            const message = interp(typeof nodeData.text === 'string' && nodeData.text.trim()
                 ? nodeData.text.replace(new RegExp(`{{\\s*${outputVar}\\s*}}`, 'g'), formattedText)
-                : formattedText;
+                : formattedText, context as any);
 
             // updatedContext es lo ÚNICO que flow.engine persiste en la sesión.
             // Sin esto, horarios_array se pierde y el nodo de agendar (turno siguiente)
