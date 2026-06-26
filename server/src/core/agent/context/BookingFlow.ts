@@ -154,6 +154,22 @@ function diaAR(iso: string): string {
   try { return new Date(iso).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: TZ }); } catch { return ''; }
 }
 function turnoWord(h: number): string { return h < 12 ? 'de mañana' : h < 14 ? 'sobre el mediodía' : 'de tarde'; }
+function turnoBucket(h: number): 0 | 1 | 2 { return h < 12 ? 0 : h < 14 ? 1 : 2; }
+
+// Diversifica la oferta: 1 turno por franja (mañana / mediodía / tarde) si hay, así
+// el cliente ve las opciones reales y no pide "a la tarde" cuando no hay. Completa
+// hasta 3 con los más próximos y ordena cronológicamente.
+function diversifyByTurno(raw: BookingSlot[]): BookingSlot[] {
+  const buckets: BookingSlot[][] = [[], [], []];
+  for (const s of raw) buckets[turnoBucket(slotHourAR(s.start))].push(s);
+  const picked: BookingSlot[] = [];
+  for (const b of buckets) if (b.length) picked.push(b[0]); // 1 por franja (el más temprano de cada una)
+  if (picked.length < 3) {
+    const chosen = new Set(picked.map((s) => s.start));
+    for (const s of raw) { if (picked.length >= 3) break; if (!chosen.has(s.start)) picked.push(s); }
+  }
+  return picked.sort((a, b) => a.start.localeCompare(b.start)).slice(0, 3);
+}
 
 // Ofrece los horarios en LENGUAJE NATURAL (no "1, 2, 3"). El cliente elige diciendo
 // el horario ("a las 10", "el del mediodía"); OptionResolver lo resuelve por hora.
@@ -183,8 +199,8 @@ async function farToVideo(state: BookingState, deps: BookingDeps): Promise<Booki
 // opts.desde: buscar desde otra fecha ("el martes"); opts.turno: filtrar mañana/tarde.
 async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?: Date; turno?: 'manana' | 'tarde' } = {}): Promise<BookingStep> {
   const oficina = state.oficina!;
-  const raw = await deps.freeSlots(oficina, { desde: opts.desde, max: opts.turno ? 30 : 3 });
-  let slots = raw.slice(0, 3);
+  const raw = await deps.freeSlots(oficina, { desde: opts.desde, max: 30 });
+  let slots = diversifyByTurno(raw); // por defecto: 1 por franja (mañana/mediodía/tarde)
   let lead: string | undefined;
   if (opts.turno) {
     const f = raw.filter((s) => (opts.turno === 'tarde' ? slotHourAR(s.start) >= 13 : slotHourAR(s.start) < 13));
@@ -192,7 +208,7 @@ async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?:
       slots = f.slice(0, 3);
     } else if (raw.length) {
       // No hay del turno pedido, pero sí hay otros ese día: los mostramos con aviso.
-      slots = raw.slice(0, 3);
+      slots = diversifyByTurno(raw);
       lead = `No tengo turnos a la ${opts.turno === 'tarde' ? 'tarde' : 'mañana'}${opts.desde ? ' ese día' : ''}, pero ${lugarLabel(state)} tengo estos:`;
     } else {
       slots = [];

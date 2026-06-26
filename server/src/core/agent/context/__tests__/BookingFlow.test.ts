@@ -199,3 +199,21 @@ describe('parseSlotRequest — "de tarde" (sin "la") y contexto de día', () => 
     expect(r.desde).toBeUndefined();
   });
 });
+
+describe('BookingFlow — oferta diversa por franja (mañana/mediodía/tarde)', () => {
+  it('con muchos slots de mañana + 1 de tarde, la oferta incluye el de tarde', async () => {
+    const many = [
+      { start: '2026-07-02T12:00:00.000Z', end: '2026-07-02T12:30:00.000Z', oficina: 'Q', profileId: 'p' }, // 09:00
+      { start: '2026-07-02T12:30:00.000Z', end: '2026-07-02T13:00:00.000Z', oficina: 'Q', profileId: 'p' }, // 09:30
+      { start: '2026-07-02T13:00:00.000Z', end: '2026-07-02T13:30:00.000Z', oficina: 'Q', profileId: 'p' }, // 10:00
+      { start: '2026-07-02T16:00:00.000Z', end: '2026-07-02T16:30:00.000Z', oficina: 'Q', profileId: 'p' }, // 13:00 mediodía
+      { start: '2026-07-02T20:00:00.000Z', end: '2026-07-02T20:30:00.000Z', oficina: 'Q', profileId: 'p' }, // 17:00 tarde
+    ];
+    const deps = makeDeps({ freeSlots: vi.fn(async () => many) });
+    const r = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const offered = (r.state.offered ?? []).map((o) => o.value);
+    expect(offered).toContain('2026-07-02T20:00:00.000Z'); // tarde presente
+    expect(offered).toContain('2026-07-02T16:00:00.000Z'); // mediodía presente
+    expect(offered).toContain('2026-07-02T12:00:00.000Z'); // mañana presente
+  });
+});
