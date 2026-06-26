@@ -19,12 +19,34 @@ function interp(text: string, context: any): string {
  * Date (09:00) desde el cual proponer, o undefined si no se entiende.
  */
 async function resolvePreferredDate(text: string, apiKey?: string, model?: string): Promise<Date | undefined> {
-    const raw = String(text || '').trim();
+    const raw = String(text || '').trim().toLowerCase();
     if (!raw) return undefined;
     // Fecha ISO directa.
     const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) { const d = new Date(`${iso[0]}T09:00:00`); return isNaN(d.getTime()) ? undefined : d; }
-    const today = new Date();
+    if (iso) { const d = new Date(`${iso[0]}T03:00:00Z`); return isNaN(d.getTime()) ? undefined : d; }
+
+    // Hoy en hora Argentina (UTC-3).
+    const AR = 3 * 3600000;
+    const arNow = new Date(Date.now() - AR);
+    // Helper: arma un Date a las 00:00 AR de (hoy + n días).
+    const arDay = (addDays: number) => new Date(Date.UTC(arNow.getUTCFullYear(), arNow.getUTCMonth(), arNow.getUTCDate() + addDays, 3, 0, 0));
+
+    // 1) Día de la semana explícito (determinístico, NO por IA — la IA se equivocaba).
+    const DOW: Record<string, number> = { domingo:0, lunes:1, martes:2, miercoles:3, 'miércoles':3, jueves:4, viernes:5, sabado:6, 'sábado':6 };
+    for (const [name, dow] of Object.entries(DOW)) {
+        if (raw.includes(name)) {
+            let add = (dow - arNow.getUTCDay() + 7) % 7;
+            if (add === 0) add = 7; // "el martes" (hoy martes) → el próximo
+            return arDay(add);
+        }
+    }
+    // 2) Relativos comunes.
+    if (/pasado\s*mañana|pasado manana/.test(raw)) return arDay(2);
+    if (/mañana|manana/.test(raw)) return arDay(1);
+    if (/hoy/.test(raw)) return arDay(0);
+    if (/semana que viene|próxima semana|proxima semana|otra semana/.test(raw)) return arDay(7);
+
+    const today = arNow;
     const hoy = today.toISOString().slice(0, 10);
     try {
         const resp = await AIService.complete({
@@ -33,12 +55,12 @@ async function resolvePreferredDate(text: string, apiKey?: string, model?: strin
             temperature: 0, maxTokens: 12, apiKey, model,
         });
         const m = (resp || '').match(/(\d{4})-(\d{2})-(\d{2})/);
-        if (m) { const d = new Date(`${m[0]}T09:00:00`); if (!isNaN(d.getTime()) && d.getTime() > today.getTime() - 864e5) return d; }
+        if (m) { const d = new Date(`${m[0]}T03:00:00Z`); if (!isNaN(d.getTime()) && d.getTime() > today.getTime() - 864e5) return d; }
     } catch (e: any) {
         logger.warn(`[Proposals] resolvePreferredDate falló: ${e?.message ?? e}`);
     }
-    // Fallback: mañana 09:00.
-    const t = new Date(today); t.setDate(t.getDate() + 1); t.setHours(9, 0, 0, 0); return t;
+    // Fallback: mañana (00:00 AR).
+    return arDay(1);
 }
 
 export class AppointmentProposalsExecutor implements NodeExecutor {
