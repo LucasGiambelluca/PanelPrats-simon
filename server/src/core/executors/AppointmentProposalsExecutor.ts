@@ -59,8 +59,24 @@ async function resolvePreferredDate(text: string, apiKey?: string, model?: strin
     } catch (e: any) {
         logger.warn(`[Proposals] resolvePreferredDate falló: ${e?.message ?? e}`);
     }
-    // Fallback: mañana (00:00 AR).
-    return arDay(1);
+    // No se reconoció un día puntual (puede ser solo un turno: "por la tarde").
+    // Si pidió explícitamente "otro día/más adelante", caemos a mañana; si no, undefined.
+    if (/otro\s*d[ií]a|más adelante|mas adelante|otra fecha|pr[oó]xim|siguiente/.test(raw)) return arDay(1);
+    return undefined;
+}
+
+/** Extrae el turno pedido: 'manana' (09–13), 'tarde' (13–18), o null. */
+function extractTurno(text: string): 'manana' | 'tarde' | null {
+    const s = String(text || '').toLowerCase();
+    if (/tarde|despu[eé]s de(l)? mediod[ií]a|a la tardecita/.test(s)) return 'tarde';
+    if (/ma[ñn]ana temprano|por la ma[ñn]ana|a la ma[ñn]ana|temprano/.test(s)) return 'manana';
+    return null;
+}
+
+/** Hora del slot en horario Argentina (UTC-3). */
+function slotHourAR(iso: string): number {
+    const d = new Date(iso);
+    return (d.getUTCHours() - 3 + 24) % 24;
 }
 
 export class AppointmentProposalsExecutor implements NodeExecutor {
@@ -124,13 +140,23 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
             // proponemos desde esa fecha en vez de desde ahora.
             const desdeRaw = String((context as any)[nodeData.desdeVar || 'fecha_desde'] || '').trim();
             const nowOverride = desdeRaw ? await resolvePreferredDate(desdeRaw, nodeData.apiKey, nodeData.model) : undefined;
-            const slots = await availability.proposeCascade(context.accountId, {
+            const turno = desdeRaw ? extractTurno(desdeRaw) : null;
+            const want = Number(nodeData.maxProposals) || 3;
+            // Si pidió turno (mañana/tarde), traemos más y filtramos por franja horaria.
+            let slots = await availability.proposeCascade(context.accountId, {
                 modalidad,
                 zona: zona || undefined,
                 minLeadMin: Number(nodeData.minLeadMin) || 60,
-                max: Number(nodeData.maxProposals) || 3,
+                max: turno ? 40 : want,
                 ...(nowOverride ? { now: nowOverride } : {}),
             });
+            if (turno) {
+                const inFranja = (iso: string) => {
+                    const h = slotHourAR(iso);
+                    return turno === 'tarde' ? h >= 13 : h < 13;
+                };
+                slots = slots.filter((s: any) => inFranja(s.start)).slice(0, want);
+            }
             const formatted = this.formatSlots(slots);
             const outVar = nodeData.outputVariable || 'horarios_disponibles';
             const message = interp(typeof nodeData.text === 'string' && nodeData.text.trim()
