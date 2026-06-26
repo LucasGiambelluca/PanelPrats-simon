@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -160,7 +160,9 @@ export default function Agenda() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
   const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
-  const [profFilter, setProfFilter] = useState<string>(''); // '' = todos
+  // Agendas (profesionales) visibles. Admin: arranca con todas + sin-asignar.
+  // Empleada: bloqueada a su propia agenda.
+  const [selectedProfs, setSelectedProfs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -174,6 +176,20 @@ export default function Agenda() {
       try { localStorage.setItem('agenda_theme', next); } catch { /* noop */ }
       return next;
     });
+  };
+
+  const toggleProf = (id: string) => {
+    setSelectedProfs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allProfKeys = () => [...professionals.map((p) => p.id), UNASSIGNED];
+  const allSelected = professionals.length > 0 && allProfKeys().every((k) => selectedProfs.has(k));
+  const toggleAllProfs = () => {
+    setSelectedProfs(() => (allSelected ? new Set<string>() : new Set(allProfKeys())));
   };
 
   // Sidebar states
@@ -253,9 +269,15 @@ export default function Agenda() {
   // Load professionals (admin) o bloquear a la agenda propia (empleada)
   useEffect(() => {
     if (role === 'admin') {
-      professionalsApi.list().then(setProfessionals).catch(() => {});
+      professionalsApi.list()
+        .then((profs) => {
+          setProfessionals(profs);
+          // Admin: arranca con todas las agendas + "sin asignar" visibles.
+          setSelectedProfs(new Set([...profs.map((p) => p.id), UNASSIGNED]));
+        })
+        .catch(() => {});
     } else if (user) {
-      setProfFilter(user.id); // empleada: agenda propia
+      setSelectedProfs(new Set([user.id])); // empleada: solo su agenda
     }
   }, [role, user]);
 
@@ -263,6 +285,12 @@ export default function Agenda() {
   useEffect(() => {
     setMiniDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
   }, [currentDate]);
+
+  // Ids de profesional ordenados de forma estable (por id) para asignar colores.
+  const orderedProfIds = useMemo(
+    () => professionals.map((p) => p.id).sort(),
+    [professionals],
+  );
 
   const statusLabel: Record<string, string> = {
     pendiente: 'pendiente', confirmada: 'confirmada', cancelada: 'cancelada',
@@ -334,7 +362,7 @@ export default function Agenda() {
     if (app.status === 'no_asistio' && filterNoShow) matchesStatusFilter = true;
     if (app.status === 'cerrado' && filterClosed) matchesStatusFilter = true;
 
-    const matchesProf = !profFilter || app.assigned_profile_id === profFilter;
+    const matchesProf = isProfVisible(selectedProfs, app.assigned_profile_id);
     return matchesSearch && matchesStatusFilter && matchesProf;
   });
 
@@ -793,6 +821,62 @@ export default function Agenda() {
           </div>
         </div>
 
+        {/* AGENDAS (multi-select de profesionales, estilo Google Calendar) */}
+        {role === 'admin' && professionals.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h3 className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${
+                theme === 'light' ? 'text-slate-400' : 'text-brand-secondary/80'
+              }`}>
+                <CalendarDays size={10} />
+                <span>Agendas</span>
+              </h3>
+              <button
+                onClick={toggleAllProfs}
+                className={`text-[10px] font-bold ${theme === 'light' ? 'text-[#1a73e8] hover:underline' : 'text-brand-secondary hover:underline'}`}
+              >
+                {allSelected ? 'Ninguna' : 'Todas'}
+              </button>
+            </div>
+            <div className="space-y-2.5 px-1 max-h-56 overflow-y-auto scrollbar-thin">
+              {professionals.map((p) => {
+                const checked = selectedProfs.has(p.id);
+                const swatch = profPalette(orderedProfIds, p.id).swatch;
+                return (
+                  <label key={p.id} className={`flex items-center gap-3 cursor-pointer text-xs font-semibold select-none group ${
+                    theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-brand-textMuted hover:text-white'
+                  }`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleProf(p.id)} className="sr-only" />
+                    <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-all ${
+                      checked ? `${swatch} text-white` : theme === 'light' ? 'border border-slate-300 group-hover:border-slate-400' : 'border border-white/20 group-hover:border-white/40'
+                    }`}>
+                      {checked && <Check size={10} className="stroke-[3]" />}
+                    </div>
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                );
+              })}
+              {/* Sin asignar */}
+              {(() => {
+                const checked = selectedProfs.has(UNASSIGNED);
+                return (
+                  <label className={`flex items-center gap-3 cursor-pointer text-xs font-semibold select-none group ${
+                    theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-brand-textMuted hover:text-white'
+                  }`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleProf(UNASSIGNED)} className="sr-only" />
+                    <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-all ${
+                      checked ? 'bg-slate-400 text-white' : theme === 'light' ? 'border border-slate-300 group-hover:border-slate-400' : 'border border-white/20 group-hover:border-white/40'
+                    }`}>
+                      {checked && <Check size={10} className="stroke-[3]" />}
+                    </div>
+                    <span className="italic opacity-80">Sin asignar</span>
+                  </label>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* MIS CALENDARIOS (Checkboxes for category filters) */}
         <div className="space-y-3">
           <h3 className={`text-[10px] font-bold uppercase tracking-widest px-1 flex items-center gap-1.5 ${
@@ -1027,21 +1111,6 @@ export default function Agenda() {
             >
               {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
             </button>
-
-            {/* Professional filter (admin only) */}
-            {role === 'admin' && (
-              <select
-                value={profFilter}
-                onChange={(e) => setProfFilter(e.target.value)}
-                className={`border rounded-xl px-3 py-1.5 text-xs font-bold ${theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-white/5 border-white/10 text-brand-textLight'}`}
-                title="Filtrar por profesional"
-              >
-                <option value="">Todos los profesionales</option>
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            )}
 
             {/* View Switcher Tabs */}
             <div className={`border rounded-xl p-1 flex gap-0.5 ${
