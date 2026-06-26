@@ -9,16 +9,45 @@ import { AppointmentService } from '../../../services/AppointmentService';
 import { AvailabilityService } from '../../../services/AvailabilityService';
 import { supabase } from '../../../config/supabase';
 import { redisPersistence } from '../../../infrastructure/persistence/RedisPersistenceService';
+import { ConversationContextLoader, buildContinuityBlock, type OpenAppointment } from '../context/ConversationContextLoader';
+import { ZoneResolver } from '../context/ZoneResolver';
+import { OfferedOptionsStore } from '../context/OfferedOptionsStore';
+import { buildReceptionFicha } from '../context/ReceptionFichaBuilder';
+import { BookingService } from '../context/BookingService';
+import { BookingStateStore } from '../context/BookingStateStore';
+import { detectBookingIntent } from '../context/BookingFlow';
+
+const TZ = 'America/Argentina/Buenos_Aires';
+
+// Próxima cita vigente del contacto (para el bloque de continuidad).
+async function nextAppointment(accountId: string, phone: string): Promise<OpenAppointment | null> {
+  try {
+    const appts = await AppointmentService.list(accountId);
+    const now = Date.now();
+    const next = appts
+      .filter((a) => a.phone === phone && a.status !== 'cancelada' && a.start_time && new Date(a.start_time).getTime() > now)
+      .sort((a, b) => new Date(a.start_time!).getTime() - new Date(b.start_time!).getTime())[0];
+    if (!next?.start_time) return null;
+    return {
+      id: next.id, start_time: next.start_time, oficina: next.oficina, status: next.status,
+      fechaTexto: new Date(next.start_time).toLocaleString('es-AR', {
+        weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+        hour12: false, timeZone: TZ,
+      }),
+    };
+  } catch { return null; }
+}
 
 async function loadAccount(accountId: string) {
   const { data } = await supabase.from('accounts')
-    .select('id, name, agent_name, agent_persona, business_context, ai_api_key, ai_model')
+    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model')
     .eq('id', accountId).maybeSingle();
   return {
     accountId,
     agentName: data?.agent_name ?? 'Sofía',
     agentPersona: data?.agent_persona ?? null,
     businessContext: data?.business_context ?? null,
+    agentProcedures: data?.agent_procedures ?? null,
     estudioNombre: data?.name ?? null,
     apiKey: data?.ai_api_key ?? null,
     model: data?.ai_model ?? null,
@@ -60,7 +89,46 @@ export function getAgentRuntime(): AgentRuntime {
   const knowledge = new KnowledgeBase();
   const memory = new ContactMemory();
   const availability = new AvailabilityService();
-  const tools = new ToolRegistry({ appointments: AppointmentService, knowledge, availability, handoff });
+  const zone = new ZoneResolver();
+  const offered = new OfferedOptionsStore();
+
+  const tools = new ToolRegistry({
+    appointments: AppointmentService, knowledge, availability, handoff,
+    // Capacidad 3: geo-routing.
+    suggestOffice: (accountId, texto) => zone.suggest(accountId, texto),
+    // Capacidad 4: opciones ofrecidas.
+    offered: { set: (a, p, opts) => offered.set(a, p, opts), get: (a, p) => offered.get(a, p) },
+    // Capacidad 2: ficha IA al agendar. Usa gpt-4o (structured extraction de calidad).
+    buildFicha: (conversation, ctx) =>
+      buildReceptionFicha({ complete: (o) => AIService.complete(o) }, { conversation, ctx, model: 'gpt-4o' })
+        .then((f) => ({ resumen_ia: f.resumen_ia, perfil: f })),
+  });
+
+  // Capacidad 1: loader de continuidad.
+  const contextLoader = new ConversationContextLoader({
+    loadMemory: (a, p) => memory.loadExtended(a, p),
+    history: recentHistory,
+    nextAppointment,
+    offeredOptions: (a, p) => offered.get(a, p),
+  });
+
+  // Agendado determinístico: reusa book_appointment del ToolRegistry (capacidad,
+  // profesional, ficha IA) → cero duplicación de la lógica de reserva.
+  const booking = new BookingService({
+    store: new BookingStateStore(),
+    suggestOffice: (a, t) => zone.suggest(a, t),
+    listOffices: (a) => availability.listOffices(a).then((offs) => offs.map((o) => ({ nombre: o.nombre, modalidad: o.modalidad }))),
+    freeSlots: (a, oficina) => availability.freeSlots(a, oficina, { max: 3 }),
+    book: async (a, phone, conversation, _zona, b) => {
+      // zona NO se thread-ea cruda: que gpt-4o extraiga la localidad limpia del diálogo.
+      const r = await tools.execute('book_appointment',
+        { nombre: b.nombre, start_time: b.start, end_time: b.end, oficina: b.oficina, resumen: '' },
+        { accountId: a, phone, conversation });
+      if (!r.ok) throw new Error(r.error || 'sin cupo');
+      return { direccion: r.data?.direccion ?? null, video_link: r.data?.video_link ?? null, modalidad: r.data?.modalidad };
+    },
+  });
+
   singleton = new AgentRuntime({
     ai: { completeWithTools: (o) => AIService.completeWithTools(o) },
     persona: { build: buildPersona },
@@ -68,6 +136,14 @@ export function getAgentRuntime(): AgentRuntime {
     tools: { schemas: () => tools.schemas(), execute: (n, args, ctx) => tools.execute(n, args, ctx) },
     loadAccount,
     history: recentHistory,
+    contextLoader: { load: (a, p) => contextLoader.load(a, p) },
+    buildContinuity: buildContinuityBlock,
+    booking: {
+      isActive: (a, p) => booking.isActive(a, p),
+      advance: (a, p, t, c) => booking.advance(a, p, t, c),
+      start: (a, p, args, c) => booking.start(a, p, args, c),
+    },
+    bookingIntent: detectBookingIntent,
     updateMemory: async (accountId, phone, turns) => {
       const patch = await extractMemoryPatch({ complete: (o) => AIService.complete(o) }, turns);
       await memory.merge(accountId, phone, patch);

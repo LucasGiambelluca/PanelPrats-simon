@@ -2,6 +2,10 @@
 export interface ToolContext {
   accountId: string;
   phone: string;
+  // Conversación acumulada (para el ReceptionFichaBuilder en book_appointment).
+  conversation?: string;
+  // Zona resuelta por suggest_office en este hilo (para etiquetar la ficha).
+  zona?: string | null;
 }
 
 // Resultado normalizado de una tool (lo que se devuelve al modelo).
@@ -25,6 +29,7 @@ export interface AgentAccountConfig {
   agentName: string;          // default 'Sofía'
   agentPersona?: string | null;
   businessContext?: string | null;
+  agentProcedures?: string | null;
   estudioNombre?: string | null;
   apiKey?: string | null;
   model?: string | null;

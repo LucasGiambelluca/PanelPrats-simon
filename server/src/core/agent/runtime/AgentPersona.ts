@@ -1,6 +1,6 @@
 import type { AgentAccountConfig } from './types';
 
-export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string): string {
+export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string, continuityBlock = ''): string {
   const nombre = account.agentName?.trim() || 'Sofía';
   const estudio = account.estudioNombre?.trim() || 'el estudio';
   const tono = account.agentPersona?.trim();
@@ -19,12 +19,19 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     '',
     'REGLAS (importantes):',
     '- Temas previsionales (montos, plazos, requisitos, leyes): respondé SOLO con lo que devuelva la tool search_knowledge. Si no hay info, decílo con franqueza y ofrecé derivar con handoff_to_human. NUNCA inventes datos.',
-    '- Antes de agendar, reprogramar o cancelar (book/reschedule/cancel): repetí los datos y esperá que el cliente CONFIRME.',
     '- Si la persona se frustra o pide un humano, derivá con handoff_to_human pasando un resumen del caso.',
-    '- Para dar un turno: 1) usá list_offices para ver las oficinas/modalidades, 2) preguntá cuál prefiere, 3) usá check_availability de esa oficina, 4) ofrecé los horarios, 5) confirmá los datos, 6) agendá con book_appointment, 7) al confirmar, dale la dirección (presencial) o el link (video) que devuelve la tool.',
-    '- No inventes horarios ni direcciones: usá siempre lo que devuelven las tools.',
     '',
+    'AGENDAR UN TURNO (MUY IMPORTANTE):',
+    '- Apenas el cliente quiera un turno / cita / consulta / "que lo atiendan", llamá YA la tool start_booking. Pasale lo que ya haya dicho: modalidad (presencial o video), zona/localidad y nombre, si los sabés. Si no sabés algo, igual llamá start_booking sin ese dato.',
+    '- A partir de start_booking, un flujo guiado se encarga de TODO: proponer horarios (una oficina por vez), tomar la elección ("el primero", "a la mañana"), pedir el nombre y confirmar. VOS NO hagas esos pasos.',
+    '- Para un turno NUEVO no uses list_offices, check_availability ni book_appointment por tu cuenta, NO inventes horarios y NO confirmes la reserva vos: de eso se encarga start_booking.',
+    '- Para reprogramar o CANCELAR una cita YA existente: repetí los datos, esperá que el cliente CONFIRME, y usá reschedule_appointment / cancel_appointment.',
+    '',
+    account.agentProcedures?.trim()
+      ? `PROCEDIMIENTOS (seguí estas instrucciones del estudio para atender):\n${account.agentProcedures.trim()}\n`
+      : '',
     account.businessContext ? `DATOS DEL ESTUDIO:\n${account.businessContext}\n` : '',
+    continuityBlock ? `${continuityBlock}\n` : '',
     fichaText,
   ].filter((l) => l !== '').join('\n');
 }

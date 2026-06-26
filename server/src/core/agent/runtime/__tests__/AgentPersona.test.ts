@@ -10,7 +10,7 @@ describe('buildPersona', () => {
     expect(prompt).toContain('PYS');
     expect(prompt).toContain('FICHA: María, 63');
     expect(prompt.toLowerCase()).toContain('search_knowledge'); // regla de grounding
-    expect(prompt.toLowerCase()).toContain('confirm');           // confirmar antes de mutar
+    expect(prompt.toLowerCase()).toContain('confirm');           // confirmar antes de cancelar/reprogramar
   });
 
   it('usa el default Sofía si no hay agentName', () => {
@@ -18,9 +18,19 @@ describe('buildPersona', () => {
     expect(prompt).toContain('Sofía');
   });
 
-  it('incluye reglas de agendado por oficina (list_offices + dirección)', () => {
+  it('agendar un turno se delega en start_booking (flujo determinístico)', () => {
     const prompt = buildPersona({ accountId: 'acc1', agentName: 'Sofía' } as any, 'FICHA: nuevo.');
-    expect(prompt.toLowerCase()).toContain('list_offices');
-    expect(prompt.toLowerCase()).toContain('direcc'); // dar la dirección al confirmar
+    expect(prompt.toLowerCase()).toContain('start_booking');
+    // No debe instruir la receta manual paso-numerado (que competía con el flujo guiado).
+    expect(prompt).not.toMatch(/1\)\s*usá list_offices/i);
+  });
+
+  it('inyecta PROCEDIMIENTOS cuando la cuenta los tiene', () => {
+    const prompt = buildPersona(
+      { accountId: 'acc1', agentName: 'Sofía', agentProcedures: 'Despido: preguntá hace cuánto y la edad.' } as any,
+      'FICHA: nuevo.',
+    );
+    expect(prompt.toUpperCase()).toContain('PROCEDIMIENTOS');
+    expect(prompt).toContain('preguntá hace cuánto');
   });
 });
