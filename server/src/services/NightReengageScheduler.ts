@@ -23,6 +23,7 @@ export interface ReengageDeps {
 export class NightReengageScheduler {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private readonly sentThisProcess = new Set<string>(); // guard ante fallo de markReengaged
   private readonly TICK_MS = 10 * 60 * 1000;
 
   constructor(private deps: ReengageDeps) {}
@@ -57,8 +58,11 @@ export class NightReengageScheduler {
             now,
           });
           if (!ok) continue;
+          const guardKey = `${c.id}:${c.last_message_at}`;
+          if (this.sentThisProcess.has(guardKey)) continue; // ya mandado en este proceso (aunque markReengaged haya fallado)
           try {
             await this.deps.sendMessage(acc.id, c.phone, texto);
+            this.sentThisProcess.add(guardKey);
             await this.deps.markReengaged(c.id, c.last_message_at);
             console.log(`[NightReengageScheduler] re-enganche enviado a ${c.phone}`);
           } catch (err: any) {

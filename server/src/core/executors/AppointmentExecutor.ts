@@ -71,7 +71,12 @@ export class AppointmentExecutor implements NodeExecutor {
         const tel = validarTelefonoAR(String(telefono));
         if (tel.valido && tel.normalizado) {
             telefono = tel.normalizado;
+        } else if (tel.motivo === 'area_desconocida') {
+            // Estructura OK pero área no reconocida (ej. interior fuera del set curado):
+            // lo conservamos para no perder un número válido, pero avisamos.
+            console.warn(`[AppointmentExecutor] teléfono con área no reconocida, se conserva: ${telefono}`);
         } else {
+            // Basura o referencia ("el mismo", "este") → usar el de WhatsApp.
             telefono = context.phone || telefono;
         }
         const resumen = resolveVar(context, nodeData.resumenVar, 'resumen');

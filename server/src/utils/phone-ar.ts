@@ -26,6 +26,7 @@ function nacionalSignificativo(digits: string): string {
   let d = digits;
   if (d.startsWith('54')) d = d.slice(2);   // país
   if (d.startsWith('0')) d = d.slice(1);    // 0 nacional
+  // Ningún código de área AR empieza con 9 → sacar el 9 inicial nunca corrompe un área válida.
   if (d.startsWith('9')) d = d.slice(1);    // 9 móvil
   // 15 móvil viejo: aparece DESPUÉS del área. Lo resolvemos al separar área (abajo).
   return d;
@@ -42,10 +43,13 @@ export function validarTelefonoAR(texto: string): TelefonoARResult {
   for (const len of [4, 3, 2]) {
     const area = d.slice(0, len);
     if (!AREA_CODES_AR.has(area)) continue;
-    let resto = d.slice(len);
-    if (resto.startsWith('15')) resto = resto.slice(2); // 15 móvil viejo tras el área
-    const total = area + resto;
-    // Número nacional AR (sin 0/9/15) = 10 dígitos: área + abonado.
+    const resto = d.slice(len);
+    let total = area + resto;
+    // El "15" de móvil viejo va DESPUÉS del área. Solo lo sacamos si así queda un
+    // nacional de 10 dígitos (no si el abonado real empieza con 15).
+    if (total.length !== 10 && resto.startsWith('15') && (area + resto.slice(2)).length === 10) {
+      total = area + resto.slice(2);
+    }
     if (total.length === 10) return { valido: true, normalizado: '54' + total };
   }
 
