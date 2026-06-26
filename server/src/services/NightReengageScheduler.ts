@@ -71,3 +71,39 @@ export class NightReengageScheduler {
     }
   }
 }
+
+import { supabase } from '../config/supabase';
+import { messageStore } from './MessageStore';
+import type { AccountManager } from '../core/accounts/AccountManager';
+
+const WINDOW_24H_MS = 24 * 60 * 60 * 1000;
+
+/** Construye el scheduler con las fuentes reales (Supabase + AccountManager). */
+export function createNightReengageScheduler(manager: AccountManager): NightReengageScheduler {
+  return new NightReengageScheduler({
+    listEnabledAccounts: async () => {
+      const { data } = await supabase.from('accounts').select('id, reengage_text').eq('reengage_enabled', true);
+      return ((data ?? []) as any[]).map((a) => ({ id: a.id, reengage_text: a.reengage_text ?? null }));
+    },
+    listConversations: async (accountId) => {
+      const since = new Date(Date.now() - WINDOW_24H_MS).toISOString();
+      const { data } = await supabase
+        .from('whatsapp_conversations')
+        .select('id, account_id, phone, status, last_message_at, reengaged_for')
+        .eq('account_id', accountId)
+        .eq('status', 'BOT')
+        .gt('last_message_at', since)
+        .limit(200);
+      return (data ?? []) as any[];
+    },
+    lastInboundAt: (accountId, phone) => messageStore.getLastInboundAt(accountId, phone),
+    isConnected: (accountId) => {
+      const s = manager.getStatus(accountId);
+      return s === 'WORKING' || s === 'connected';
+    },
+    sendMessage: (accountId, phone, text) => manager.sendMessage(accountId, phone, text).then(() => undefined),
+    markReengaged: async (conversationId, lastMessageAt) => {
+      await supabase.from('whatsapp_conversations').update({ reengaged_for: lastMessageAt }).eq('id', conversationId);
+    },
+  });
+}

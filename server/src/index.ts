@@ -10,6 +10,7 @@ import { FlowEngine } from './core/engine/flow.engine';
 import { AccountManager } from './core/accounts/AccountManager';
 import { ReminderScheduler } from './services/ReminderScheduler';
 import { NudgeScheduler } from './services/NudgeScheduler';
+import { createNightReengageScheduler } from './services/NightReengageScheduler';
 import { WebhookQueue } from './services/WebhookQueue';
 import { setNotificationSender } from './services/NotifierService';
 import { createApp } from './api/app';
@@ -58,6 +59,8 @@ async function bootstrap() {
   const reminders = new ReminderScheduler(manager);
   // Empujón cuando dejan una pregunta sin responder (nodos con nudgeText).
   const nudges = new NudgeScheduler(manager);
+  // Re-enganche nocturno: retoma a la mañana lo que se cortó de noche.
+  const reengage = createNightReengageScheduler(manager);
 
   // Apagado limpio (A7): al recibir SIGTERM/SIGINT dejamos de aceptar requests,
   // frenamos los workers, cerramos los clientes de WhatsApp y la conexión Redis.
@@ -74,6 +77,7 @@ async function bootstrap() {
       await new Promise<void>((resolve) => server.close(() => resolve())); // no más requests nuevos
       reminders.stop();
       nudges.stop();
+      reengage.stop();
       webhookQueue.stop();
       await manager.stopAll();
       await closeRedis();
@@ -93,6 +97,7 @@ async function bootstrap() {
 
   reminders.start();
   nudges.start();
+  reengage.start();
 }
 
 bootstrap().catch((e) => {
