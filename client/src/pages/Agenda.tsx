@@ -42,7 +42,7 @@ const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7:00 to 22:00
 const UNASSIGNED = '__unassigned__';
 
 // Niveles discretos de zoom (alto de la fila de una hora, en px).
-export const ZOOM_LEVELS = [40, 56, 68, 96, 128, 160];
+const ZOOM_LEVELS = [40, 56, 68, 96, 128, 160];
 
 // Paleta fija de "agendas" (una por profesional), estilo Google Calendar.
 // Cada entrada trae clases Tailwind para tema claro y oscuro: fondo + borde
@@ -73,7 +73,7 @@ const UNASSIGNED_PALETTE: ProfPalette = {
 
 // Índice de color estable de un profesional, según su posición en la lista
 // ordenada por id. Devuelve la entrada gris si no hay profesional (sin asignar).
-export function profPalette(orderedProfIds: string[], profileId: string | null | undefined): ProfPalette {
+function profPalette(orderedProfIds: string[], profileId: string | null | undefined): ProfPalette {
   if (!profileId) return UNASSIGNED_PALETTE;
   const idx = orderedProfIds.indexOf(profileId);
   if (idx < 0) return UNASSIGNED_PALETTE;
@@ -81,7 +81,7 @@ export function profPalette(orderedProfIds: string[], profileId: string | null |
 }
 
 // Predicado puro: ¿la cita es visible según las agendas seleccionadas?
-export function isProfVisible(selectedProfs: Set<string>, assignedProfileId: string | null | undefined): boolean {
+function isProfVisible(selectedProfs: Set<string>, assignedProfileId: string | null | undefined): boolean {
   return selectedProfs.has(assignedProfileId ?? UNASSIGNED);
 }
 
@@ -158,9 +158,10 @@ export default function Agenda() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
   const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
-  // Agendas (profesionales) visibles. Admin: arranca con todas + sin-asignar.
-  // Empleada: bloqueada a su propia agenda.
-  const [selectedProfs, setSelectedProfs] = useState<Set<string>>(new Set());
+  // Agendas (profesionales) visibles. null = sin inicializar → muestra todo
+  // (evita agenda en blanco si falla la carga). Set vacío = "Ninguna" (nada visible).
+  // Admin: arranca con todas + sin-asignar. Empleada: bloqueada a su propia agenda.
+  const [selectedProfs, setSelectedProfs] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -178,14 +179,14 @@ export default function Agenda() {
 
   const toggleProf = (id: string) => {
     setSelectedProfs((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev ?? []);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
   const allProfKeys = () => [...professionals.map((p) => p.id), UNASSIGNED];
-  const allSelected = professionals.length > 0 && allProfKeys().every((k) => selectedProfs.has(k));
+  const allSelected = professionals.length > 0 && selectedProfs !== null && allProfKeys().every((k) => selectedProfs.has(k));
   const toggleAllProfs = () => {
     setSelectedProfs(() => (allSelected ? new Set<string>() : new Set(allProfKeys())));
   };
@@ -251,7 +252,7 @@ export default function Agenda() {
       // 8 AM is index 1 from 7 AM → un alto de hora.
       scrollContainerRef.current.scrollTop = hourHeight;
     }
-  }, [view, hourHeight]);
+  }, [view]);
 
   // Load appointments. allLines (toggle) o cuenta activa = 'all' => agenda unificada.
   const loadAppointments = async (silent = false) => {
@@ -285,7 +286,7 @@ export default function Agenda() {
           // Admin: arranca con todas las agendas + "sin asignar" visibles.
           setSelectedProfs(new Set([...profs.map((p) => p.id), UNASSIGNED]));
         })
-        .catch(() => {});
+        .catch(() => setSelectedProfs(null));
     } else if (user) {
       setSelectedProfs(new Set([user.id])); // empleada: solo su agenda
     }
@@ -372,7 +373,12 @@ export default function Agenda() {
     if (app.status === 'no_asistio' && filterNoShow) matchesStatusFilter = true;
     if (app.status === 'cerrado' && filterClosed) matchesStatusFilter = true;
 
-    const matchesProf = isProfVisible(selectedProfs, app.assigned_profile_id);
+    // null = sin inicializar → mostrar todo. Cita con profesional desconocido
+    // (no está en la lista cargada) cae en el bucket "Sin asignar". orderedProfIds
+    // vacío (empleada) → no se reasigna, así ve sus propias citas por match exacto.
+    const aid = app.assigned_profile_id;
+    const profKey = aid && (orderedProfIds.length === 0 || orderedProfIds.includes(aid)) ? aid : UNASSIGNED;
+    const matchesProf = selectedProfs === null || isProfVisible(selectedProfs, profKey);
     return matchesSearch && matchesStatusFilter && matchesProf;
   });
 
@@ -836,7 +842,7 @@ export default function Agenda() {
             </div>
             <div className="space-y-2.5 px-1 max-h-56 overflow-y-auto scrollbar-thin">
               {professionals.map((p) => {
-                const checked = selectedProfs.has(p.id);
+                const checked = selectedProfs?.has(p.id) ?? true;
                 const swatch = profPalette(orderedProfIds, p.id).swatch;
                 return (
                   <label key={p.id} className={`flex items-center gap-3 cursor-pointer text-xs font-semibold select-none group ${
@@ -854,7 +860,7 @@ export default function Agenda() {
               })}
               {/* Sin asignar */}
               {(() => {
-                const checked = selectedProfs.has(UNASSIGNED);
+                const checked = selectedProfs?.has(UNASSIGNED) ?? true;
                 return (
                   <label className={`flex items-center gap-3 cursor-pointer text-xs font-semibold select-none group ${
                     theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-brand-textMuted hover:text-white'
