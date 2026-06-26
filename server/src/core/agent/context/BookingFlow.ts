@@ -147,10 +147,23 @@ function lugarLabel(state: BookingState): string {
   return state.modalidad === 'video' ? 'por videollamada' : 'de forma presencial';
 }
 
+function horaAR(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ }); } catch { return iso; }
+}
+function diaAR(iso: string): string {
+  try { return new Date(iso).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: TZ }); } catch { return ''; }
+}
+function turnoWord(h: number): string { return h < 12 ? 'de mañana' : h < 14 ? 'sobre el mediodía' : 'de tarde'; }
+
+// Ofrece los horarios en LENGUAJE NATURAL (no "1, 2, 3"). El cliente elige diciendo
+// el horario ("a las 10", "el del mediodía"); OptionResolver lo resuelve por hora.
 function showSlotsMessage(state: BookingState, offered: OfferedOption[], lead?: string): string {
-  const lines = offered.map((o) => `${o.index}. ${o.label}`).join('\n');
-  const head = lead ?? `Estos turnos tengo ${lugarLabel(state)}:`;
-  return `${head}\n${lines}\n¿Cuál te queda mejor? Decime el número (1, 2 o 3). 😊`;
+  const items = offered.map((o) => ({ turno: turnoWord(slotHourAR(o.value)), hora: horaAR(o.value), dia: diaAR(o.value) }));
+  const multiDay = new Set(items.map((i) => i.dia)).size > 1;
+  const frags = items.map((i) => (multiDay ? `el ${i.dia} ${i.turno} a las ${i.hora}` : `${i.turno} a las ${i.hora}`));
+  const lista = frags.length === 1 ? frags[0] : `${frags.slice(0, -1).join(', ')} o ${frags[frags.length - 1]}`;
+  if (lead) return `${lead} ${lista}. ¿Cuál te queda más cómodo? Decime el horario. 🙂`;
+  return `Tengo disponible ${lugarLabel(state)} ${lista}. Confirmame cuál te queda más cómodo (decime el horario). 🙂`;
 }
 
 // Fuera de cobertura → videollamada, avisando el motivo (no exponemos oficinas).
@@ -299,7 +312,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       if (req.isRequest) {
         return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined });
       }
-      return { state, messages: ['Decime cuál te sirve con el número (1, 2 o 3), o pedime otro día/horario. 🙂'], active: true };
+      return { state, messages: ['Decime qué horario preferís (ej: "a las 10" o "el del mediodía"), o pedime otro día. 🙂'], active: true };
     }
 
     case 'ask_name': {
