@@ -19,7 +19,7 @@ export function agenteRouter(): Router {
 
   r.get('/state', async (_req, res) => {
     try { res.json(await getBrainState(db)); }
-    catch (e: any) { res.status(500).json({ error: e?.message ?? 'error' }); }
+    catch (e: any) { console.error('[agente] GET /state error:', e?.stack ?? e?.message ?? e); res.status(500).json({ error: e?.message ?? 'error' }); }
   });
 
   r.post('/chat', async (req, res) => {
@@ -27,7 +27,7 @@ export function agenteRouter(): Router {
       const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
       const state = await getBrainState(db);
       res.json(await agent.handle(messages, state));
-    } catch (e: any) { res.status(500).json({ error: e?.message ?? 'error' }); }
+    } catch (e: any) { console.error('[agente] POST /chat error:', e?.stack ?? e?.message ?? e); res.status(500).json({ error: e?.message ?? 'error' }); }
   });
 
   r.post('/apply', async (req, res) => {
@@ -35,7 +35,7 @@ export function agenteRouter(): Router {
       const changes = (Array.isArray(req.body?.changes) ? req.body.changes : []) as Change[];
       const results = await applyChanges(changes, db);
       res.json({ applied: results.filter((x) => x.ok).length, results });
-    } catch (e: any) { res.status(500).json({ error: e?.message ?? 'error' }); }
+    } catch (e: any) { console.error('[agente] POST /apply error:', e?.stack ?? e?.message ?? e); res.status(500).json({ error: e?.message ?? 'error' }); }
   });
 
   return r;
