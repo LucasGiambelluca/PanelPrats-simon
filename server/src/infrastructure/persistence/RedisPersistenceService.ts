@@ -61,11 +61,14 @@ class RedisPersistenceService {
 
     async getHistory(accountId: string, phone: string, limit: number = 10): Promise<any[]> {
         try {
+            // `.in(variants)` matchea el teléfono se haya guardado con o sin el 9 móvil
+            // (distintos clientes guardan distinto). Con `.eq(normalize)` el historial
+            // quedaba vacío y el agente "no tenía memoria".
             const { data } = await supabase
                 .from('whatsapp_messages')
                 .select('content, direction, created_at')
                 .eq('account_id', accountId)
-                .eq('phone', PhoneUtils.normalize(phone))
+                .in('phone', PhoneUtils.variants(phone))
                 .order('created_at', { ascending: false })
                 .limit(limit);
 

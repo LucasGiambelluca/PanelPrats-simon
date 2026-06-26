@@ -19,6 +19,21 @@ export class PhoneUtils {
     return clean;
   }
 
+  /**
+   * Formas equivalentes de un teléfono para CONSULTAR (no para guardar). Resuelve el
+   * mismatch AR con-9 / sin-9: distintos paths guardan el wa_id con el 9 móvil
+   * (5492915093499) mientras normalize() lo saca (542915093499). Al consultar el
+   * historial con `.in(variants)` matcheamos sin importar en qué forma se guardó.
+   */
+  static variants(phone: string): string[] {
+    const norm = PhoneUtils.normalize(phone);
+    if (!norm) return [];
+    if (norm.includes('@')) return [norm]; // @lid u otros JIDs: sin variantes numéricas
+    const set = new Set<string>([norm]);
+    if (/^54\d{10}$/.test(norm)) set.add('549' + norm.slice(2)); // AR: agrega la forma móvil con 9
+    return [...set];
+  }
+
   static toJid(phone: string): string {
     if (!phone) return '';
     if (phone.includes('@')) return phone;

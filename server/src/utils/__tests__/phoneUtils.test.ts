@@ -13,6 +13,26 @@ describe('PhoneUtils.normalize', () => {
   });
 });
 
+describe('PhoneUtils.variants (matchear con-9 y sin-9 al consultar)', () => {
+  it('AR sin 9 → incluye la forma con 9 (para historial guardado con 9)', () => {
+    const v = PhoneUtils.variants('542915093499');
+    expect(v).toContain('542915093499');
+    expect(v).toContain('5492915093499');
+  });
+  it('AR con 9 → incluye ambas (normaliza + con 9)', () => {
+    const v = PhoneUtils.variants('5492915093499');
+    expect(new Set(v)).toEqual(new Set(['542915093499', '5492915093499']));
+  });
+  it('tolera prefijos/sufijos', () => {
+    expect(PhoneUtils.variants('+54 9 11 3334-4455@s.whatsapp.net')).toEqual(
+      expect.arrayContaining(['541133344455', '5491133344455']),
+    );
+  });
+  it('@lid: sin variantes numéricas', () => {
+    expect(PhoneUtils.variants('176295539376186@lid')).toEqual(['176295539376186@lid']);
+  });
+});
+
 describe('PhoneUtils.resolveIdentity (@lid → teléfono real)', () => {
   it('chat normal: normaliza el remoteJid', () => {
     const map = new Map<string, string>();
