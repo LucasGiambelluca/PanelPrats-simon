@@ -195,8 +195,43 @@ export interface Appointment {
   start_time?: string;
   end_time?: string;
   oficina?: string; // modalidad/oficina (Videollamada, Presencial CABA…)
-  assigned_profile_id?: string | null;
+  assigned_profile_id?: string | null; // abogada/profesional
+
+  // Ficha de recepción (migración 0023).
+  motivo?: AppointmentMotivo | null;
+  dni?: string | null;
+  faltante?: string | null;
+  canal_origen?: AppointmentCanal | null;
+  canal_auto?: boolean;
+  carpeta?: boolean;
+  seguimiento?: string | null;
+  resultado?: AppointmentResultado | null;
+  atendido_por?: string | null; // empleada/recepcionista (profiles.id)
 }
+
+export type AppointmentMotivo =
+  | 'jubilacion' | 'puam' | 'pension_v' | 'reajuste' | 'rti'
+  | 'laboral' | 'pension_discapacidad' | 'asesoramiento_pago' | 'otro';
+
+export type AppointmentCanal =
+  | 'whatsapp' | 'facebook' | 'instagram' | 'tiktok'
+  | 'google' | 'recomendada' | 'pagina_web' | 'otro';
+
+export type AppointmentResultado = 'si' | 'no' | 'pensar' | 'traer_doc';
+
+// Etiquetas para los <select> de la ficha de recepción.
+export const MOTIVO_LABELS: Record<AppointmentMotivo, string> = {
+  jubilacion: 'Jubilación', puam: 'PUAM', pension_v: 'Pensión por viudez',
+  reajuste: 'Reajuste', rti: 'RTI', laboral: 'Laboral',
+  pension_discapacidad: 'Pensión por discapacidad', asesoramiento_pago: 'Asesoramiento pago', otro: 'Otro',
+};
+export const CANAL_LABELS: Record<AppointmentCanal, string> = {
+  whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok',
+  google: 'Google', recomendada: 'Recomendada', pagina_web: 'Página web', otro: 'Otro',
+};
+export const RESULTADO_LABELS: Record<AppointmentResultado, string> = {
+  si: 'SÍ (cliente)', no: 'NO', pensar: 'PENSAR', traer_doc: 'Traer documentación',
+};
 
 export const appointmentsApi = {
   list: (accountId: string) =>
@@ -307,6 +342,31 @@ export const agendaApi = {
       `/api/agenda/professionals/${profileId}?account_id=${encodeURIComponent(accountId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   assign: (appointmentId: string, profileId: string | null) =>
     api<Appointment>(`/api/agenda/appointments/${appointmentId}/assign`, { method: 'PATCH', body: JSON.stringify({ profile_id: profileId }) }),
+};
+
+// ── Analíticas de recepción (solo admin) ────────────────────
+export interface IntakeBucket { bucket: string; total: number; conversion: number }
+export interface IntakeRank { id: string; name: string; total: number; conversion: number }
+export interface IntakeAnalytics {
+  total: number;
+  conversion: number;
+  porResultado: Record<string, number>;
+  porCanal: Record<string, number>;
+  porMotivo: Record<string, number>;
+  porMes: IntakeBucket[];
+  porEmpleada: IntakeRank[];
+  porAbogada: IntakeRank[];
+}
+
+export const analyticsApi = {
+  intake: (params: { from?: string; to?: string; account_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.from) q.set('from', params.from);
+    if (params.to) q.set('to', params.to);
+    if (params.account_id) q.set('account_id', params.account_id);
+    const qs = q.toString();
+    return api<IntakeAnalytics>(`/api/analytics/intake${qs ? `?${qs}` : ''}`);
+  },
 };
 
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.

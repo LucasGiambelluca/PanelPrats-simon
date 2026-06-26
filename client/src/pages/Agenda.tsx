@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { appointmentsApi, professionalsApi, agendaApi, Appointment } from '../lib/api';
+import {
+  appointmentsApi, professionalsApi, agendaApi, Appointment,
+  MOTIVO_LABELS, CANAL_LABELS, RESULTADO_LABELS,
+  type AppointmentMotivo, type AppointmentCanal, type AppointmentResultado,
+} from '../lib/api';
 import type { ProfessionalLite } from '../types';
 import CallReminderModal from '../components/CallReminderModal';
 import CallActions from '../components/CallActions';
@@ -35,6 +39,73 @@ const months = [
 const weekDaysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7:00 to 22:00
 const HOUR_HEIGHT = 68; // height in pixels of an hour row
+
+// Campos de la ficha de recepción (migración 0023) en el formData del modal.
+// '' = sin cargar (se mapea a null al enviar). canal_auto trackea si el canal fue
+// detectado por el sistema (prellenado desde la cuenta) o corregido a mano.
+function emptyIntake() {
+  return {
+    motivo: '' as AppointmentMotivo | '',
+    dni: '',
+    faltante: '',
+    canal_origen: '' as AppointmentCanal | '',
+    canal_auto: true,
+    carpeta: false,
+    seguimiento: '',
+    resultado: '' as AppointmentResultado | '',
+  };
+}
+
+// canal de la cuenta → canal_origen por defecto (auto). FB/IG/WhatsApp mapean directo;
+// el resto (tiktok/google/recomendada) no es autodetectable → queda vacío.
+function autoCanalFromAccount(channel?: string): AppointmentCanal | '' {
+  if (channel === 'facebook' || channel === 'instagram' || channel === 'whatsapp') return channel;
+  return '';
+}
+
+// Inputs reutilizables para la ficha de recepción (mantienen el estilo del modal).
+function fieldClass(theme: string) {
+  return `w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all ${
+    theme === 'light'
+      ? 'bg-brand-surface border-brand-hairline text-brand-ink focus:ring-brand-primary/40 focus:border-brand-primary'
+      : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
+  }`;
+}
+function FieldLabel({ theme, label, hint }: { theme: string; label: string; hint?: string }) {
+  return (
+    <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+      theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
+    }`}>
+      <span>{label}</span>
+      {hint && <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 text-[8px] normal-case font-semibold">{hint}</span>}
+    </label>
+  );
+}
+function FieldText({ theme, label, value, onChange, placeholder }: {
+  theme: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <FieldLabel theme={theme} label={label} />
+      <input type="text" value={value} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} className={fieldClass(theme)} />
+    </div>
+  );
+}
+function FieldSelect({ theme, label, value, onChange, options, hint }: {
+  theme: string; label: string; value: string; onChange: (v: string) => void;
+  options: [string, string][]; hint?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <FieldLabel theme={theme} label={label} hint={hint} />
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldClass(theme)}>
+        <option value="">—</option>
+        {options.map(([val, lbl]) => <option key={val} value={val}>{lbl}</option>)}
+      </select>
+    </div>
+  );
+}
 
 export default function Agenda() {
   const { activeAccountId, accounts } = useAccounts();
@@ -88,6 +159,7 @@ export default function Agenda() {
     startHour: '09:00',
     endHour: '10:00',
     account_id: '',
+    ...emptyIntake(),
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -328,6 +400,8 @@ export default function Agenda() {
       startHour: startHourStr,
       endHour: endHourStr,
       account_id: activeAccountId || '',
+      ...emptyIntake(),
+      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === activeAccountId)?.channel),
     });
     setIsModalOpen(true);
   };
@@ -348,6 +422,8 @@ export default function Agenda() {
       startHour: startHourStr,
       endHour: endHourStr,
       account_id: activeAccountId || '',
+      ...emptyIntake(),
+      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === activeAccountId)?.channel),
     });
     setIsModalOpen(true);
   };
@@ -371,6 +447,14 @@ export default function Agenda() {
       startHour: startHourStr,
       endHour: endHourStr,
       account_id: app.account_id || activeAccountId || '',
+      motivo: app.motivo ?? '',
+      dni: app.dni ?? '',
+      faltante: app.faltante ?? '',
+      canal_origen: app.canal_origen ?? '',
+      canal_auto: app.canal_auto ?? true,
+      carpeta: app.carpeta ?? false,
+      seguimiento: app.seguimiento ?? '',
+      resultado: app.resultado ?? '',
     });
     setIsModalOpen(true);
   };
@@ -400,6 +484,22 @@ export default function Agenda() {
         return;
       }
 
+      // Ficha de recepción: '' → null (campo sin cargar). canal_auto se vuelve false
+      // si la empleada eligió un canal distinto al detectado desde la cuenta.
+      const autoCanal = autoCanalFromAccount(
+        accounts.find(a => a.id === (formData.account_id || activeAccountId))?.channel,
+      );
+      const intake = {
+        motivo: formData.motivo || null,
+        dni: formData.dni.trim() || null,
+        faltante: formData.faltante.trim() || null,
+        canal_origen: formData.canal_origen || null,
+        canal_auto: !!formData.canal_origen && formData.canal_origen === autoCanal,
+        carpeta: formData.carpeta,
+        seguimiento: formData.seguimiento.trim() || null,
+        resultado: formData.resultado || null,
+      };
+
       if (selectedApp) {
         // Edit mode
         await appointmentsApi.update(selectedApp.id, {
@@ -411,6 +511,7 @@ export default function Agenda() {
           start_time: startTimeISO,
           end_time: endTimeISO,
           account_id: formData.account_id || activeAccountId || '',
+          ...intake,
         });
         toast.success('Cita actualizada con éxito');
       } else {
@@ -424,6 +525,7 @@ export default function Agenda() {
           status: formData.status,
           start_time: startTimeISO,
           end_time: endTimeISO,
+          ...intake,
         });
         toast.success('Cita agendada con éxito');
       }
@@ -1582,6 +1684,82 @@ export default function Agenda() {
                   }`}
                   placeholder="Detalles sobre la consulta del cliente..."
                 />
+              </div>
+
+              {/* Ficha de recepción (planilla): se llena mientras se atiende */}
+              <div className={`space-y-3 border rounded-xl p-3 ${
+                theme === 'light' ? 'border-brand-hairline bg-brand-ivory/40' : 'border-white/10 bg-brand-dark/30'
+              }`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                  theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
+                }`}>
+                  <FileText size={10} />
+                  <span>Ficha de recepción</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Motivo */}
+                  <FieldSelect
+                    theme={theme} label="Motivo" value={formData.motivo}
+                    onChange={(v) => setFormData({ ...formData, motivo: v as AppointmentMotivo | '' })}
+                    options={Object.entries(MOTIVO_LABELS)}
+                  />
+                  {/* DNI */}
+                  <FieldText
+                    theme={theme} label="DNI" value={formData.dni} placeholder="20-12345678-9"
+                    onChange={(v) => setFormData({ ...formData, dni: v })}
+                  />
+                  {/* Cómo nos conoció / canal */}
+                  <FieldSelect
+                    theme={theme} label="Cómo nos conoció" value={formData.canal_origen}
+                    onChange={(v) => setFormData({ ...formData, canal_origen: v as AppointmentCanal | '' })}
+                    options={Object.entries(CANAL_LABELS)}
+                    hint={formData.canal_auto && formData.canal_origen ? 'auto' : undefined}
+                  />
+                  {/* Resultado */}
+                  <FieldSelect
+                    theme={theme} label="Resultado" value={formData.resultado}
+                    onChange={(v) => setFormData({ ...formData, resultado: v as AppointmentResultado | '' })}
+                    options={Object.entries(RESULTADO_LABELS)}
+                  />
+                </div>
+
+                {/* Faltante */}
+                <FieldText
+                  theme={theme} label="Documentación faltante" value={formData.faltante}
+                  placeholder="Clave ANSES, certificación IERIC…"
+                  onChange={(v) => setFormData({ ...formData, faltante: v })}
+                />
+
+                {/* Seguimiento */}
+                <div className="space-y-1">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
+                  }`}>Seguimiento</label>
+                  <textarea
+                    value={formData.seguimiento}
+                    onChange={(e) => setFormData({ ...formData, seguimiento: e.target.value })}
+                    className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 transition-all min-h-[60px] ${
+                      theme === 'light'
+                        ? 'bg-brand-surface border-brand-hairline text-brand-ink focus:ring-brand-primary/40 focus:border-brand-primary'
+                        : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
+                    }`}
+                    placeholder="Llamé, quedó en traer la clave; recontactar en 1 mes…"
+                  />
+                </div>
+
+                {/* Carpeta */}
+                <label className={`flex items-center gap-2 text-xs cursor-pointer ${
+                  theme === 'light' ? 'text-brand-ink' : 'text-white'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={formData.carpeta}
+                    onChange={(e) => setFormData({ ...formData, carpeta: e.target.checked })}
+                    className="rounded"
+                  />
+                  <span>Carpeta armada</span>
+                </label>
               </div>
 
               {/* Profesional asignado (reasignar — solo admin, citas existentes) */}

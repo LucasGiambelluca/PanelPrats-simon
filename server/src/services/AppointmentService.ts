@@ -15,8 +15,29 @@ export interface Appointment {
   end_time?: string;
   reminded?: boolean; // recordatorio 20' antes ya enviado (idempotencia del scheduler)
   oficina?: string;   // modalidad/oficina: pool de disponibilidad independiente (Videollamada, CABA, Quilmes, Haedo…)
-  assigned_profile_id?: string | null; // profesional asignado (Fase 2); null = legacy/pool
+  assigned_profile_id?: string | null; // abogada/profesional asignado (Fase 2); null = legacy/pool
+
+  // Ficha de recepción (migración 0023). Todos opcionales = sin cargar todavía.
+  motivo?: AppointmentMotivo | null;
+  dni?: string | null;
+  faltante?: string | null;              // qué documentación falta (clave ANSES, IERIC…)
+  canal_origen?: AppointmentCanal | null;
+  canal_auto?: boolean;                  // true = detectado por el sistema; false = corregido a mano
+  carpeta?: boolean;                     // carpeta armada
+  seguimiento?: string | null;           // notas de seguimiento
+  resultado?: AppointmentResultado | null; // disposición del lead (SI/NO/PENSAR/TRAER DOC)
+  atendido_por?: string | null;          // empleada/recepcionista (profiles.id)
 }
+
+export type AppointmentMotivo =
+  | 'jubilacion' | 'puam' | 'pension_v' | 'reajuste' | 'rti'
+  | 'laboral' | 'pension_discapacidad' | 'asesoramiento_pago' | 'otro';
+
+export type AppointmentCanal =
+  | 'whatsapp' | 'facebook' | 'instagram' | 'tiktok'
+  | 'google' | 'recomendada' | 'pagina_web' | 'otro';
+
+export type AppointmentResultado = 'si' | 'no' | 'pensar' | 'traer_doc';
 
 const isSupabaseConfigured = !!(
   process.env.SUPABASE_URL &&
@@ -38,7 +59,24 @@ function isEnvelope(o: any): boolean {
 
 const plus30 = (iso: string) => new Date(new Date(iso).getTime() + 30 * 60000).toISOString();
 
-function deserializeAppointment(app: any): Appointment {
+// Rellena los campos de la ficha de recepción (0023) con defaults seguros.
+// Filas viejas (pre-0023) no tienen estas columnas → null / false.
+function withIntakeDefaults(out: Appointment, raw: any): Appointment {
+  return {
+    ...out,
+    motivo: raw.motivo ?? null,
+    dni: raw.dni ?? null,
+    faltante: raw.faltante ?? null,
+    canal_origen: raw.canal_origen ?? null,
+    canal_auto: raw.canal_auto ?? true,
+    carpeta: raw.carpeta ?? false,
+    seguimiento: raw.seguimiento ?? null,
+    resultado: raw.resultado ?? null,
+    atendido_por: raw.atendido_por ?? null,
+  };
+}
+
+function deserializeAppointmentCore(app: any): Appointment {
   // 1) Esquema 0011: columnas reales pobladas.
   if (app.start_time) {
     return {
@@ -79,6 +117,10 @@ function deserializeAppointment(app: any): Appointment {
     oficina: app.oficina || '',
     assigned_profile_id: app.assigned_profile_id ?? null,
   };
+}
+
+function deserializeAppointment(app: any): Appointment {
+  return withIntakeDefaults(deserializeAppointmentCore(app), app);
 }
 
 export const AppointmentService = {
@@ -177,6 +219,15 @@ export const AppointmentService = {
           reminded: !!appointment.reminded,
           oficina: appointment.oficina || null,
           assigned_profile_id: appointment.assigned_profile_id ?? null,
+          motivo: appointment.motivo ?? null,
+          dni: appointment.dni ?? null,
+          faltante: appointment.faltante ?? null,
+          canal_origen: appointment.canal_origen ?? null,
+          canal_auto: appointment.canal_auto ?? true,
+          carpeta: appointment.carpeta ?? false,
+          seguimiento: appointment.seguimiento ?? null,
+          resultado: appointment.resultado ?? null,
+          atendido_por: appointment.atendido_por ?? null,
         })
         .select('*')
         .single();
@@ -233,6 +284,15 @@ export const AppointmentService = {
           reminded: !!merged.reminded,
           oficina: merged.oficina || null,
           assigned_profile_id: merged.assigned_profile_id ?? null,
+          motivo: merged.motivo ?? null,
+          dni: merged.dni ?? null,
+          faltante: merged.faltante ?? null,
+          canal_origen: merged.canal_origen ?? null,
+          canal_auto: merged.canal_auto ?? true,
+          carpeta: merged.carpeta ?? false,
+          seguimiento: merged.seguimiento ?? null,
+          resultado: merged.resultado ?? null,
+          atendido_por: merged.atendido_por ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
