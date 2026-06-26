@@ -45,7 +45,12 @@ function buildISO(date: string, hour: string): string | undefined {
 export class AppointmentExecutor implements NodeExecutor {
     async execute(nodeData: any, context: ExecutionContext): Promise<NodeExecutionResult> {
         const nombre = resolveVar(context, nodeData.nombreVar, 'nombre');
-        const telefono = resolveVar(context, nodeData.telefonoVar, 'telefono') || context.phone || '';
+        let telefono = resolveVar(context, nodeData.telefonoVar, 'telefono') || context.phone || '';
+        // "este", "el mismo", "del que te escribo", etc.: no es un número → usar el de
+        // WhatsApp desde el que escribe (context.phone).
+        if (String(telefono).replace(/\D/g, '').length < 8) {
+            telefono = context.phone || telefono;
+        }
         const resumen = resolveVar(context, nodeData.resumenVar, 'resumen');
         const oficina = String(nodeData.oficina || resolveVar(context, nodeData.oficinaVar, 'oficina')).trim();
 
