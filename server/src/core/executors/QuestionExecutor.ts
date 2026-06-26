@@ -11,9 +11,12 @@ function interpolate(text: string, context: any): string {
 
 export class QuestionExecutor implements NodeExecutor {
     async execute(data: any, context: ExecutionContext, engine: any): Promise<NodeExecutionResult> {
-        // Solo salteamos si explícitamente se permite en el nodo Y ya tiene valor
-        if (data.allow_skip && data.variable && context[data.variable]) {
-            console.log(`[QuestionExecutor] Saltando pregunta '${data.name}' porque allow_skip es true y ${data.variable} ya tiene valor.`);
+        // Si ya tenemos el dato (vino de otro flujo vía "Ir a Flujo" / namespace compartido,
+        // o se preguntó antes), NO lo volvemos a pedir. Para forzar re-preguntar, poné
+        // allow_skip = false en el nodo.
+        const existing = data.variable ? (context as any)[data.variable] : undefined;
+        if (data.allow_skip !== false && data.variable && existing !== undefined && existing !== null && String(existing).trim() !== '') {
+            console.log(`[QuestionExecutor] Saltando '${data.variable}': ya tiene valor "${existing}".`);
             return { messages: [], wait_for_input: false };
         }
 
