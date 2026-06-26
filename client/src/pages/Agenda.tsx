@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
   Phone, UserCheck, Shield, Plus, ChevronLeft, ChevronRight, Info, User,
-  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon
+  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon, Minus
 } from 'lucide-react';
 
 function formatDistanceToNow(dateInput: Date | string): string {
@@ -38,8 +38,6 @@ const months = [
 
 const weekDaysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7:00 to 22:00
-const HOUR_HEIGHT = 68; // height in pixels of an hour row
-
 // Pseudo-agenda para citas sin profesional asignado.
 const UNASSIGNED = '__unassigned__';
 
@@ -204,6 +202,18 @@ export default function Agenda() {
   // View settings
   const [view, setView] = useState<'month' | 'week' | 'day' | 'list'>('week');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [hourHeight, setHourHeight] = useState<number>(() => {
+    const saved = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('agenda_hour_height')) : NaN;
+    return ZOOM_LEVELS.includes(saved) ? saved : 68;
+  });
+  const zoomBy = (dir: 1 | -1) => {
+    setHourHeight((cur) => {
+      const i = ZOOM_LEVELS.indexOf(cur);
+      const next = ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, (i < 0 ? ZOOM_LEVELS.indexOf(68) : i) + dir))];
+      try { localStorage.setItem('agenda_hour_height', String(next)); } catch { /* noop */ }
+      return next;
+    });
+  };
   const [miniDate, setMiniDate] = useState<Date>(new Date());
 
   // Real-time indicator
@@ -238,10 +248,10 @@ export default function Agenda() {
   // Scroll to active business hour (8 AM) on load
   useEffect(() => {
     if ((view === 'week' || view === 'day') && scrollContainerRef.current) {
-      // 8 AM is index 1 from 7 AM, so 1 * 68 = 68px
-      scrollContainerRef.current.scrollTop = 68;
+      // 8 AM is index 1 from 7 AM → un alto de hora.
+      scrollContainerRef.current.scrollTop = hourHeight;
     }
-  }, [view]);
+  }, [view, hourHeight]);
 
   // Load appointments. allLines (toggle) o cuenta activa = 'all' => agenda unificada.
   const loadAppointments = async (silent = false) => {
@@ -652,8 +662,8 @@ export default function Agenda() {
     const endHrs = end.getHours() + end.getMinutes() / 60;
     
     // Grid starts at 7 AM
-    const top = Math.max(0, (startHrs - 7) * HOUR_HEIGHT);
-    const height = Math.max(30, (endHrs - startHrs) * HOUR_HEIGHT); // Min 30px
+    const top = Math.max(0, (startHrs - 7) * hourHeight);
+    const height = Math.max(30, (endHrs - startHrs) * hourHeight); // Min 30px
     
     return { top, height };
   };
@@ -697,7 +707,7 @@ export default function Agenda() {
   const getRedTimeLinePosition = () => {
     const hrs = now.getHours() + now.getMinutes() / 60;
     // 7 AM offset
-    return (hrs - 7) * HOUR_HEIGHT;
+    return (hrs - 7) * hourHeight;
   };
 
   // Header Title
@@ -1225,8 +1235,8 @@ export default function Agenda() {
 
               {/* Scrollable hourly grid body */}
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative scrollbar-thin">
-                <div className="relative" style={{ height: `${hours.length * HOUR_HEIGHT}px` }}>
-                  
+                <div className="relative" style={{ height: `${hours.length * hourHeight}px` }}>
+
                   {/* Grid Lines Layer */}
                   {hours.map((hour, hIdx) => (
                     <div
@@ -1234,8 +1244,11 @@ export default function Agenda() {
                       className={`absolute left-0 right-0 border-b flex ${
                         theme === 'light' ? 'border-slate-100' : 'border-white/[0.03]'
                       }`}
-                      style={{ top: `${hIdx * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                      style={{ top: `${hIdx * hourHeight}px`, height: `${hourHeight}px` }}
                     >
+                      <div className={`pointer-events-none absolute left-[12.5%] right-0 border-t border-dashed ${
+                        theme === 'light' ? 'border-slate-100' : 'border-white/[0.02]'
+                      }`} style={{ top: `${hourHeight / 2}px` }} />
                       {/* Left Hour Label */}
                       <div className={`w-[12.5%] text-[9px] font-bold font-mono pr-3 pt-1 text-right select-none ${
                         theme === 'light' ? 'text-slate-400' : 'text-brand-textMuted/60'
@@ -1266,7 +1279,7 @@ export default function Agenda() {
                             // Find click position within the column to infer start hour
                             const rect = e.currentTarget.getBoundingClientRect();
                             const clickY = e.clientY - rect.top;
-                            const clickedHour = Math.floor(clickY / HOUR_HEIGHT) + 7;
+                            const clickedHour = Math.floor(clickY / hourHeight) + 7;
                             handleSlotClick(day, clickedHour);
                           }}
                           className="w-[14.28%] h-full relative"
@@ -1299,7 +1312,7 @@ export default function Agenda() {
                           ))}
 
                           {/* Red Time Indicator Line (only on today's column) */}
-                          {isTodayCol && redLineTop >= 0 && redLineTop <= hours.length * HOUR_HEIGHT && (
+                          {isTodayCol && redLineTop >= 0 && redLineTop <= hours.length * hourHeight && (
                             <div
                               className="absolute left-0 right-0 border-t-2 border-red-500 z-20 pointer-events-none"
                               style={{ top: `${redLineTop}px` }}
@@ -1321,20 +1334,37 @@ export default function Agenda() {
           {/* DAY VIEW */}
           {view === 'day' && (
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Day title */}
-              <div className={`border-b py-3 flex-shrink-0 text-center select-none ${
+              {/* Day title + zoom control */}
+              <div className={`border-b py-3 flex-shrink-0 relative text-center select-none ${
                 theme === 'light' ? 'border-slate-200 bg-slate-50' : 'border-white/5 bg-brand-dark/10'
               }`}>
                 <span className={`text-xs font-bold uppercase tracking-widest block ${
                   theme === 'light' ? 'text-slate-400' : 'text-brand-secondary/80'
                 }`}>{weekDaysNames[currentDate.getDay()]}</span>
                 <span className={`text-2xl font-black mt-1 block ${theme === 'light' ? 'text-slate-800' : 'text-white'}`}>{currentDate.getDate()}</span>
+                <div className={`absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 border rounded-xl p-1 ${
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/10'
+                }`}>
+                  <button onClick={() => zoomBy(-1)} disabled={hourHeight === ZOOM_LEVELS[0]}
+                    title="Alejar"
+                    className={`p-1 rounded-lg transition disabled:opacity-30 ${theme === 'light' ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-white/10 text-brand-textMuted'}`}>
+                    <Minus size={14} />
+                  </button>
+                  <span className={`text-[10px] font-mono font-bold w-7 text-center ${theme === 'light' ? 'text-slate-500' : 'text-brand-textMuted'}`}>
+                    {Math.round((hourHeight / 68) * 100)}%
+                  </span>
+                  <button onClick={() => zoomBy(1)} disabled={hourHeight === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+                    title="Acercar"
+                    className={`p-1 rounded-lg transition disabled:opacity-30 ${theme === 'light' ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-white/10 text-brand-textMuted'}`}>
+                    <Plus size={14} />
+                  </button>
+                </div>
               </div>
 
               {/* Scrollable single day timeline */}
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative scrollbar-thin">
-                <div className="relative max-w-4xl mx-auto" style={{ height: `${hours.length * HOUR_HEIGHT}px` }}>
-                  
+                <div className="relative max-w-4xl mx-auto" style={{ height: `${hours.length * hourHeight}px` }}>
+
                   {/* Grid Lines Layer */}
                   {hours.map((hour, hIdx) => (
                     <div
@@ -1342,8 +1372,11 @@ export default function Agenda() {
                       className={`absolute left-0 right-0 border-b flex ${
                         theme === 'light' ? 'border-slate-100' : 'border-white/[0.03]'
                       }`}
-                      style={{ top: `${hIdx * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                      style={{ top: `${hIdx * hourHeight}px`, height: `${hourHeight}px` }}
                     >
+                      <div className={`pointer-events-none absolute left-20 right-0 border-t border-dashed ${
+                        theme === 'light' ? 'border-slate-100' : 'border-white/[0.02]'
+                      }`} style={{ top: `${hourHeight / 2}px` }} />
                       <div className={`w-20 text-[10px] font-bold font-mono pr-4 pt-1 text-right select-none ${
                         theme === 'light' ? 'text-slate-400' : 'text-brand-textMuted/60'
                       }`}>
@@ -1360,7 +1393,7 @@ export default function Agenda() {
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const clickY = e.clientY - rect.top;
-                      const clickedHour = Math.floor(clickY / HOUR_HEIGHT) + 7;
+                      const clickedHour = Math.floor(clickY / hourHeight) + 7;
                       handleSlotClick(currentDate, clickedHour);
                     }}
                     className="absolute inset-y-0 left-20 right-4"
