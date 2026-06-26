@@ -246,14 +246,17 @@ export class FlowEngine {
                     metadata: { flowId: flowId!, flowVersion: 1, entryPoint: flowId === options.flowId ? 'manual' : 'trigger' }
                 }, effectiveStartNodeId);
 
+                // Memoria de conversación: 30 días. Si el contacto deja de contestar y
+                // vuelve dentro de los 30 días, la sesión sigue (no reinicia). Se refresca
+                // en cada mensaje (ver persistencia); pasados 30 días sin actividad, expira.
                 const expirationDate = new Date();
-                expirationDate.setHours(expirationDate.getHours() + 2);
+                expirationDate.setDate(expirationDate.getDate() + 30);
                 session.getContext().metadata.expiresAt = expirationDate;
 
                 if (!(options.startNodeId && options.startNodeId !== 'start')) {
                     const nodes = fullFlow?.nodes || [];
                     const startNode = nodes.find((n: any) => n.id === session!.currentNodeId);
-                    if (!(startNode && ['intentResolverNode', 'groqNode', 'questionNode', 'webhookNode'].includes(startNode.type))) {
+                    if (!(startNode && ['intentResolverNode', 'genderNode', 'groqNode', 'questionNode', 'webhookNode'].includes(startNode.type))) {
                         await this.handleInput(accountId, session, this.normalizeInput(messageText));
                     }
                 }
@@ -290,6 +293,10 @@ export class FlowEngine {
             // logueamos pero NO descartamos los mensajes ya generados. Reemplazar una
             // respuesta válida por "Ocurrió un error" es peor que perder el checkpoint.
             try {
+                // Refrescar la ventana de memoria a 30 días desde la última actividad.
+                const refreshed = new Date();
+                refreshed.setDate(refreshed.getDate() + 30);
+                session.getContext().metadata.expiresAt = refreshed;
                 await this.sessionRepository.update(accountId, session);
                 await redisPersistence.setCheckpoint(accountId, cleanPhone, {
                     currentNodeId: session.currentNodeId,
@@ -474,6 +481,9 @@ export class FlowEngine {
             if (result.updatedContext) {
                 Object.entries(result.updatedContext).forEach(([k, v]) => {
                     session.setVariable(k, v);
+                    // Mirror al namespace compartido (igual que las respuestas de preguntas):
+                    // así {{nombre}}/{{genero}} sobreviven un cambio de flujo (flowLink).
+                    if (k && !k.startsWith('_')) session.setGlobalVariable(k, v);
                 });
             }
 
@@ -612,6 +622,11 @@ export class FlowEngine {
             const outputVar = currentNode.data?.output_variable || 'intent_clasificado';
             advanceHandle = session.getVariable(outputVar);
             logger.info(`[FlowEngine] [INPUT] IntentResolver classified intent: "${advanceHandle}" (var: ${outputVar})`);
+        } else if (currentNode.type === 'genderNode') {
+            // El género clasificado ('hombre'|'mujer'|'desconocido') es el handle de salida.
+            const outputVar = currentNode.data?.outputVariable || currentNode.data?.output_variable || 'genero';
+            advanceHandle = session.getVariable(outputVar);
+            logger.info(`[FlowEngine] [INPUT] Gender clasificado: "${advanceHandle}" (var: ${outputVar})`);
         } else if (currentNode.type === 'orderValidatorNode') {
             advanceHandle = session.getVariable('order_validation_result');
             logger.info(`[FlowEngine] [INPUT] OrderValidator selected: "${advanceHandle}"`);
@@ -795,7 +810,7 @@ export class FlowEngine {
         // OR if the node is NOT a branching node.
         if (!edge) {
             const node = (flow.nodes || []).find((n: any) => n.id === currentNodeId);
-            const isBranchingNode = ['pollNode', 'conditionNode', 'locationValidatorNode', 'orderValidatorNode', 'arraySwitchNode', 'switchNode', 'keywordNode', 'intentResolverNode'].includes(node?.type || '');
+            const isBranchingNode = ['pollNode', 'conditionNode', 'locationValidatorNode', 'orderValidatorNode', 'arraySwitchNode', 'switchNode', 'keywordNode', 'intentResolverNode', 'genderNode'].includes(node?.type || '');
 
             if (!handle || !isBranchingNode) {
                 edge = edges.find((e: any) => e.source === currentNodeId);

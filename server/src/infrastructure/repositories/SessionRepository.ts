@@ -55,7 +55,14 @@ export class SessionRepository {
       .limit(1);
 
     if (data && data.length > 0) {
-      return Session.fromJSON(data[0]);
+      const row = data[0];
+      // Memoria de 30 días: si la sesión venció (sin actividad por >30d), no se resume;
+      // se archiva y se arranca una conversación nueva.
+      if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+        await supabase.from(this.TABLE).update({ status: 'archived', archived_reason: 'expired_30d' }).eq('id', row.id);
+        return null;
+      }
+      return Session.fromJSON(row);
     }
     return null;
   }
