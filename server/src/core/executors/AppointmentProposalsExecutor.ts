@@ -80,9 +80,16 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
         if (!modalidadRaw) {
             const choice = String((context as any)[oficinaVar] || '').trim().toLowerCase();
             if (/video|virtual|llamada/.test(choice)) modalidadRaw = 'video';
-            else if (choice.includes('presencial')) {
+            else {
+                // Por defecto presencial (el estudio prioriza presencial). La zona se
+                // deduce del nombre de la sede elegida (Capital/CABA, Quilmes, Haedo).
                 modalidadRaw = 'presencial';
-                if (!zona) zona = choice.replace(/.*presencial\s*/, '').trim(); // "presencial caba" → "caba"
+                if (!zona) {
+                    if (/capital|caba|federal|obelisco|corrientes/.test(choice)) zona = 'caba';
+                    else if (/quilmes/.test(choice)) zona = 'quilmes';
+                    else if (/haedo/.test(choice)) zona = 'haedo';
+                    else if (choice.includes('presencial')) zona = choice.replace(/.*presencial\s*/, '').trim();
+                }
             }
         }
         const modalidad: 'presencial' | 'video' | '' =
