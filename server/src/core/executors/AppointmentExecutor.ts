@@ -2,6 +2,26 @@ import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
 import { AppointmentService } from '../../services/AppointmentService';
 import { supabase } from '../../config/supabase';
 import { notify } from '../../services/NotifierService';
+import { AIService } from '../../services/AIService';
+import { buildReceptionFicha } from '../agent/context/ReceptionFichaBuilder';
+import { redisPersistence } from '../../infrastructure/persistence/RedisPersistenceService';
+import { validarTelefonoAR } from '../../utils/phone-ar';
+
+// Ficha IA best-effort (Capacidad 2): arma resumen + perfil desde el historial.
+// Si no hay IA / historial, devuelve nulls (la cita se agenda igual).
+async function buildFichaBestEffort(accountId: string, phone: string, oficina: string, resumen: string): Promise<{ resumen_ia: string | null; perfil_json: any }> {
+  try {
+    const hist = await redisPersistence.getHistory(accountId, phone, 16);
+    const convo = (hist ?? []).map((m: any) => `${m.role === 'user' ? 'Cliente' : 'Asistente'}: ${m.content}`).join('\n')
+      || (resumen ? `Cliente: ${resumen}` : '');
+    if (!convo.trim()) return { resumen_ia: null, perfil_json: null };
+    const modalidad = /video|llamada|virtual/i.test(oficina) ? 'video' : 'presencial';
+    const ficha = await buildReceptionFicha({ complete: (o) => AIService.complete(o) }, { conversation: convo, ctx: { telefono: phone, modalidad }, model: 'gpt-4o' });
+    return { resumen_ia: ficha.resumen_ia || null, perfil_json: ficha };
+  } catch {
+    return { resumen_ia: null, perfil_json: null };
+  }
+}
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 function fechaLegible(iso?: string): string {
@@ -46,9 +66,12 @@ export class AppointmentExecutor implements NodeExecutor {
     async execute(nodeData: any, context: ExecutionContext): Promise<NodeExecutionResult> {
         const nombre = resolveVar(context, nodeData.nombreVar, 'nombre');
         let telefono = resolveVar(context, nodeData.telefonoVar, 'telefono') || context.phone || '';
-        // "este", "el mismo", "del que te escribo", etc.: no es un número → usar el de
-        // WhatsApp desde el que escribe (context.phone).
-        if (String(telefono).replace(/\D/g, '').length < 8) {
+        // Validar por conformación (código de área AR). Si el cliente escribió un número
+        // inválido o una referencia ("el mismo", "este"), usamos el de WhatsApp (context.phone).
+        const tel = validarTelefonoAR(String(telefono));
+        if (tel.valido && tel.normalizado) {
+            telefono = tel.normalizado;
+        } else {
             telefono = context.phone || telefono;
         }
         const resumen = resolveVar(context, nodeData.resumenVar, 'resumen');
@@ -87,6 +110,7 @@ export class AppointmentExecutor implements NodeExecutor {
         console.log(`[AppointmentExecutor] Agendando cita para "${nombre}" (${telefono}) | ${start_time || 'sin fecha'}`);
 
         try {
+            const ficha = await buildFichaBestEffort(context.accountId, telefono || context.phone, slotOficina || oficina, resumen);
             await AppointmentService.create({
                 account_id: context.accountId,
                 phone: telefono,
@@ -98,6 +122,8 @@ export class AppointmentExecutor implements NodeExecutor {
                 end_time,
                 oficina: slotOficina || oficina,
                 assigned_profile_id: assignedProfileId,
+                resumen_ia: ficha.resumen_ia,
+                perfil_json: ficha.perfil_json,
             });
 
             // ── Notificación a la operadora (línea del estudio) ───────────────────
