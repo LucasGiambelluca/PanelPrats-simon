@@ -40,6 +40,53 @@ const weekDaysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7:00 to 22:00
 const HOUR_HEIGHT = 68; // height in pixels of an hour row
 
+// Pseudo-agenda para citas sin profesional asignado.
+const UNASSIGNED = '__unassigned__';
+
+// Niveles discretos de zoom (alto de la fila de una hora, en px).
+export const ZOOM_LEVELS = [40, 56, 68, 96, 128, 160];
+
+// Paleta fija de "agendas" (una por profesional), estilo Google Calendar.
+// Cada entrada trae clases Tailwind para tema claro y oscuro: fondo + borde
+// izquierdo + texto + hover. El último elemento (gris) es para "Sin asignar".
+type ProfPalette = { light: string; dark: string; swatch: string };
+const PROF_PALETTE: ProfPalette[] = [
+  { light: 'bg-[#e8f0fe] border-l-[4px] border-[#1a73e8] text-[#1a4fa0] hover:bg-[#1a73e8]/10', dark: 'bg-blue-500/10 border-l-[4px] border-blue-500 text-blue-300 hover:bg-blue-500/20', swatch: 'bg-[#1a73e8]' },
+  { light: 'bg-[#e6f4ea] border-l-[4px] border-[#137333] text-[#0f5927] hover:bg-[#137333]/10', dark: 'bg-emerald-500/10 border-l-[4px] border-emerald-500 text-emerald-300 hover:bg-emerald-500/20', swatch: 'bg-[#137333]' },
+  { light: 'bg-[#fce8e6] border-l-[4px] border-[#c5221f] text-[#a11b19] hover:bg-[#c5221f]/10', dark: 'bg-red-500/10 border-l-[4px] border-red-500 text-red-300 hover:bg-red-500/20', swatch: 'bg-[#c5221f]' },
+  { light: 'bg-[#fff3e0] border-l-[4px] border-[#e8710a] text-[#b45309] hover:bg-[#e8710a]/10', dark: 'bg-orange-500/10 border-l-[4px] border-orange-500 text-orange-300 hover:bg-orange-500/20', swatch: 'bg-[#e8710a]' },
+  { light: 'bg-[#f3e8fd] border-l-[4px] border-[#8430ce] text-[#6b21a8] hover:bg-[#8430ce]/10', dark: 'bg-purple-500/10 border-l-[4px] border-purple-500 text-purple-300 hover:bg-purple-500/20', swatch: 'bg-[#8430ce]' },
+  { light: 'bg-[#e0f7f6] border-l-[4px] border-[#009688] text-[#00695c] hover:bg-[#009688]/10', dark: 'bg-teal-500/10 border-l-[4px] border-teal-500 text-teal-300 hover:bg-teal-500/20', swatch: 'bg-[#009688]' },
+  { light: 'bg-[#fde7f3] border-l-[4px] border-[#d81b60] text-[#ad1457] hover:bg-[#d81b60]/10', dark: 'bg-pink-500/10 border-l-[4px] border-pink-500 text-pink-300 hover:bg-pink-500/20', swatch: 'bg-[#d81b60]' },
+  { light: 'bg-[#fef7e0] border-l-[4px] border-[#b06000] text-[#8e4d00] hover:bg-[#b06000]/10', dark: 'bg-amber-500/10 border-l-[4px] border-amber-500 text-amber-300 hover:bg-amber-500/20', swatch: 'bg-[#b06000]' },
+  { light: 'bg-[#e8eaf6] border-l-[4px] border-[#3f51b5] text-[#283593] hover:bg-[#3f51b5]/10', dark: 'bg-indigo-500/10 border-l-[4px] border-indigo-500 text-indigo-300 hover:bg-indigo-500/20', swatch: 'bg-[#3f51b5]' },
+  { light: 'bg-[#f1f8e9] border-l-[4px] border-[#689f38] text-[#33691e] hover:bg-[#689f38]/10', dark: 'bg-lime-500/10 border-l-[4px] border-lime-500 text-lime-300 hover:bg-lime-500/20', swatch: 'bg-[#689f38]' },
+  { light: 'bg-[#e0f2f1] border-l-[4px] border-[#00838f] text-[#006064] hover:bg-[#00838f]/10', dark: 'bg-cyan-500/10 border-l-[4px] border-cyan-500 text-cyan-300 hover:bg-cyan-500/20', swatch: 'bg-[#00838f]' },
+  { light: 'bg-[#fbe9e7] border-l-[4px] border-[#d84315] text-[#bf360c] hover:bg-[#d84315]/10', dark: 'bg-rose-500/10 border-l-[4px] border-rose-500 text-rose-300 hover:bg-rose-500/20', swatch: 'bg-[#d84315]' },
+  { light: 'bg-[#ede7f6] border-l-[4px] border-[#5e35b1] text-[#4527a0] hover:bg-[#5e35b1]/10', dark: 'bg-violet-500/10 border-l-[4px] border-violet-500 text-violet-300 hover:bg-violet-500/20', swatch: 'bg-[#5e35b1]' },
+  { light: 'bg-[#e3f2fd] border-l-[4px] border-[#0277bd] text-[#01579b] hover:bg-[#0277bd]/10', dark: 'bg-sky-500/10 border-l-[4px] border-sky-500 text-sky-300 hover:bg-sky-500/20', swatch: 'bg-[#0277bd]' },
+];
+// Color gris para "Sin asignar".
+const UNASSIGNED_PALETTE: ProfPalette = {
+  light: 'bg-slate-100 border-l-[4px] border-slate-400 text-slate-600 hover:bg-slate-200',
+  dark: 'bg-white/5 border-l-[4px] border-slate-500 text-slate-300 hover:bg-white/10',
+  swatch: 'bg-slate-400',
+};
+
+// Índice de color estable de un profesional, según su posición en la lista
+// ordenada por id. Devuelve la entrada gris si no hay profesional (sin asignar).
+export function profPalette(orderedProfIds: string[], profileId: string | null | undefined): ProfPalette {
+  if (!profileId) return UNASSIGNED_PALETTE;
+  const idx = orderedProfIds.indexOf(profileId);
+  if (idx < 0) return UNASSIGNED_PALETTE;
+  return PROF_PALETTE[idx % PROF_PALETTE.length];
+}
+
+// Predicado puro: ¿la cita es visible según las agendas seleccionadas?
+export function isProfVisible(selectedProfs: Set<string>, assignedProfileId: string | null | undefined): boolean {
+  return selectedProfs.has(assignedProfileId ?? UNASSIGNED);
+}
+
 // Campos de la ficha de recepción (migración 0023) en el formData del modal.
 // '' = sin cargar (se mapea a null al enviar). canal_auto trackea si el canal fue
 // detectado por el sistema (prellenado desde la cuenta) o corregido a mano.
