@@ -1,3 +1,70 @@
+# VEREDICTO 2026-06-26 (sesión Agente: empleado + cerebro + schedulers + teléfono)
+
+> **VEREDICTO: 🟡 CASI** — el código nuevo NO introduce bloqueantes (🔴) ni altos de código abiertos.
+> **A-S1 (suite roja) RESUELTO** (349 verde, 0 fallos). Los 🟠 que quedan son **operativos/de verificación**
+> (no defectos de código): confirmar key OpenAI con saldo si se habilita `ai_first`, y el checklist
+> pre-deploy heredado (env). Code-wise está LISTO; el deploy queda gated solo en esas verificaciones de entorno.
+> Conteo (sesión, actualizado): **0 🔴 · 0 🟠 de código · 2 🟠 operativos · 3 🟡** · Rama `feat-omnichannel`.
+>
+> **Actualización 2026-06-26 (post-fix):**
+> - ✅ **A-S1 RESUELTO** — reescritos `AppointmentAvailabilityExecutor`/`AppointmentProposalsExecutor` tests
+>   como unit aislados (mock de AppointmentService/AvailabilityService/AIService, verifican solapamiento +
+>   motor en cascada). **Suite: 64 files, 349 tests, 0 fallos.** `tsc` limpio.
+> - 🟡 **A-S2 reducido** — esos 2 tests ya NO pegan a Supabase prod; la hygiene general (otros tests podrían
+>   leer prod) queda como 🟡.
+> - 🟠 **A-S3 (operativo, condicional)** — key OpenAI con saldo solo si se habilita `ai_first` (hoy dormant).
+> - 🟠 **Checklist pre-deploy heredado (operativo)** — env de prod (`NODE_ENV`/`CORS`/sin `DEV_AUTH_BYPASS`),
+>   migración `0014`, rotar keys. No verificable desde el código; confirmar en el entorno antes de deployar.
+
+## ✅ Verificado OK (código de la sesión)
+- **Sin secrets hardcodeados** — grep del prefijo de key solo pega en `logger.redact.test.ts` (fake de
+  redacción). `.env` en `.gitignore`. La key de OpenAI usada en smokes fue inline, nunca en disco (verificado).
+- **`/api/agente` admin-only** — `app.ts:86` `requireRole('admin')`. El config-agent solo emite `Change`
+  tipados (whitelist en `ConfigToolRegistry.toChange`); `applyChanges` rechaza tipos desconocidos; toda
+  escritura es vía supabase parametrizado (sin SQL armado a mano). Sin IDOR (config global admin).
+- **Booking** valida ownership (account+phone) en reschedule/cancel (`ToolRegistry`); doble-reserva cubierta
+  por constraints DB existentes (0012/0017).
+- **`npm audit --omit=dev` → 0 vulnerabilidades.**
+- **Schedulers**: `NightReengageScheduler` es **opt-in** (`reengage_enabled` default `false` → dormant hasta
+  activar) + guard anti doble-envío + `running` guard + ventana 24h.
+- **Teléfono**: `validarTelefonoAR` testeado; conserva números de área no curada (con `console.warn`), no
+  descarta en silencio.
+- **Migraciones 0024-0028** additivas (`ADD COLUMN IF NOT EXISTS`), aplicadas por el usuario.
+- **Tests del código nuevo**: ~140 verdes (config 17, booking ~18, reengage 15, phone 6, persona/runtime, etc.).
+
+## 🟠 Altos abiertos
+- **A-S1 — Suite roja (6 tests).** `AppointmentProposalsExecutor`/`AppointmentAvailabilityExecutor` fallan:
+  son tests de **integración que pegan a Supabase** y revientan por FK (`appointments_account_id_fkey`,
+  cuenta de prueba no seedeada) — NO es regresión de producto (`proposeCascade` existe, `AvailabilityService.ts:226`),
+  pero el suite no queda verde → CI no gatea limpio y enmascara futuras regresiones de agenda. *Fix:* seedear
+  cuenta de test o mockear la DB en esos tests.
+- **A-S2 — Los tests corren contra Supabase PROD.** `.env` apunta a la base viva del estudio; `npx vitest run`
+  lee/escribe prod. *Fix:* base de test o mocks (los smokes ya limpian sus datos).
+- **A-S3 — Dependencia de `OPENAI_API_KEY` con saldo en prod** para agente ai_first / config-agent / ficha.
+  Sin saldo degradan a fallback (no rompen). *Acción:* confirmar saldo del key de prod antes de habilitar
+  `ai_first` (memory: había key con saldo en VPS 2026-06-25 — confirmar).
+- **Heredados (checklist pre-deploy 2026-06-21, siguen aplicando):** migración `0014`, `NODE_ENV=production`
+  + `CORS_ORIGIN` explícito + quitar `DEV_AUTH_BYPASS`, rotar keys que estuvieron en `.env` local.
+
+## 🟡 Medios (deuda documentada)
+- `/api/agente` sin validación de schema (zod) como el resto de routers — mitigado por admin-only +
+  validación de `Change` + DB parametrizada.
+- Catches best-effort silenciosos en ficha/booking (paths no-críticos; la cita se crea igual).
+- `AREA_CODES_AR` AMBA-céntrico (data ampliable; números de interior se conservan con aviso).
+- Migraciones sin `down` (additivas, bajo riesgo).
+
+## Camino a 🟢 LISTO
+1. Poner **verde el suite** (seedear cuenta de test o mockear la DB en los 2 tests de agenda).
+2. Confirmar **OPENAI key con saldo** en prod si se habilita `ai_first`.
+3. Completar el **checklist pre-deploy heredado** (0014, `NODE_ENV`/`CORS`/`DEV_AUTH_BYPASS`, rotar keys).
+
+> Nota: gran parte del código nuevo es **opt-in/dormant** en prod — el re-enganche está OFF por default y el
+> agente ai_first/booking/ficha solo se activan en cuentas con `agent_mode='ai_first'` (hoy ninguna). El
+> único código nuevo activo en el path de `flows` es la validación de teléfono, que está testeada. Por eso el
+> riesgo de runtime del deploy es bajo; los 🟠 son de CI/operación, no de un incidente inmediato.
+
+---
+
 # AUDITORÍA DE PRODUCCIÓN — Panel WhatsApp multi-cuenta
 
 > **VEREDICTO: 🟢 LISTO** (código) — sujeto al checklist de pre-deploy de abajo. (era 🔴 NO LISTO)
