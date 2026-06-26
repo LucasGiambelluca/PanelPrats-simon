@@ -25,6 +25,7 @@ vi.mock('../../../config/database', () => {
   const builder: any = {
     select: vi.fn((arg: string) => { capturedSelect.arg = arg; return builder; }),
     eq: vi.fn(() => builder),
+    in: vi.fn(() => builder),   // getHistory ahora filtra el phone con .in(variants)
     order: vi.fn(() => builder),
     limit: vi.fn(() => Promise.resolve({ data: rows, error: null })),
   };
