@@ -87,10 +87,23 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   // (modo dev con vite aparte), no monta nada.
   const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, '../../public');
   if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
+    // index.html: siempre revalidar (así tras un deploy el browser baja el index
+    // nuevo, que referencia los chunks nuevos → no queda "pegado" en una versión).
+    // Assets hasheados (index-XXXX.js/.css): inmutables, cache largo (el hash cambia
+    // en cada build, así que es seguro).
+    app.use(express.static(clientDist, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        } else if (/\.(js|css|woff2?|png|jpg|svg)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
     // Fallback SPA: toda ruta que NO sea /api ni /health devuelve index.html
     // (React Router resuelve en el cliente). Regex evita capturar la API.
     app.get(/^(?!\/api|\/health).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(path.join(clientDist, 'index.html'));
     });
   }
