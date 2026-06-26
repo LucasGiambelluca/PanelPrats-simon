@@ -1464,7 +1464,7 @@ export default function Agenda() {
       {/* CREATE & EDIT MODAL (Unified Dialog Window) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in select-none">
-          <div className={`w-full max-w-lg overflow-hidden p-6 relative ${
+          <div className={`w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-6 relative ${
             theme === 'light'
               ? 'bg-brand-surface rounded-2xl border border-brand-hairline shadow-card'
               : 'bg-brand-card rounded-2xl border border-white/10 shadow-2xl'
@@ -1472,7 +1472,7 @@ export default function Agenda() {
             <div className={`absolute top-0 left-0 right-0 h-1 ${theme === 'light' ? 'bg-brand-primary' : 'hidden'}`} />
 
             {/* Modal Header */}
-            <div className={`flex items-center justify-between border-b pb-4 mb-4 ${
+            <div className={`flex-shrink-0 flex items-center justify-between border-b pb-4 mb-4 ${
               theme === 'light' ? 'border-brand-hairline' : 'border-white/5'
             }`}>
               <div className="flex items-center gap-3">
@@ -1500,7 +1500,7 @@ export default function Agenda() {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 -mr-3 pr-3 scrollbar-thin">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Nombre */}
                 <div className="space-y-1">
