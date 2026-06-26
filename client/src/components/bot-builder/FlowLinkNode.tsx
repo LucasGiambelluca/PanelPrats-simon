@@ -45,8 +45,16 @@ export default memo(({ data, isConnectable }: any) => {
                 <option key={f.id} value={f.id}>{f.name}</option>
             ))}
         </select>
-        <div className="mt-2 text-[10px] text-gray-400">
-            Al llegar aquí, la conversación saltará al flujo seleccionado.
+        <label className="block text-xs font-medium text-gray-500 mb-1 mt-3">Variables a pasar</label>
+        <input
+            type="text"
+            className="w-full text-xs border border-gray-300 rounded focus:ring-gray-500 py-1 px-1 font-mono"
+            value={data.passVariables || ''}
+            onChange={(e) => data.onChangeValue?.('passVariables', e.target.value)}
+            placeholder="nombre, telefono"
+        />
+        <div className="mt-1 text-[10px] text-gray-400">
+            Separá por coma. Para renombrar usá <span className="font-mono">origen:destino</span> (ej. <span className="font-mono">nombre:cliente</span>). El flujo destino las usa con <span className="font-mono">{'{{nombre}}'}</span>.
         </div>
       </div>
 

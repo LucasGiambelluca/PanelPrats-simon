@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, HelpCircle, GitFork, BarChart2, Store, ArrowRightCircle, UploadCloud, FileText, PauseCircle, Clock, ChevronLeft, ChevronRight, AlertTriangle, Image, Search, Brain, Mic, Bot, Zap, Database, Scissors, Spline, MousePointerClick, CalendarPlus, Sliders, UserSearch } from 'lucide-react';
+import { MessageSquare, HelpCircle, GitFork, BarChart2, Store, ArrowRightCircle, UploadCloud, FileText, PauseCircle, Clock, ChevronLeft, ChevronRight, AlertTriangle, Image, Search, Brain, Mic, Bot, Zap, Database, Scissors, Spline, MousePointerClick, CalendarPlus, Sliders, UserSearch, Download } from 'lucide-react';
 
 export const nodeItems = [
   { type: 'webhookNode', icon: Zap, label: 'Hook / Inicio', desc: 'Gatillo de entrada.', bg: 'bg-amber-100', text: 'text-amber-600' },
@@ -13,7 +13,8 @@ export const nodeItems = [
   { type: 'pollNode', icon: BarChart2, label: 'Encuesta', desc: 'Opciones múltiples.', bg: 'bg-purple-100', text: 'text-purple-600' },
   { type: 'conditionNode', icon: GitFork, label: 'Condición', desc: 'Ramifica según variable.', bg: 'bg-orange-100', text: 'text-orange-600' },
   { type: 'genderNode', icon: UserSearch, label: 'Género (IA)', desc: 'Pide el nombre y ramifica hombre/mujer.', bg: 'bg-fuchsia-100', text: 'text-fuchsia-600' },
-  { type: 'flowLinkNode', icon: ArrowRightCircle, label: 'Ir a Flujo', desc: 'Salta a otro flujo.', bg: 'bg-gray-100', text: 'text-gray-600' },
+  { type: 'flowLinkNode', icon: ArrowRightCircle, label: 'Ir a Flujo', desc: 'Salta a otro flujo (pasa variables).', bg: 'bg-gray-100', text: 'text-gray-600' },
+  { type: 'captureVarNode', icon: Download, label: 'Capturar Variable', desc: 'Recibe variables de otro flujo.', bg: 'bg-teal-100', text: 'text-teal-600' },
   { type: 'mediaUploadNode', icon: UploadCloud, label: 'Recibir Archivo', desc: 'Pide un archivo.', bg: 'bg-pink-100', text: 'text-pink-600' },
   { type: 'documentNode', icon: FileText, label: 'Enviar PDF', desc: 'Genera comprobante.', bg: 'bg-red-100', text: 'text-red-600' },
   { type: 'threadNode', icon: PauseCircle, label: 'Control Bot', desc: 'Pausa/Reanuda.', bg: 'bg-orange-100', text: 'text-orange-600' },

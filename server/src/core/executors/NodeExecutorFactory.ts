@@ -22,6 +22,7 @@ import { BusinessHoursExecutor } from './BusinessHoursExecutor';
 import { GroqExecutor } from './GroqExecutor';
 import { IntentResolverExecutor } from './IntentResolverExecutor';
 import { GenderExecutor } from './GenderExecutor';
+import { CaptureVarExecutor } from './CaptureVarExecutor';
 import { BufferMemoryExecutor } from './BufferMemoryExecutor';
 import { TextSplitterExecutor } from './TextSplitterExecutor';
 import { AIAgentExecutor } from './AIAgentExecutor'; // omitir si Task 9 = B
@@ -62,6 +63,7 @@ class NodeExecutorFactory {
     this.register('groqNode', new GroqExecutor());
     this.register('intentResolverNode', new IntentResolverExecutor());
     this.register('genderNode', new GenderExecutor());
+    this.register('captureVarNode', new CaptureVarExecutor());
     this.register('bufferMemoryNode', new BufferMemoryExecutor());
     this.register('textSplitterNode', new TextSplitterExecutor());
     this.register('aiAgentNode', new AIAgentExecutor()); // omitir si Task 9 = B

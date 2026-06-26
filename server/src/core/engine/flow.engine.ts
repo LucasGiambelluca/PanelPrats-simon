@@ -710,6 +710,8 @@ export class FlowEngine {
             if (result.updatedContext) {
                 Object.entries(result.updatedContext).forEach(([k, v]) => {
                     session.setVariable(k, v);
+                    // Mirror al namespace compartido para que sobreviva saltos de flujo.
+                    if (k && !k.startsWith('_') && k !== 'last_ai_completed') session.setGlobalVariable(k, v);
                 });
             }
 
@@ -721,6 +723,22 @@ export class FlowEngine {
             if (currentNode.type === 'flowLinkNode' && currentNode.data?.flowId) {
                 const targetFlowId = currentNode.data.flowId;
                 logger.info(`[FlowEngine] Switching flow for session ${session.id} -> ${targetFlowId}`);
+
+                // Pasar variables explícitas al flujo destino. Formato: "nombre, edad" o
+                // "nombre:cliente" (renombra). Se guardan en el namespace compartido para
+                // que el flujo destino las lea con {{nombre}} sin volver a pedirlas.
+                const passSpec = String(currentNode.data.passVariables || currentNode.data.pass_variables || '').trim();
+                if (passSpec) {
+                    for (const part of passSpec.split(',')) {
+                        const [src, dst] = part.split(':').map((s) => s.trim());
+                        if (!src) continue;
+                        const val = session.getVariable(src);
+                        if (val !== undefined && val !== null) {
+                            session.setGlobalVariable(dst || src, val);
+                            logger.info(`[FlowEngine] [flowLink] pasando "${src}"${dst ? ` → "${dst}"` : ''} = "${val}"`);
+                        }
+                    }
+                }
 
                 // Switch context/flow in session
                 session.getContext().metadata.flowId = targetFlowId;

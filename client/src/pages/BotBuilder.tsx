@@ -36,6 +36,7 @@ import MobileNodeSelector from '../components/bot-builder/MobileNodeSelector';
 import GroqNode from '../components/bot-builder/GroqNode';
 import IntentResolverNode from '../components/bot-builder/IntentResolverNode';
 import GenderNode from '../components/bot-builder/GenderNode';
+import CaptureVarNode from '../components/bot-builder/CaptureVarNode';
 import AudioTranscriberNode from '../components/bot-builder/AudioTranscriberNode';
 import AIAgentNode from '../components/bot-builder/AIAgentNode';
 import MediaTypeDetectorNode from '../components/bot-builder/MediaTypeDetectorNode';
@@ -67,6 +68,7 @@ const nodeTypes = {
   groqNode: GroqNode,
   intentResolverNode: IntentResolverNode,
   genderNode: GenderNode,
+  captureVarNode: CaptureVarNode,
   audioTranscriberNode: AudioTranscriberNode,
   aiAgentNode: AIAgentNode,
   mediaTypeDetectorNode: MediaTypeDetectorNode,
