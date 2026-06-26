@@ -5,7 +5,7 @@ import type { BrainDb, BrainFaq, BrainZona, AccountField } from './types';
 // igual que accounts.routes GET que hace select('*') sin filtrar por user_id).
 export class SupabaseBrainDb implements BrainDb {
   async listAccountIds(): Promise<string[]> {
-    const { data } = await supabase.from('accounts').select('id');
+    const { data } = await supabase.from('accounts').select('id').order('id');
     return ((data ?? []) as any[]).map((a) => a.id);
   }
   async getField(accountId: string, field: AccountField): Promise<string | null> {
@@ -36,8 +36,8 @@ export class SupabaseBrainDb implements BrainDb {
     await supabase.from('account_faqs').delete().eq('account_id', accountId).eq('pregunta', pregunta);
   }
   async listZonas(accountId: string): Promise<BrainZona[]> {
-    const { data } = await supabase.from('zone_gazetteer').select('id, alias_norm, oficina').eq('account_id', accountId);
-    return ((data ?? []) as any[]).map((z) => ({ id: String(z.id), alias: z.alias_norm, oficina: z.oficina }));
+    const { data } = await supabase.from('zone_gazetteer').select('id, alias, alias_norm, oficina').eq('account_id', accountId);
+    return ((data ?? []) as any[]).map((z) => ({ id: String(z.id), alias: z.alias ?? z.alias_norm, oficina: z.oficina }));
   }
   async upsertZona(accountId: string, aliasNorm: string, alias: string, oficina: string): Promise<void> {
     await supabase.from('zone_gazetteer').upsert({ account_id: accountId, alias, alias_norm: aliasNorm, oficina }, { onConflict: 'account_id,alias_norm' });

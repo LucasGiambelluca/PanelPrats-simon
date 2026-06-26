@@ -78,6 +78,7 @@ export default function Agente() {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center text-center text-gray-500 mt-8">
+              <img src="/agente/bot-avatar.png" alt="Agente" className="w-20 h-20 rounded-full object-cover mb-2" />
               <video src="/agente/bot-ok.mp4" autoPlay loop muted playsInline className="w-32 h-32 object-contain" />
               <p className="mt-2">Decime qué mejorar de la atención y lo preparo. 👋</p>
             </div>
