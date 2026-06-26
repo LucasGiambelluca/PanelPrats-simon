@@ -187,3 +187,15 @@ describe('BookingFlow — await_slot re-busca otro día/turno', () => {
     expect(deps.book).not.toHaveBeenCalled();
   });
 });
+
+describe('parseSlotRequest — "de tarde" (sin "la") y contexto de día', () => {
+  const sun = new Date('2026-06-28T12:00:00');
+  it('"de tarde seria mejor!" → turno tarde', () => {
+    expect(parseSlotRequest('de tarde seria mejor!', sun).turno).toBe('tarde');
+  });
+  it('"de mañana" → turno mañana (no día)', () => {
+    const r = parseSlotRequest('de mañana mejor', sun);
+    expect(r.turno).toBe('manana');
+    expect(r.desde).toBeUndefined();
+  });
+});

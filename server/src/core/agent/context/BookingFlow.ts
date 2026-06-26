@@ -22,6 +22,7 @@ export interface BookingState {
   meta?: Record<string, { end: string; profileId?: string | null; oficina: string }>;
   chosenStart?: string;
   nombre?: string;
+  desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
 }
 
 export interface BookingSlot { start: string; end: string; profileId?: string | null; oficina?: string }
@@ -95,11 +96,11 @@ export function parseSlotRequest(text: string, now: Date = new Date()): { isRequ
   const t = norm(text);
   if (!t) return { isRequest: false };
 
-  // Turno: "de/a/por la tarde", "la tarde", "tardecita" → tarde; idem mañana/temprano.
-  // (Detectarlo ANTES evita confundir "de la mañana" con el día "mañana".)
+  // Turno: cualquier mención de "tarde" → tarde. Para mañana exigimos "de/a/por (la)
+  // mañana", "la mañana" o "temprano" (así "para mañana" se trata como DÍA, no turno).
   const turno: 'manana' | 'tarde' | undefined =
-    /\b((de|a|por) la tarde|la tarde|tardecita|despues de(l)? almuerzo|despues de comer)\b/.test(t) ? 'tarde'
-    : /\b((de|a|por) la manana|la manana|manana temprano|temprano|tempranito|al mediodia)\b/.test(t) ? 'manana'
+    /\b(tarde|tardecita|despues de(l)? almuerzo|despues de comer)\b/.test(t) ? 'tarde'
+    : /\b((de|a|por)\s+(la\s+)?manana|la manana|manana temprano|temprano|tempranito|al mediodia)\b/.test(t) ? 'manana'
     : undefined;
 
   const atDay = (target: number): Date => { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + target); return d; };
@@ -146,9 +147,10 @@ function lugarLabel(state: BookingState): string {
   return state.modalidad === 'video' ? 'por videollamada' : 'de forma presencial';
 }
 
-function showSlotsMessage(state: BookingState, offered: OfferedOption[]): string {
+function showSlotsMessage(state: BookingState, offered: OfferedOption[], lead?: string): string {
   const lines = offered.map((o) => `${o.index}. ${o.label}`).join('\n');
-  return `Estos turnos tengo ${lugarLabel(state)}:\n${lines}\n¿Cuál te queda mejor? Decime el número (1, 2 o 3). 😊`;
+  const head = lead ?? `Estos turnos tengo ${lugarLabel(state)}:`;
+  return `${head}\n${lines}\n¿Cuál te queda mejor? Decime el número (1, 2 o 3). 😊`;
 }
 
 // Fuera de cobertura → videollamada, avisando el motivo (no exponemos oficinas).
@@ -169,10 +171,20 @@ async function farToVideo(state: BookingState, deps: BookingDeps): Promise<Booki
 async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?: Date; turno?: 'manana' | 'tarde' } = {}): Promise<BookingStep> {
   const oficina = state.oficina!;
   const raw = await deps.freeSlots(oficina, { desde: opts.desde, max: opts.turno ? 30 : 3 });
-  const filtered = opts.turno
-    ? raw.filter((s) => (opts.turno === 'tarde' ? slotHourAR(s.start) >= 13 : slotHourAR(s.start) < 13))
-    : raw;
-  const slots = filtered.slice(0, 3);
+  let slots = raw.slice(0, 3);
+  let lead: string | undefined;
+  if (opts.turno) {
+    const f = raw.filter((s) => (opts.turno === 'tarde' ? slotHourAR(s.start) >= 13 : slotHourAR(s.start) < 13));
+    if (f.length) {
+      slots = f.slice(0, 3);
+    } else if (raw.length) {
+      // No hay del turno pedido, pero sí hay otros ese día: los mostramos con aviso.
+      slots = raw.slice(0, 3);
+      lead = `No tengo turnos a la ${opts.turno === 'tarde' ? 'tarde' : 'mañana'}${opts.desde ? ' ese día' : ''}, pero ${lugarLabel(state)} tengo estos:`;
+    } else {
+      slots = [];
+    }
+  }
   if (!slots.length) {
     // Pidió un día/turno puntual sin disponibilidad: avisar sin romper.
     if (opts.desde || opts.turno) {
@@ -194,10 +206,10 @@ async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?:
   const offered: OfferedOption[] = slots.map((s, i) => ({ index: i + 1, label: SLOT_LABEL(s), value: s.start }));
   const meta: Record<string, { end: string; profileId?: string | null; oficina: string }> = {};
   for (const s of slots) meta[s.start] = { end: s.end, profileId: s.profileId ?? null, oficina: s.oficina ?? oficina };
-  const nextState = { ...state, stage: 'await_slot' as const, offered, meta };
+  const nextState = { ...state, stage: 'await_slot' as const, offered, meta, desde: opts.desde ? opts.desde.toISOString() : state.desde };
   return {
     state: nextState,
-    messages: [showSlotsMessage(nextState, offered)],
+    messages: [showSlotsMessage(nextState, offered, lead)],
     active: true,
   };
 }
@@ -282,9 +294,10 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       // No eligió. ¿Cambió de modalidad?
       const m = detectModalidad(text);
       if (m && m !== state.modalidad) return afterModality({ ...state, modalidad: m, oficina: undefined, offered: undefined, meta: undefined }, deps);
-      // ¿Pidió otro turno/horario ("a la tarde", "más tarde", "otro")? → re-buscar.
+      // ¿Pidió otro turno/horario ("de tarde", "más temprano", "otro")? → re-buscar,
+      // manteniendo el día que ya venía mirando (state.desde) si lo hay.
       if (req.isRequest) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { turno: req.turno });
+        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined });
       }
       return { state, messages: ['Decime cuál te sirve con el número (1, 2 o 3), o pedime otro día/horario. 🙂'], active: true };
     }
