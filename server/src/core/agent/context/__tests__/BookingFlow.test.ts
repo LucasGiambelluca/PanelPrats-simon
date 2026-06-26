@@ -150,3 +150,40 @@ describe('detectBookingIntent — dispara el flujo sin depender del LLM', () => 
     expect(detectBookingIntent('hola buenas').start).toBe(false);
   });
 });
+
+import { parseSlotRequest } from '../BookingFlow';
+
+describe('parseSlotRequest — pedir otro día/horario (determinístico)', () => {
+  const sunday = new Date('2026-06-28T12:00:00'); // domingo (getDay()=0)
+  it('"el martes a la tarde" → día martes + turno tarde', () => {
+    const r = parseSlotRequest('no tenes para el martes a la tarde?', sunday);
+    expect(r.isRequest).toBe(true);
+    expect(r.turno).toBe('tarde');
+    expect(r.desde?.getDay()).toBe(2); // martes
+  });
+  it('"el de la mañana" → turno mañana, NO un día', () => {
+    const r = parseSlotRequest('el de la mañana', sunday);
+    expect(r.turno).toBe('manana');
+    expect(r.desde).toBeUndefined();
+  });
+  it('"para mañana" → día siguiente, sin turno', () => {
+    const r = parseSlotRequest('tenes para mañana?', sunday);
+    expect(r.desde?.getDate()).toBe(29); // 28 + 1
+    expect(r.turno).toBeUndefined();
+  });
+  it('"no sé" → no es un pedido', () => {
+    expect(parseSlotRequest('no sé', sunday).isRequest).toBe(false);
+  });
+});
+
+describe('BookingFlow — await_slot re-busca otro día/turno', () => {
+  it('"¿para el martes?" recarga slots (vuelve a llamar freeSlots) y sigue en await_slot', async () => {
+    const deps = makeDeps();
+    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    (deps.freeSlots as any).mockClear();
+    const step = await advanceBooking(start.state, '¿no tenés para el martes?', deps);
+    expect(deps.freeSlots).toHaveBeenCalled();           // recargó
+    expect(step.state.stage).toBe('await_slot');
+    expect(deps.book).not.toHaveBeenCalled();
+  });
+});

@@ -29,7 +29,8 @@ export interface BookingSlot { start: string; end: string; profileId?: string | 
 export interface BookingDeps {
   suggestOffice: (text: string) => Promise<{ oficina_sugerida: string | null; necesita_aclaracion: boolean; pregunta_aclaracion?: string }>;
   videoOfficeName: () => Promise<string | null>;
-  freeSlots: (oficina: string) => Promise<BookingSlot[]>;
+  // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
+  freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
   book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
 }
 
@@ -78,6 +79,52 @@ function isNegative(text: string): boolean {
   return /\b(no|nop|otro|otra|cambiar|mejor otro|distinto|ninguno|ninguna)\b/.test(norm(text));
 }
 
+// Hora del slot en horario Argentina (UTC-3), para filtrar mañana/tarde.
+function slotHourAR(iso: string): number {
+  return (new Date(iso).getUTCHours() - 3 + 24) % 24;
+}
+
+const DOW: Record<string, number> = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
+
+/**
+ * Parser DETERMINÍSTICO (sin IA) de un pedido de OTRO día/horario dentro del agendado:
+ * "el martes", "mañana", "la semana que viene", "a la tarde", "más tarde", "otra fecha".
+ * `now` se inyecta para testear. Devuelve si es un pedido de re-búsqueda + desde/turno.
+ */
+export function parseSlotRequest(text: string, now: Date = new Date()): { isRequest: boolean; desde?: Date; turno?: 'manana' | 'tarde' } {
+  const t = norm(text);
+  if (!t) return { isRequest: false };
+
+  // Turno: "de/a/por la tarde", "la tarde", "tardecita" → tarde; idem mañana/temprano.
+  // (Detectarlo ANTES evita confundir "de la mañana" con el día "mañana".)
+  const turno: 'manana' | 'tarde' | undefined =
+    /\b((de|a|por) la tarde|la tarde|tardecita|despues de(l)? almuerzo|despues de comer)\b/.test(t) ? 'tarde'
+    : /\b((de|a|por) la manana|la manana|manana temprano|temprano|tempranito|al mediodia)\b/.test(t) ? 'manana'
+    : undefined;
+
+  const atDay = (target: number): Date => { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + target); return d; };
+  let desde: Date | undefined;
+
+  const iso = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) desde = new Date(`${iso[0]}T12:00:00`);
+
+  if (!desde) {
+    for (const [name, dow] of Object.entries(DOW)) {
+      if (new RegExp(`\\b${name}\\b`).test(t)) { let add = (dow - now.getDay() + 7) % 7; if (add === 0) add = 7; desde = atDay(add); break; }
+    }
+  }
+  if (!desde) {
+    if (/\bpasado\s*manana\b/.test(t)) desde = atDay(2);
+    else if (/\bmanana\b/.test(t) && !turno) desde = atDay(1); // "mañana" como día (si no era turno)
+    else if (/\b(semana que viene|proxima semana|otra semana)\b/.test(t)) desde = atDay(7);
+    else if (/\b(otro dia|otra fecha|mas adelante|proximo|siguiente)\b/.test(t)) desde = atDay(1);
+  }
+
+  // Es un pedido de re-búsqueda si hay día, turno, o un "otro/más tarde/no me sirve" explícito.
+  const otherSignal = /\b(otro|otra|mas tarde|mas temprano|no me sirve|no tenes|no hay|ninguno|ninguna)\b/.test(t);
+  return { isRequest: !!(desde || turno || otherSignal), desde, turno };
+}
+
 // Extrae un nombre razonable ("mi nombre es Juan Pérez" → "Juan Pérez").
 function cleanName(text: string): string {
   let s = (text || '').trim()
@@ -118,10 +165,19 @@ async function farToVideo(state: BookingState, deps: BookingDeps): Promise<Booki
 }
 
 // Carga slots de UNA oficina y arma el paso await_slot. Si no hay, ofrece alternativa.
-async function loadSlots(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
+// opts.desde: buscar desde otra fecha ("el martes"); opts.turno: filtrar mañana/tarde.
+async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?: Date; turno?: 'manana' | 'tarde' } = {}): Promise<BookingStep> {
   const oficina = state.oficina!;
-  const slots = (await deps.freeSlots(oficina)).slice(0, 3);
+  const raw = await deps.freeSlots(oficina, { desde: opts.desde, max: opts.turno ? 30 : 3 });
+  const filtered = opts.turno
+    ? raw.filter((s) => (opts.turno === 'tarde' ? slotHourAR(s.start) >= 13 : slotHourAR(s.start) < 13))
+    : raw;
+  const slots = filtered.slice(0, 3);
   if (!slots.length) {
+    // Pidió un día/turno puntual sin disponibilidad: avisar sin romper.
+    if (opts.desde || opts.turno) {
+      return { state, messages: [`No tengo horarios para ese día/horario ${lugarLabel(state)}. ¿Querés que te muestre los más próximos?`], active: true };
+    }
     // Sin horarios: ofrecer videollamada como salida (si no estábamos ya en video).
     if (state.modalidad !== 'video') {
       const video = await deps.videoOfficeName();
@@ -211,16 +267,26 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
     }
 
     case 'await_slot': {
-      const picked = resolveOption({ userText: text, offered: state.offered ?? [] });
-      if (!picked.matchedValue || picked.confianza < 0.55) {
-        // Cambió de idea de modalidad en el medio.
-        const m = detectModalidad(text);
-        if (m && m !== state.modalidad) return afterModality({ ...state, modalidad: m, oficina: undefined, offered: undefined, meta: undefined }, deps);
-        return { state, messages: ['Decime cuál te sirve con el número: 1, 2 o 3. 🙂'], active: true };
+      const req = parseSlotRequest(text);
+      // Pidió un DÍA explícito distinto ("el martes", "mañana") → re-buscamos ese día,
+      // sin elegir del día actual.
+      if (req.desde) {
+        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { desde: req.desde, turno: req.turno });
       }
-      const next = { ...state, chosenStart: picked.matchedValue, stage: state.nombre ? 'confirm' as const : 'ask_name' as const };
-      if (next.nombre) return { state: next, messages: [confirmMessage(next)], active: true };
-      return { state: next, messages: ['Genial. ¿A nombre de quién lo agendo?'], active: true };
+      const picked = resolveOption({ userText: text, offered: state.offered ?? [] });
+      if (picked.matchedValue && picked.confianza >= 0.55) {
+        const next = { ...state, chosenStart: picked.matchedValue, stage: state.nombre ? 'confirm' as const : 'ask_name' as const };
+        if (next.nombre) return { state: next, messages: [confirmMessage(next)], active: true };
+        return { state: next, messages: ['Genial. ¿A nombre de quién lo agendo?'], active: true };
+      }
+      // No eligió. ¿Cambió de modalidad?
+      const m = detectModalidad(text);
+      if (m && m !== state.modalidad) return afterModality({ ...state, modalidad: m, oficina: undefined, offered: undefined, meta: undefined }, deps);
+      // ¿Pidió otro turno/horario ("a la tarde", "más tarde", "otro")? → re-buscar.
+      if (req.isRequest) {
+        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { turno: req.turno });
+      }
+      return { state, messages: ['Decime cuál te sirve con el número (1, 2 o 3), o pedime otro día/horario. 🙂'], active: true };
     }
 
     case 'ask_name': {

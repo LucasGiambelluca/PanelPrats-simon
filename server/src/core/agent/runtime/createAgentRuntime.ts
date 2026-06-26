@@ -118,7 +118,7 @@ export function getAgentRuntime(): AgentRuntime {
     store: new BookingStateStore(),
     suggestOffice: (a, t) => zone.suggest(a, t),
     listOffices: (a) => availability.listOffices(a).then((offs) => offs.map((o) => ({ nombre: o.nombre, modalidad: o.modalidad }))),
-    freeSlots: (a, oficina) => availability.freeSlots(a, oficina, { max: 3 }),
+    freeSlots: (a, oficina, opts) => availability.freeSlots(a, oficina, { max: opts?.max ?? 3, ...(opts?.desde ? { now: opts.desde } : {}) }),
     book: async (a, phone, conversation, _zona, b) => {
       // zona NO se thread-ea cruda: que gpt-4o extraiga la localidad limpia del diálogo.
       const r = await tools.execute('book_appointment',
