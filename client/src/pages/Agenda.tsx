@@ -620,41 +620,27 @@ export default function Agenda() {
     });
   };
 
-  // Google Calendar Event Style Generator (Theme Aware)
-  const getEventStyle = (status: string) => {
-    if (theme === 'light') {
-      if (status === 'confirmada') return 'bg-[#e6f4ea] border-l-[4px] border-[#137333] text-[#137333] hover:bg-[#137333]/10';
-      if (status === 'cancelada') return 'bg-[#fce8e6] border-l-[4px] border-[#c5221f] text-[#c5221f] hover:bg-[#c5221f]/10';
-      if (status === 'asistio') return 'bg-[#e8f0fe] border-l-[4px] border-[#1a73e8] text-[#1a73e8] hover:bg-[#1a73e8]/10';
-      if (status === 'no_asistio') return 'bg-[#fff3e0] border-l-[4px] border-[#e8710a] text-[#b45309] hover:bg-[#e8710a]/10';
-      if (status === 'cerrado') return 'bg-[#e6f4ea] border-l-[4px] border-emerald-700 text-emerald-800 hover:bg-emerald-700/10';
-      return 'bg-[#fef7e0] border-l-[4px] border-[#b06000] text-[#b06000] hover:bg-[#b06000]/10';
-    } else {
-      if (status === 'confirmada') return 'bg-emerald-500/10 border-l-[4px] border-emerald-500 text-emerald-400 hover:bg-emerald-500/20';
-      if (status === 'cancelada') return 'bg-red-500/10 border-l-[4px] border-red-500 text-red-400 hover:bg-red-500/20';
-      if (status === 'asistio') return 'bg-blue-500/10 border-l-[4px] border-blue-500 text-blue-400 hover:bg-blue-500/20';
-      if (status === 'no_asistio') return 'bg-orange-500/10 border-l-[4px] border-orange-500 text-orange-400 hover:bg-orange-500/20';
-      if (status === 'cerrado') return 'bg-emerald-600/15 border-l-[4px] border-emerald-600 text-emerald-300 hover:bg-emerald-600/25';
-      return 'bg-amber-500/10 border-l-[4px] border-amber-500 text-amber-400 hover:bg-amber-500/20';
-    }
+  // Estilo de la cita: color POR PROFESIONAL (el estado va en un badge aparte).
+  const getEventStyle = (app: Appointment) => {
+    const pal = profPalette(orderedProfIds, app.assigned_profile_id);
+    return theme === 'light' ? pal.light : pal.dark;
   };
 
-  const getMonthPillStyle = (status: string) => {
-    if (theme === 'light') {
-      if (status === 'confirmada') return 'bg-[#137333] text-white hover:bg-[#0f5927]';
-      if (status === 'cancelada') return 'bg-[#c5221f] text-white hover:bg-[#a11b19]';
-      if (status === 'asistio') return 'bg-[#1a73e8] text-white hover:bg-[#1557b0]';
-      if (status === 'no_asistio') return 'bg-[#e8710a] text-white hover:bg-[#b45309]';
-      if (status === 'cerrado') return 'bg-emerald-700 text-white hover:bg-emerald-800';
-      return 'bg-[#b06000] text-white hover:bg-[#8e4d00]';
-    } else {
-      if (status === 'confirmada') return 'bg-emerald-600/80 hover:bg-emerald-600 text-white';
-      if (status === 'cancelada') return 'bg-red-600/80 hover:bg-red-600 text-white';
-      if (status === 'asistio') return 'bg-blue-600/80 hover:bg-blue-600 text-white';
-      if (status === 'no_asistio') return 'bg-orange-600/80 hover:bg-orange-600 text-white';
-      if (status === 'cerrado') return 'bg-emerald-700/90 hover:bg-emerald-700 text-white';
-      return 'bg-amber-600/80 hover:bg-amber-600 text-white';
-    }
+  // Pill de vista Mes: fondo sólido del color del profesional.
+  const getMonthPillStyle = (app: Appointment) => {
+    const swatch = profPalette(orderedProfIds, app.assigned_profile_id).swatch;
+    return `${swatch} text-white hover:opacity-90`;
+  };
+
+  // Ícono chico que representa el estado de la cita (el color ya lo da el profesional).
+  const StatusBadge = ({ status, size = 11 }: { status: string; size?: number }) => {
+    const common = 'inline-flex items-center justify-center rounded-full';
+    if (status === 'confirmada') return <span className={`${common} text-emerald-600`} title="Confirmada"><CheckCircle size={size} /></span>;
+    if (status === 'cancelada') return <span className={`${common} text-red-600`} title="Cancelada"><XCircle size={size} /></span>;
+    if (status === 'asistio') return <span className={`${common} text-blue-600`} title="Asistió"><UserCheck size={size} /></span>;
+    if (status === 'no_asistio') return <span className={`${common} text-orange-600`} title="No asistió"><Clock size={size} /></span>;
+    if (status === 'cerrado') return <span className={`${common} text-emerald-700`} title="Cerrado"><Check size={size} className="stroke-[3]" /></span>;
+    return <span className={`${common} text-amber-600`} title="Pendiente"><Clock size={size} /></span>;
   };
 
   // Absolute positioning math for events in day/week views
@@ -1191,11 +1177,11 @@ export default function Agenda() {
                             <div
                               key={app.id}
                               onClick={(e) => handleEditClick(app, e)}
-                              className={`text-[8.5px] font-bold py-0.5 px-1.5 rounded truncate leading-tight flex items-center gap-1 ${getMonthPillStyle(app.status)}`}
+                              className={`text-[8.5px] font-bold py-0.5 px-1.5 rounded truncate leading-tight flex items-center gap-1 ${getMonthPillStyle(app)}`}
                               title={`${app.nombre} (${app.status})`}
                             >
                               <span className="font-mono text-[8px] opacity-75">{hr}</span>
-                              <span>{app.nombre}</span>
+                              <span className="truncate flex-1">{app.nombre}</span>
                             </div>
                           );
                         })}
@@ -1290,13 +1276,14 @@ export default function Agenda() {
                             <div
                               key={app.id}
                               onClick={(e) => handleEditClick(app, e)}
-                              className={`absolute p-2 rounded-xl transition-all cursor-pointer shadow-md select-none overflow-hidden group ${getEventStyle(app.status)}`}
+                              className={`absolute p-2 rounded-xl transition-all cursor-pointer shadow-md select-none overflow-hidden group ${getEventStyle(app)}`}
                               style={{ top: `${top}px`, height: `${height}px`, width, left }}
                             >
-                              <div className="flex items-start justify-between">
+                              <div className="flex items-start justify-between gap-1">
                                 <span className={`font-bold text-[10px] leading-tight block truncate ${
                                   theme === 'light' ? 'text-slate-800 font-extrabold' : 'text-white'
                                 }`}>{app.nombre}</span>
+                                <StatusBadge status={app.status} size={10} />
                               </div>
                               <span className={`text-[8.5px] font-mono opacity-80 block mt-0.5 leading-none ${
                                 theme === 'light' ? 'text-slate-600 font-bold' : ''
@@ -1383,22 +1370,14 @@ export default function Agenda() {
                       <div
                         key={app.id}
                         onClick={(e) => handleEditClick(app, e)}
-                        className={`absolute p-3 rounded-2xl transition-all cursor-pointer shadow-md select-none overflow-hidden group ${getEventStyle(app.status)}`}
+                        className={`absolute p-3 rounded-2xl transition-all cursor-pointer shadow-md select-none overflow-hidden group ${getEventStyle(app)}`}
                         style={{ top: `${top}px`, height: `${height}px`, width, left }}
                       >
                         <div className="flex items-center justify-between">
                           <span className={`font-bold text-xs block ${
                             theme === 'light' ? 'text-slate-800 font-extrabold' : 'text-white'
                           }`}>{app.nombre}</span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${
-                            theme === 'light'
-                              ? app.status === 'confirmada' ? 'bg-[#137333]/15 text-[#137333]'
-                                : app.status === 'cancelada' ? 'bg-[#c5221f]/15 text-[#c5221f]'
-                                : 'bg-[#b06000]/15 text-[#b06000]'
-                              : 'bg-black/25 text-white'
-                          }`}>
-                            {app.status}
-                          </span>
+                          <StatusBadge status={app.status} size={14} />
                         </div>
                         <div className={`flex items-center gap-1.5 mt-1 text-[10px] opacity-80 font-mono ${
                           theme === 'light' ? 'text-slate-600 font-bold' : ''
