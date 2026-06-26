@@ -27,9 +27,29 @@ export default function Agente() {
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Borradores editables del cerebro (textareas).
+  const [tonoDraft, setTonoDraft] = useState('');
+  const [datosDraft, setDatosDraft] = useState('');
+  const [procDraft, setProcDraft] = useState('');
+
   const loadState = () => agenteApi.state().then(setState).catch((e) => toast.error(e.message));
   useEffect(() => { loadState(); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, pending]);
+
+  // Sembrar los borradores cuando llega/cambia el estado.
+  useEffect(() => {
+    if (!state) return;
+    setTonoDraft(state.tono ?? '');
+    setDatosDraft(state.datos ?? '');
+    setProcDraft(state.procedimientos ?? '');
+  }, [state]);
+
+  async function applyChange(change: AgenteChange, okMsg: string) {
+    setBusy(true);
+    try { await agenteApi.apply([change]); toast.success(okMsg); await loadState(); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
 
   async function send() {
     const text = input.trim();
@@ -60,14 +80,53 @@ export default function Agente() {
         <h1 className="flex items-center gap-2 text-lg font-semibold text-brand-ink"><Brain size={20} /> Cerebro del agente</h1>
         {!state ? <Loader2 className="animate-spin" /> : (
           <>
-            <Card title="Tono">{state.tono || <em className="text-gray-400">(vacío)</em>}</Card>
-            <Card title="Datos del estudio">{state.datos || <em className="text-gray-400">(vacío)</em>}</Card>
-            <Card title="Procedimientos">{state.procedimientos || <em className="text-gray-400">(vacío)</em>}</Card>
-            <Card title={`FAQs (${state.faqs.length})`}>
-              <ul className="list-disc pl-4 space-y-1">{state.faqs.map((f) => <li key={f.id}><b>{f.pregunta}</b> → {f.respuesta}</li>)}</ul>
+            <Card title="Tono">
+              <textarea value={tonoDraft} onChange={(e) => setTonoDraft(e.target.value)} rows={3}
+                className="w-full px-2 py-1.5 rounded-lg border text-sm resize-y" placeholder="Cálido, claro, breve…" />
+              <div className="flex justify-end mt-2">
+                <button onClick={() => applyChange({ type: 'set_tono', texto: tonoDraft }, 'Tono actualizado')} disabled={busy}
+                  className="px-3 py-1.5 rounded-lg bg-brand-secondary text-white text-sm disabled:opacity-50">Guardar</button>
+              </div>
             </Card>
+
+            <Card title="Datos del estudio">
+              <textarea value={datosDraft} onChange={(e) => setDatosDraft(e.target.value)} rows={4}
+                className="w-full px-2 py-1.5 rounded-lg border text-sm resize-y" placeholder="Horarios, dirección, teléfonos…" />
+              <div className="flex justify-end mt-2">
+                <button onClick={() => applyChange({ type: 'set_datos', texto: datosDraft, modo: 'reemplazar' }, 'Datos actualizados')} disabled={busy}
+                  className="px-3 py-1.5 rounded-lg bg-brand-secondary text-white text-sm disabled:opacity-50">Guardar</button>
+              </div>
+            </Card>
+
+            <Card title="Procedimientos">
+              <textarea value={procDraft} onChange={(e) => setProcDraft(e.target.value)} rows={4}
+                className="w-full px-2 py-1.5 rounded-lg border text-sm resize-y" placeholder="Cómo se atiende cada caso…" />
+              <div className="flex justify-end mt-2">
+                <button onClick={() => applyChange({ type: 'set_procedimientos', texto: procDraft, modo: 'reemplazar' }, 'Procedimientos actualizados')} disabled={busy}
+                  className="px-3 py-1.5 rounded-lg bg-brand-secondary text-white text-sm disabled:opacity-50">Guardar</button>
+              </div>
+            </Card>
+
+            <Card title={`FAQs (${state.faqs.length})`}>
+              <div className="space-y-3">
+                {state.faqs.map((f) => <FaqRow key={f.id} faq={f} busy={busy} applyChange={applyChange} />)}
+                {state.faqs.length === 0 && <em className="text-gray-400">(sin FAQs)</em>}
+              </div>
+              <AddFaqForm busy={busy} applyChange={applyChange} />
+            </Card>
+
             <Card title={`Zonas (${state.zonas.length})`}>
-              <ul className="list-disc pl-4 space-y-1">{state.zonas.map((z) => <li key={z.id}>{z.alias} → {z.oficina}</li>)}</ul>
+              <ul className="space-y-1">
+                {state.zonas.map((z) => (
+                  <li key={z.id} className="flex items-center justify-between gap-2">
+                    <span>{z.alias} → {z.oficina}</span>
+                    <button onClick={() => { if (window.confirm(`¿Borrar zona "${z.alias}"?`)) applyChange({ type: 'remove_zona', localidad: z.alias }, 'Zona borrada'); }}
+                      disabled={busy} className="px-2 py-0.5 rounded border text-xs text-red-600 disabled:opacity-50">Borrar</button>
+                  </li>
+                ))}
+                {state.zonas.length === 0 && <em className="text-gray-400">(sin zonas)</em>}
+              </ul>
+              <AddZonaForm busy={busy} applyChange={applyChange} />
             </Card>
           </>
         )}
@@ -117,6 +176,69 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     <div className="border border-gray-200 rounded-xl bg-white p-3">
       <h2 className="text-sm font-semibold text-brand-secondary mb-1">{title}</h2>
       <div className="text-sm text-brand-ink whitespace-pre-wrap">{children}</div>
+    </div>
+  );
+}
+
+type ApplyFn = (change: AgenteChange, okMsg: string) => Promise<void>;
+
+function FaqRow({ faq, busy, applyChange }: { faq: BrainState['faqs'][number]; busy: boolean; applyChange: ApplyFn }) {
+  const [resp, setResp] = useState(faq.respuesta);
+  useEffect(() => { setResp(faq.respuesta); }, [faq.respuesta]);
+  return (
+    <div className="border border-gray-100 rounded-lg p-2">
+      <p className="font-semibold mb-1">{faq.pregunta}</p>
+      <textarea value={resp} onChange={(e) => setResp(e.target.value)} rows={2}
+        className="w-full px-2 py-1.5 rounded-lg border text-sm resize-y" />
+      <div className="flex justify-end gap-2 mt-1">
+        <button onClick={() => applyChange({ type: 'edit_faq', pregunta: faq.pregunta, nueva_respuesta: resp }, 'FAQ actualizada')}
+          disabled={busy} className="px-2 py-0.5 rounded bg-brand-secondary text-white text-xs disabled:opacity-50">Guardar</button>
+        <button onClick={() => { if (window.confirm(`¿Borrar FAQ "${faq.pregunta}"?`)) applyChange({ type: 'remove_faq', pregunta: faq.pregunta }, 'FAQ borrada'); }}
+          disabled={busy} className="px-2 py-0.5 rounded border text-xs text-red-600 disabled:opacity-50">Borrar</button>
+      </div>
+    </div>
+  );
+}
+
+function AddFaqForm({ busy, applyChange }: { busy: boolean; applyChange: ApplyFn }) {
+  const [pregunta, setPregunta] = useState('');
+  const [respuesta, setRespuesta] = useState('');
+  async function add() {
+    if (!pregunta.trim() || !respuesta.trim()) return;
+    await applyChange({ type: 'add_faq', pregunta: pregunta.trim(), respuesta: respuesta.trim() }, 'FAQ agregada');
+    setPregunta(''); setRespuesta('');
+  }
+  return (
+    <div className="mt-3 pt-3 border-t space-y-2">
+      <input value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Pregunta"
+        className="w-full px-2 py-1.5 rounded-lg border text-sm" />
+      <input value={respuesta} onChange={(e) => setRespuesta(e.target.value)} placeholder="Respuesta"
+        className="w-full px-2 py-1.5 rounded-lg border text-sm" />
+      <div className="flex justify-end">
+        <button onClick={add} disabled={busy} className="px-3 py-1.5 rounded-lg bg-brand-secondary text-white text-sm disabled:opacity-50">Agregar FAQ</button>
+      </div>
+    </div>
+  );
+}
+
+function AddZonaForm({ busy, applyChange }: { busy: boolean; applyChange: ApplyFn }) {
+  const [localidad, setLocalidad] = useState('');
+  const [oficina, setOficina] = useState<'CABA' | 'Quilmes' | 'Haedo'>('CABA');
+  async function add() {
+    if (!localidad.trim()) return;
+    await applyChange({ type: 'add_zona', localidad: localidad.trim(), oficina }, 'Zona agregada');
+    setLocalidad('');
+  }
+  return (
+    <div className="mt-3 pt-3 border-t flex gap-2">
+      <input value={localidad} onChange={(e) => setLocalidad(e.target.value)} placeholder="Localidad"
+        className="flex-1 px-2 py-1.5 rounded-lg border text-sm" />
+      <select value={oficina} onChange={(e) => setOficina(e.target.value as any)} className="px-2 py-1.5 rounded-lg border text-sm">
+        <option value="CABA">CABA</option>
+        <option value="Quilmes">Quilmes</option>
+        <option value="Haedo">Haedo</option>
+      </select>
+      <button onClick={add} disabled={busy} className="px-3 py-1.5 rounded-lg bg-brand-secondary text-white text-sm disabled:opacity-50">Agregar</button>
     </div>
   );
 }

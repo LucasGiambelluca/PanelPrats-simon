@@ -5,6 +5,9 @@ import type { BrainDb, BrainFaq, BrainZona, AccountField } from './types';
 // igual que accounts.routes GET que hace select('*') sin filtrar por user_id).
 export class SupabaseBrainDb implements BrainDb {
   async listAccountIds(): Promise<string[]> {
+    // SINGLE-TENANT (decidido): el "estudio" = TODAS las cuentas. Coincide con
+    // accounts.routes (select sin filtrar por user_id). Si algún día la tabla
+    // tuviera más de un dueño, acá habría que filtrar por user_id del admin.
     const { data } = await supabase.from('accounts').select('id').order('id');
     return ((data ?? []) as any[]).map((a) => a.id);
   }
