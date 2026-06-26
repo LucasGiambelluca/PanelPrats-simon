@@ -23,6 +23,7 @@ const Sala = lazy(() => import('./pages/Sala'));
 const Team = lazy(() => import('./pages/Team'));
 const Offices = lazy(() => import('./pages/Offices'));
 const Analiticas = lazy(() => import('./pages/Analiticas'));
+const Agente = lazy(() => import('./pages/Agente'));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-brand-ivory">
@@ -66,6 +67,7 @@ function App() {
               <Route element={<RoleRoute role="admin" />}>
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/builder" element={<BotBuilder />} />
+                <Route path="/agente" element={<Agente />} />
                 <Route path="/connections" element={<Connections />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/offices" element={<Offices />} />
