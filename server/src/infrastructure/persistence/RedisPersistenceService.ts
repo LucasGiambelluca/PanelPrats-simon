@@ -61,14 +61,20 @@ class RedisPersistenceService {
 
     async getHistory(accountId: string, phone: string, limit: number = 10): Promise<any[]> {
         try {
+            // Marcador de reset (POST /conversations/:id/reset): el bot "se olvida" del
+            // contexto previo → ignoramos los mensajes anteriores a ese instante.
+            const resetAt = await this.getRaw(`reset:${accountId}:${PhoneUtils.normalize(phone)}`);
+
             // `.in(variants)` matchea el teléfono se haya guardado con o sin el 9 móvil
             // (distintos clientes guardan distinto). Con `.eq(normalize)` el historial
             // quedaba vacío y el agente "no tenía memoria".
-            const { data } = await supabase
+            let q = supabase
                 .from('whatsapp_messages')
                 .select('content, direction, created_at')
                 .eq('account_id', accountId)
-                .in('phone', PhoneUtils.variants(phone))
+                .in('phone', PhoneUtils.variants(phone));
+            if (resetAt) q = q.gt('created_at', resetAt);
+            const { data } = await q
                 .order('created_at', { ascending: false })
                 .limit(limit);
 

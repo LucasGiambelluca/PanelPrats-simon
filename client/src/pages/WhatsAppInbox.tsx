@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  MessageSquare, Send, UserCheck, Bot, Search, RefreshCw,
+  MessageSquare, Send, UserCheck, Bot, Search, RefreshCw, RotateCcw,
   Phone, Clock, Facebook, Instagram, Layers, ArrowLeft,
   Check
 } from 'lucide-react';
@@ -217,6 +217,22 @@ export default function WhatsAppInbox() {
     }
   };
 
+  const [resetting, setResetting] = useState(false);
+  const resetConversation = async () => {
+    if (!activeConvo || resetting) return;
+    if (!window.confirm('¿Reiniciar la conversación? El bot se va a olvidar del contexto y arranca de cero. No borra los mensajes.')) return;
+    setResetting(true);
+    try {
+      await conversationsApi.reset(activeConvo.id);
+      setActiveConvo({ ...activeConvo, status: 'BOT' });
+      toast.success('Bot reiniciado: se olvidó del contexto');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const filtered = search
     ? conversations.filter(c => (c.contact_name || c.phone).toLowerCase().includes(search.toLowerCase()))
     : conversations;
@@ -424,17 +440,28 @@ export default function WhatsAppInbox() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={toggleHandover}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:-translate-y-0.5 ${
-                  activeConvo.status === 'HANDOVER'
-                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20'
-                    : 'bg-brand-primary/[0.08] text-brand-primary border-brand-primary/20 hover:bg-brand-primary/[0.14]'
-                }`}
-              >
-                {activeConvo.status === 'HANDOVER' ? <Bot size={14} /> : <UserCheck size={14} />}
-                {activeConvo.status === 'HANDOVER' ? 'Devolver al Bot' : 'Tomar Chat'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={resetConversation}
+                  disabled={resetting}
+                  title="Reiniciar: el bot se olvida del contexto y arranca de cero"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-amber-500/20 bg-amber-500/10 text-amber-600 transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-500/20 disabled:opacity-50 disabled:hover:translate-y-0"
+                >
+                  <RotateCcw size={14} className={resetting ? 'animate-spin' : ''} />
+                  Reiniciar
+                </button>
+                <button
+                  onClick={toggleHandover}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:-translate-y-0.5 ${
+                    activeConvo.status === 'HANDOVER'
+                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20'
+                      : 'bg-brand-primary/[0.08] text-brand-primary border-brand-primary/20 hover:bg-brand-primary/[0.14]'
+                  }`}
+                >
+                  {activeConvo.status === 'HANDOVER' ? <Bot size={14} /> : <UserCheck size={14} />}
+                  {activeConvo.status === 'HANDOVER' ? 'Devolver al Bot' : 'Tomar Chat'}
+                </button>
+              </div>
             </div>
 
             {/* Messages */}

@@ -149,6 +149,10 @@ export const conversationsApi = {
       method: 'POST',
       body: JSON.stringify({ resume }),
     }),
+  reset: (conversationId: string) =>
+    api<{ ok: boolean; reset_at: string }>(`/api/conversations/${conversationId}/reset`, {
+      method: 'POST',
+    }),
 };
 
 export const messagesApi = {
