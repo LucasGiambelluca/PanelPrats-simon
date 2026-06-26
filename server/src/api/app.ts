@@ -20,6 +20,7 @@ import { officesRouter } from './routes/offices.routes';
 import { officeProfessionalsRouter } from './routes/office-professionals.routes';
 import { professionalsRouter } from './routes/professionals.routes';
 import { agendaRouter } from './routes/agenda.routes';
+import { analyticsRouter } from './routes/analytics.routes';
 import { authContext, requireRole } from './middleware/auth';
 import type { WebhookQueue } from '../services/WebhookQueue';
 
@@ -80,6 +81,7 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/offices', authContext, requireRole('admin'), officeProfessionalsRouter());
   app.use('/api/professionals', authContext, requireRole('admin'), professionalsRouter());
   app.use('/api/agenda', authContext, agendaRouter());
+  app.use('/api/analytics', authContext, requireRole('admin'), analyticsRouter());
 
   // --- Cliente (SPA) servido por el mismo server en producción ---
   // El build de Vite se copia a CLIENT_DIST (en el contenedor: /app/public).
