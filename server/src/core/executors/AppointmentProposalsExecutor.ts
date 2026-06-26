@@ -1,6 +1,8 @@
 import { NodeExecutor, ExecutionContext, NodeExecutionResult } from './types';
 import { AppointmentService } from '../../services/AppointmentService';
 import { AvailabilityService } from '../../services/AvailabilityService';
+import { AIService } from '../../services/AIService';
+import { logger } from '../../utils/logger';
 
 /** Reemplaza {{variable}} con el valor del contexto (vacío si no existe). */
 function interp(text: string, context: any): string {
@@ -9,6 +11,34 @@ function interp(text: string, context: any): string {
         const val = context?.[v];
         return val === undefined || val === null ? '' : String(val);
     });
+}
+
+/**
+ * Resuelve la fecha que pidió el cliente cuando rechazó los horarios inmediatos
+ * ("para otro día", "el jueves", "la semana que viene", "2026-07-10"…). Devuelve un
+ * Date (09:00) desde el cual proponer, o undefined si no se entiende.
+ */
+async function resolvePreferredDate(text: string, apiKey?: string, model?: string): Promise<Date | undefined> {
+    const raw = String(text || '').trim();
+    if (!raw) return undefined;
+    // Fecha ISO directa.
+    const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) { const d = new Date(`${iso[0]}T09:00:00`); return isNaN(d.getTime()) ? undefined : d; }
+    const today = new Date();
+    const hoy = today.toISOString().slice(0, 10);
+    try {
+        const resp = await AIService.complete({
+            systemPrompt: `Hoy es ${hoy}. Convertí el pedido de día del usuario a una fecha FUTURA. Respondé SOLO la fecha en formato YYYY-MM-DD. Si solo quiere "otro día"/"más adelante" sin especificar, respondé la fecha de mañana. Sin texto extra.`,
+            userMessage: `Pedido: "${raw}"`,
+            temperature: 0, maxTokens: 12, apiKey, model,
+        });
+        const m = (resp || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (m) { const d = new Date(`${m[0]}T09:00:00`); if (!isNaN(d.getTime()) && d.getTime() > today.getTime() - 864e5) return d; }
+    } catch (e: any) {
+        logger.warn(`[Proposals] resolvePreferredDate falló: ${e?.message ?? e}`);
+    }
+    // Fallback: mañana 09:00.
+    const t = new Date(today); t.setDate(t.getDate() + 1); t.setHours(9, 0, 0, 0); return t;
 }
 
 export class AppointmentProposalsExecutor implements NodeExecutor {
@@ -61,11 +91,16 @@ export class AppointmentProposalsExecutor implements NodeExecutor {
             : '';
         if (modalidad) {
             const availability = new AvailabilityService();
+            // Si el cliente rechazó los inmediatos y pidió otro día (var `fecha_desde`),
+            // proponemos desde esa fecha en vez de desde ahora.
+            const desdeRaw = String((context as any)[nodeData.desdeVar || 'fecha_desde'] || '').trim();
+            const nowOverride = desdeRaw ? await resolvePreferredDate(desdeRaw, nodeData.apiKey, nodeData.model) : undefined;
             const slots = await availability.proposeCascade(context.accountId, {
                 modalidad,
                 zona: zona || undefined,
                 minLeadMin: Number(nodeData.minLeadMin) || 60,
                 max: Number(nodeData.maxProposals) || 3,
+                ...(nowOverride ? { now: nowOverride } : {}),
             });
             const formatted = this.formatSlots(slots);
             const outVar = nodeData.outputVariable || 'horarios_disponibles';
