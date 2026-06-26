@@ -2,6 +2,19 @@ import type { ToolContext, ToolResult } from './types';
 import type { AppointmentService as ApptSvc } from '../../../services/AppointmentService';
 import type { KnowledgeBase } from './KnowledgeBase';
 import type { AvailabilityService } from '../../../services/AvailabilityService';
+import type { OfferedOption } from '../context/OptionResolver';
+import { resolveOption } from '../context/OptionResolver';
+import { validarTelefonoAR } from '../../../utils/phone-ar';
+
+const TZ = 'America/Argentina/Buenos_Aires';
+function fmtSlot(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('es-AR', {
+      weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+      hour12: false, timeZone: TZ,
+    });
+  } catch { return iso; }
+}
 
 export interface ToolDeps {
   appointments: typeof ApptSvc;
@@ -9,6 +22,14 @@ export interface ToolDeps {
   availability: AvailabilityService;
   // marca HANDOVER y corta el bot; recibe identidad server-side + payload del modelo.
   handoff: (accountId: string, phone: string, payload: { motivo: string; resumen_caso: string }) => Promise<void>;
+
+  // ── Capacidades nuevas (opcionales: si faltan, la tool degrada con gracia) ──
+  // Geo-routing (Capacidad 3).
+  suggestOffice?: (accountId: string, texto: string) => Promise<any>;
+  // Opciones ofrecidas (Capacidad 4): persisten qué se mostró y en qué orden.
+  offered?: { set: (accountId: string, phone: string, opts: OfferedOption[]) => Promise<void>; get: (accountId: string, phone: string) => Promise<OfferedOption[]> };
+  // Ficha IA al agendar (Capacidad 2).
+  buildFicha?: (conversation: string, ctx: { telefono: string; modalidad: 'presencial' | 'video'; zona?: string | null }) => Promise<{ resumen_ia: string; perfil: Record<string, any> }>;
 }
 
 // Esquema de tools en formato OpenAI function-calling.
@@ -20,6 +41,10 @@ const SCHEMAS = [
   { type: 'function', function: { name: 'cancel_appointment', description: 'Cancela una cita existente.', parameters: { type: 'object', properties: { appointment_id: { type: 'string' } }, required: ['appointment_id'] } } },
   { type: 'function', function: { name: 'search_knowledge', description: 'Busca en la base del estudio. Usala SIEMPRE antes de responder temas previsionales.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'handoff_to_human', description: 'Deriva la conversación a una persona del estudio.', parameters: { type: 'object', properties: { motivo: { type: 'string' }, resumen_caso: { type: 'string' } }, required: ['motivo', 'resumen_caso'] } } },
+  { type: 'function', function: { name: 'suggest_office', description: 'Dada la zona/localidad que dice el cliente (ej "soy de Lanús"), sugiere la oficina más cercana. Si es vago o fuera de cobertura, lo indica. Usala antes de proponer presencial.', parameters: { type: 'object', properties: { location_text: { type: 'string' } }, required: ['location_text'] } } },
+  { type: 'function', function: { name: 'pick_option', description: 'Interpreta una respuesta del cliente que se refiere a una opción ya ofrecida ("el tercero", "el de videollamada", "a la tarde"). Devuelve el valor elegido o null si es ambiguo.', parameters: { type: 'object', properties: { user_text: { type: 'string' } }, required: ['user_text'] } } },
+  { type: 'function', function: { name: 'start_booking', description: 'Iniciá el agendado de un turno cuando el cliente quiere una cita/consulta. A partir de ahí un flujo guiado propone horarios, toma la elección y confirma SOLO; vos NO sigas los pasos ni llames book_appointment manualmente. Pasá lo que ya sepas (modalidad, zona, nombre).', parameters: { type: 'object', properties: { modalidad: { type: 'string', enum: ['presencial', 'video'] }, zona: { type: 'string' }, nombre: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'validate_phone', description: 'Validá un número de teléfono que el cliente te DICE (no el de WhatsApp): chequea que tenga forma de número argentino con código de área real. Usala cuando el cliente te da un número de contacto. Si NO es válido, pedíle que lo confirme.', parameters: { type: 'object', properties: { numero: { type: 'string' } }, required: ['numero'] } } },
 ];
 
 export class ToolRegistry {
@@ -34,6 +59,9 @@ export class ToolRegistry {
         case 'list_offices': {
           const oficinas = (await this.deps.availability.listOffices(ctx.accountId))
             .map((o) => ({ nombre: o.nombre, modalidad: o.modalidad, direccion: o.direccion ?? null }));
+          // Registrar lo ofrecido para que pick_option entienda "el de Quilmes" / "el segundo".
+          await this.deps.offered?.set(ctx.accountId, ctx.phone,
+            oficinas.map((o, i) => ({ index: i + 1, label: `${o.nombre}${o.modalidad ? ' — ' + o.modalidad : ''}`, value: o.nombre })));
           return { ok: true, data: { oficinas } };
         }
         case 'check_availability': {
@@ -42,6 +70,9 @@ export class ToolRegistry {
             const existe = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
             return { ok: true, data: { oficina: args.oficina, slots: [], sin_oficina: !existe } };
           }
+          // Registrar los horarios ofrecidos (orden estable) para pick_option.
+          await this.deps.offered?.set(ctx.accountId, ctx.phone,
+            slots.map((s, i) => ({ index: i + 1, label: fmtSlot(s.start), value: s.start })));
           return { ok: true, data: { oficina: args.oficina, slots } };
         }
         case 'book_appointment': {
@@ -54,11 +85,24 @@ export class ToolRegistry {
           } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, args.oficina, args.start_time, args.end_time))) {
             return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
+          // Enriquecimiento pre-INSERT (Capacidad 2): ficha estructurada + resumen
+          // natural, en el MISMO registro. Best-effort: si falla, se agenda igual.
+          let resumen_ia: string | null = null;
+          let perfil_json: Record<string, any> | null = null;
+          if (this.deps.buildFicha && ctx.conversation) {
+            try {
+              const modalidad = office?.modalidad === 'video' ? 'video' : 'presencial';
+              const ficha = await this.deps.buildFicha(ctx.conversation, { telefono: ctx.phone, modalidad, zona: ctx.zona });
+              resumen_ia = ficha.resumen_ia || null;
+              perfil_json = ficha.perfil ?? null;
+            } catch { /* sin ficha: la cita se crea igual */ }
+          }
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono: ctx.phone,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
             assigned_profile_id: assigned,
+            resumen_ia, perfil_json,
           } as any);
           return { ok: true, data: { appointment_id: appt.id, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
         }
@@ -94,6 +138,20 @@ export class ToolRegistry {
         case 'handoff_to_human': {
           await this.deps.handoff(ctx.accountId, ctx.phone, { motivo: args.motivo ?? '', resumen_caso: args.resumen_caso ?? '' });
           return { ok: true, data: { handoff: true } };
+        }
+        case 'suggest_office': {
+          if (!this.deps.suggestOffice) return { ok: true, data: { oficina_sugerida: null, necesita_aclaracion: true, siempre_ofrecer_video: true } };
+          const data = await this.deps.suggestOffice(ctx.accountId, args.location_text ?? '');
+          return { ok: true, data };
+        }
+        case 'pick_option': {
+          const offered = (await this.deps.offered?.get(ctx.accountId, ctx.phone)) ?? [];
+          const m = resolveOption({ userText: args.user_text ?? '', offered });
+          return { ok: true, data: { matched_value: m.matchedValue, confianza: m.confianza } };
+        }
+        case 'validate_phone': {
+          const r = validarTelefonoAR(String(args.numero ?? ''));
+          return { ok: true, data: { valido: r.valido, normalizado: r.normalizado, motivo: r.motivo ?? null } };
         }
         default:
           return { ok: false, error: `tool desconocida: ${name}` };

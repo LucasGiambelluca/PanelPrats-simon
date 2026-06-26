@@ -29,6 +29,7 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     '- A partir de start_booking, un flujo guiado se encarga de TODO: proponer horarios (una oficina por vez), tomar la elección ("el primero", "a la mañana"), pedir el nombre y confirmar. VOS NO hagas esos pasos.',
     '- Para un turno NUEVO no uses list_offices, check_availability ni book_appointment por tu cuenta, NO inventes horarios y NO confirmes la reserva vos: de eso se encarga start_booking.',
     '- Para reprogramar o CANCELAR una cita YA existente: repetí los datos, esperá que el cliente CONFIRME, y usá reschedule_appointment / cancel_appointment.',
+    '- Cuando el cliente te dé un número de teléfono de contacto, validalo con la tool validate_phone. Si NO es válido (área inexistente, mal tipeado), pedíle amablemente que lo confirme antes de seguir.',
     '',
     account.agentProcedures?.trim()
       ? `PROCEDIMIENTOS (seguí estas instrucciones del estudio para atender):\n${account.agentProcedures.trim()}\n`

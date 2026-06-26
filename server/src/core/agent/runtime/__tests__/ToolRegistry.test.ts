@@ -37,7 +37,8 @@ describe('ToolRegistry', () => {
     const names = schemas.map((s: any) => s.function.name).sort();
     expect(names).toEqual([
       'book_appointment', 'cancel_appointment', 'check_availability',
-      'handoff_to_human', 'list_offices', 'reschedule_appointment', 'search_knowledge',
+      'handoff_to_human', 'list_offices', 'pick_option', 'reschedule_appointment',
+      'search_knowledge', 'start_booking', 'suggest_office', 'validate_phone',
     ]);
   });
 
@@ -183,5 +184,64 @@ describe('ToolRegistry book_appointment auto-asigna profesional', () => {
     const r = await reg.execute('book_appointment', { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' }, ctx);
     expect(r.ok).toBe(true);
     expect(created[0].assigned_profile_id ?? null).toBeNull();
+  });
+
+  it('book_appointment enriquece con ficha IA cuando hay conversación', async () => {
+    const created: any[] = [];
+    const deps: any = {
+      appointments: { create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); } },
+      availability: {
+        getOffice: () => Promise.resolve(office),
+        officeHasProfessionals: () => Promise.resolve(false),
+        hasCapacity: () => Promise.resolve(true),
+      },
+      knowledge: {}, handoff: () => Promise.resolve(),
+      buildFicha: (_conv: string, _c: any) => Promise.resolve({ resumen_ia: 'Juan, 62, jubilación.', perfil: { edad: 62 } }),
+    };
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment',
+      { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' },
+      { accountId: 'acc1', phone: '549111', conversation: 'Cliente: tengo 62...' });
+    expect(r.ok).toBe(true);
+    expect(created[0].resumen_ia).toBe('Juan, 62, jubilación.');
+    expect(created[0].perfil_json).toMatchObject({ edad: 62 });
+  });
+});
+
+describe('ToolRegistry — tools nuevas (Capacidades 3 y 4)', () => {
+  const ctx = { accountId: 'acc1', phone: '549111' } as any;
+
+  it('suggest_office delega en el ZoneResolver inyectado', async () => {
+    const suggestOffice = vi.fn().mockResolvedValue({ oficina_sugerida: 'Quilmes', confianza: 'alta', necesita_aclaracion: false, siempre_ofrecer_video: true });
+    const reg = new ToolRegistry({ appointments: {}, availability: {}, knowledge: {}, handoff: vi.fn(), suggestOffice } as any);
+    const r = await reg.execute('suggest_office', { location_text: 'soy de Lanús' }, ctx);
+    expect(suggestOffice).toHaveBeenCalledWith('acc1', 'soy de Lanús');
+    expect(r.ok).toBe(true);
+    expect(r.data.oficina_sugerida).toBe('Quilmes');
+  });
+
+  it('pick_option resuelve "el tercero" contra lo ofrecido', async () => {
+    const offered = {
+      get: vi.fn().mockResolvedValue([
+        { index: 1, label: 'A', value: 'v1' }, { index: 2, label: 'B', value: 'v2' }, { index: 3, label: 'C', value: 'v3' },
+      ]),
+      set: vi.fn(),
+    };
+    const reg = new ToolRegistry({ appointments: {}, availability: {}, knowledge: {}, handoff: vi.fn(), offered } as any);
+    const r = await reg.execute('pick_option', { user_text: 'el tercero' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(r.data.matched_value).toBe('v3');
+  });
+
+  it('list_offices guarda las opciones ofrecidas (para pick_option)', async () => {
+    const offered = { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) };
+    const reg = new ToolRegistry({
+      appointments: {}, knowledge: {}, handoff: vi.fn(), offered,
+      availability: { listOffices: () => Promise.resolve([{ nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1' }]) },
+    } as any);
+    await reg.execute('list_offices', {}, ctx);
+    expect(offered.set).toHaveBeenCalledWith('acc1', '549111', expect.arrayContaining([
+      expect.objectContaining({ value: 'CABA' }),
+    ]));
   });
 });
