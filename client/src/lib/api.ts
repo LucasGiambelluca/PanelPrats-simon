@@ -369,5 +369,37 @@ export const analyticsApi = {
   },
 };
 
+// ── Agente (cerebro editable, solo admin) ───────────────────
+export type AgenteOficina = 'CABA' | 'Quilmes' | 'Haedo';
+export type AgenteChange =
+  | { type: 'set_tono'; texto: string }
+  | { type: 'set_datos'; texto: string; modo: 'reemplazar' | 'agregar' }
+  | { type: 'set_procedimientos'; texto: string; modo: 'reemplazar' | 'agregar' }
+  | { type: 'add_faq'; pregunta: string; respuesta: string; tags?: string[] }
+  | { type: 'edit_faq'; pregunta: string; nueva_respuesta?: string; nueva_pregunta?: string; tags?: string[] }
+  | { type: 'remove_faq'; pregunta: string }
+  | { type: 'add_zona'; localidad: string; oficina: AgenteOficina }
+  | { type: 'remove_zona'; localidad: string };
+
+export interface BrainState {
+  tono: string | null;
+  datos: string | null;
+  procedimientos: string | null;
+  faqs: Array<{ id: string; pregunta: string; respuesta: string; tags: string[] }>;
+  zonas: Array<{ id: string; alias: string; oficina: string }>;
+  lineas: number;
+}
+
+export const agenteApi = {
+  state: () => api<BrainState>('/api/agente/state'),
+  chat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    api<{ reply: string; pendingChanges: AgenteChange[] }>('/api/agente/chat', {
+      method: 'POST', body: JSON.stringify({ messages }),
+    }),
+  apply: (changes: AgenteChange[]) =>
+    api<{ applied: number; results: Array<{ change: AgenteChange; ok: boolean; error?: string }> }>(
+      '/api/agente/apply', { method: 'POST', body: JSON.stringify({ changes }) }),
+};
+
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
 export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
