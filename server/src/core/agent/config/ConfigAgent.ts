@@ -32,13 +32,20 @@ export class ConfigAgent {
   constructor(private deps: ConfigAgentDeps) {}
 
   async handle(messages: Array<{ role: 'user' | 'assistant'; content: string }>, state: BrainState): Promise<{ reply: string; pendingChanges: Change[] }> {
-    const res = await this.deps.ai.completeWithTools({
-      systemPrompt: buildSystemPrompt(state),
-      messages,
-      tools: this.deps.registry.schemas(),
-      apiKey: this.deps.apiKey,
-      model: this.deps.model ?? 'gpt-4o',
-    });
+    let res: { content?: string; toolCalls?: Array<{ id: string; name: string; args: any }> };
+    try {
+      res = await this.deps.ai.completeWithTools({
+        systemPrompt: buildSystemPrompt(state),
+        messages,
+        tools: this.deps.registry.schemas(),
+        apiKey: this.deps.apiKey,
+        model: this.deps.model ?? 'gpt-4o',
+      });
+    } catch {
+      // El proveedor de IA falló (sin saldo, caído, sin key): no reventamos el endpoint
+      // — devolvemos un aviso claro y el admin igual puede editar el cerebro a mano.
+      return { reply: 'No pude conectarme al modelo (revisá la API key de OpenAI / saldo). Igual podés editar el cerebro a mano en los paneles de la izquierda.', pendingChanges: [] };
+    }
     if (!res.toolCalls?.length) {
       return { reply: (res.content && res.content.trim()) || '¿Qué querés ajustar del agente?', pendingChanges: [] };
     }

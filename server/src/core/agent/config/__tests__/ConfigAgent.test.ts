@@ -31,3 +31,11 @@ it('descarta tool-calls inválidas (no las propone)', async () => {
   const r = await agent.handle([{ role: 'user', content: 'x' }], state);
   expect(r.pendingChanges).toHaveLength(0);
 });
+
+it('si la IA falla, NO tira: devuelve aviso y cero cambios (fix del 500)', async () => {
+  const ai = { completeWithTools: vi.fn().mockRejectedValue(new Error('429 quota')) };
+  const agent = new ConfigAgent({ ai, registry: new ConfigToolRegistry() });
+  const r = await agent.handle([{ role: 'user', content: 'algo' }], state);
+  expect(r.pendingChanges).toHaveLength(0);
+  expect(r.reply.toLowerCase()).toContain('modelo');
+});
