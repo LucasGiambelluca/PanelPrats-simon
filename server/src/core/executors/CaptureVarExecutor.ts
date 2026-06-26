@@ -34,16 +34,26 @@ export class CaptureVarExecutor implements NodeExecutor {
             }
         }
 
-        // Transform opcional: año de nacimiento → edad.
+        // Transform opcional: convierte año de nacimiento → edad. Soporta:
+        //  - año de 4 dígitos: "1967" / "soy de 1967" → edad.
+        //  - año de 2 dígitos con contexto: "soy del 67" / "nací en el 67" / "del 67" → 1967.
+        //  - edad directa: "60" / "tengo 60 años" → 60.
         if (data.transform === 'edad' && val !== undefined && val !== null) {
-            const m = String(val).match(/\b(19\d{2}|20\d{2})\b/);
-            if (m) {
-                const year = parseInt(m[1], 10);
-                const nowYear = new Date(Date.now() - 3 * 3600000).getUTCFullYear(); // AR
-                if (year >= 1900 && year <= nowYear) val = String(nowYear - year);
+            const s = String(val).toLowerCase();
+            const nowYear = new Date(Date.now() - 3 * 3600000).getUTCFullYear(); // AR
+            const pivot = nowYear % 100; // p.ej. 26 → "67" es 1967, "05" es 2005
+            const y4 = s.match(/\b(19\d{2}|20\d{2})\b/);
+            const yCtx = s.match(/(?:del|de los|nací|naci|nacida|nacido|año|anio)\s*(?:en\s*|el\s*|de\s*)?'?(\d{2})\b/);
+            if (y4) {
+                const year = parseInt(y4[1], 10);
+                if (year <= nowYear) val = String(nowYear - year);
+            } else if (yCtx) {
+                const yy = parseInt(yCtx[1], 10);
+                const fullYear = yy > pivot ? 1900 + yy : 2000 + yy;
+                val = String(nowYear - fullYear);
             } else {
-                const n = String(val).match(/\d{1,3}/);
-                if (n) val = n[0]; // deja solo el número de edad ("tengo 60 años" → "60")
+                const n = s.match(/\d{1,3}/);
+                if (n) val = n[0]; // edad directa
             }
         }
 
