@@ -382,34 +382,60 @@ export class WhatsAppClient {
 
                 console.log(`📩 [${this.accountId}] Message from ${pushName} (${phone}): ${text}`);
 
+                // Guardar el inbound SIEMPRE y al toque (para que el inbox muestre cada mensaje).
                 try {
-                    // Save inbound message (etiquetado por cuenta)
                     await this.store.record({
-                        accountId: this.accountId,
-                        phone,
-                        direction: 'INBOUND',
-                        content: text,
-                        contactName: pushName,
+                        accountId: this.accountId, phone, direction: 'INBOUND', content: text, contactName: pushName,
                     });
-
-                    console.log(`[PID:${PID}] Routing message from ${phone}...`);
-                    const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
-                    console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
-
-                    // Responder al remoteJid EXACTO que WhatsApp usó para direccionarnos.
-                    // En cuentas LID el chat se direcciona por @lid; enviar al JID de teléfono
-                    // (@s.whatsapp.net) recibe wa_id pero WhatsApp no lo entrega al dispositivo.
-                    // baileys 6.7 cifra/rutea @lid nativamente. `phone` (normalizado) es solo
-                    // identidad de inbox/citas, NUNCA línea de envío.
-                    console.log(`[PID:${PID}] Reply -> ${remoteJid} (senderPn=${senderPn || 'none'})`);
-                    for (const response of (responses || [])) {
-                        await this.sendFormattedMessage(remoteJid, response);
-                    }
                 } catch (err) {
-                    console.error(`[PID:${PID}] Processing Error:`, err);
+                    console.error(`[PID:${PID}] store inbound error:`, err);
                 }
+
+                // Debounce: juntamos los mensajes rápidos del mismo contacto y respondemos UNA
+                // sola vez (que "escuche" todo antes de contestar). Evita respuestas por fragmento
+                // y mensajes duplicados. Media/ubicación se procesan al instante.
+                this.scheduleProcess(phone, text, remoteJid, senderPn, pushName, fileContext);
             }
         });
+    }
+
+    // ---- Debounce de mensajes entrantes -------------------------------------------------
+    private msgBuffer = new Map<string, { texts: string[]; timer: NodeJS.Timeout | null; remoteJid: string; senderPn?: string; pushName: string }>();
+    private static readonly DEBOUNCE_MS = 6000;
+
+    private scheduleProcess(phone: string, text: string, remoteJid: string, senderPn: string | undefined, pushName: string, fileContext: any) {
+        // Media/ubicación: procesar al instante (no se mezclan con texto).
+        if (fileContext && Object.keys(fileContext).length > 0) {
+            void this.processNow(phone, text, remoteJid, senderPn, pushName, fileContext);
+            return;
+        }
+        const entry = this.msgBuffer.get(phone) ?? { texts: [], timer: null, remoteJid, senderPn, pushName };
+        if (entry.timer) clearTimeout(entry.timer);
+        // No duplicar el MISMO texto (re-entregas del webhook).
+        if (entry.texts[entry.texts.length - 1] !== text) entry.texts.push(text);
+        entry.remoteJid = remoteJid; entry.senderPn = senderPn; entry.pushName = pushName;
+        entry.timer = setTimeout(() => {
+            const e = this.msgBuffer.get(phone);
+            this.msgBuffer.delete(phone);
+            if (e) void this.processNow(phone, e.texts.join('\n'), e.remoteJid, e.senderPn, e.pushName, {});
+        }, WhatsAppClient.DEBOUNCE_MS);
+        this.msgBuffer.set(phone, entry);
+    }
+
+    private async processNow(phone: string, text: string, remoteJid: string, senderPn: string | undefined, pushName: string, fileContext: any) {
+        const PID = process.pid;
+        try {
+            console.log(`[PID:${PID}] Routing message from ${phone}...`);
+            const responses = await this.onMessage(this.accountId, phone, text, pushName, fileContext || {});
+            console.log(`[PID:${PID}] Got ${(responses || []).length} responses for ${phone}`);
+            // Responder al remoteJid EXACTO que WhatsApp usó (en @lid el chat se direcciona así).
+            console.log(`[PID:${PID}] Reply -> ${remoteJid} (senderPn=${senderPn || 'none'})`);
+            for (const response of (responses || [])) {
+                await this.sendFormattedMessage(remoteJid, response);
+            }
+        } catch (err) {
+            console.error(`[PID:${PID}] Processing Error:`, err);
+        }
     }
 
     /** Detiene el cliente: cierra el socket y limpia el intervalo de anti-ban. */
