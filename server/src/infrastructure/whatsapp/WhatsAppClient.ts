@@ -545,7 +545,10 @@ export class WhatsAppClient {
                 if (sentMsg && textToSave) {
                     await this.store.record({
                         accountId: this.accountId,
-                        phone: PhoneUtils.normalize(finalJid),
+                        // Mismo criterio que INBOUND (resolveIdentity): si el destinatario es
+                        // @lid, lo guardamos bajo el teléfono real (no el @lid). Si no, queda
+                        // partido y getHistory no ve las respuestas del bot → se re-presenta.
+                        phone: PhoneUtils.resolveIdentity(finalJid, undefined, this.lidMap),
                         direction: 'OUTBOUND',
                         content: textToSave,
                         messageType: msgType,
