@@ -20,6 +20,7 @@ function makeDeps(over: Partial<BookingDeps> = {}): BookingDeps {
         : { oficina_sugerida: null, necesita_aclaracion: true, pregunta_aclaracion: '¿De qué zona sos?' };
     }),
     videoOfficeName: vi.fn(async () => 'Videollamada'),
+    defaultOffice: vi.fn(async () => 'Capital'),
     freeSlots: vi.fn(async () => SLOTS),
     book: vi.fn(async () => ({ direccion: 'Moreno 609', video_link: null, modalidad: 'presencial' })),
     ...over,
@@ -82,12 +83,14 @@ describe('BookingFlow — modalidad y zona', () => {
     expect(r.state.stage).toBe('ask_zone');
   });
 
-  it('zona fuera de cobertura → ofrece videollamada', async () => {
+  it('zona fuera de cobertura → ofrece PRESENCIAL en una sede (presencial es la opción principal)', async () => {
     const deps = makeDeps();
     const start = await startBooking({ modalidad: 'presencial' }, deps);
     const step = await advanceBooking(start.state, 'soy de Córdoba', deps);
-    expect(step.state.oficina).toBe('Videollamada');
+    expect(step.state.oficina).toBe('Capital');       // sede por defecto, NO video
+    expect(step.state.modalidad).toBe('presencial');
     expect(step.state.stage).toBe('await_slot');
+    expect(step.messages.join(' ')).toMatch(/no tenemos sede|videollamada/i);
   });
 });
 

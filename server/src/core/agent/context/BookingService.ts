@@ -30,6 +30,11 @@ export class BookingService {
         const v = offs.find((o) => o.modalidad === 'video') ?? offs.find((o) => o.modalidad === 'ambas');
         return v?.nombre ?? null;
       },
+      defaultOffice: async () => {
+        const offs = await this.deps.listOffices(accountId);
+        const p = offs.find((o) => o.modalidad === 'presencial') ?? offs.find((o) => o.modalidad === 'ambas') ?? offs[0];
+        return p?.nombre ?? null;
+      },
       freeSlots: async (oficina, opts) => (await this.deps.freeSlots(accountId, oficina, opts)).map((s) => ({ start: s.start, end: s.end, oficina })),
       book: (b) => this.deps.book(accountId, phone, conversation, getState()?.zona ?? null, b),
     };
