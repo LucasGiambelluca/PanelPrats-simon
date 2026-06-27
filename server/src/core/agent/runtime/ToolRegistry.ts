@@ -37,7 +37,7 @@ const SCHEMAS = [
   { type: 'function', function: { name: 'list_offices', description: 'Lista las oficinas/modalidades del estudio (presencial y video) con su dirección. Usala antes de ofrecer un turno.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'check_availability', description: 'Lista los horarios LIBRES (no ocupados) de una oficina en una ventana de fechas. Llamá list_offices primero para saber qué oficina pasar.', parameters: { type: 'object', properties: { desde: { type: 'string' }, hasta: { type: 'string' }, oficina: { type: 'string' } }, required: ['desde', 'hasta', 'oficina'] } } },
   { type: 'function', function: { name: 'book_appointment', description: 'Agenda una cita. Confirmá los datos con el cliente ANTES de llamar.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, oficina: { type: 'string' }, resumen: { type: 'string' } }, required: ['nombre', 'start_time', 'end_time', 'oficina', 'resumen'] } } },
-  { type: 'function', function: { name: 'reschedule_appointment', description: 'Reprograma una cita existente.', parameters: { type: 'object', properties: { appointment_id: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' } }, required: ['appointment_id', 'start_time', 'end_time'] } } },
+  { type: 'function', function: { name: 'reschedule_appointment', description: 'Reprograma una cita existente: cambia el horario y/o la SEDE. Si el cliente cambia de sede, pasá la nueva oficina (y un horario disponible en esa sede).', parameters: { type: 'object', properties: { appointment_id: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, oficina: { type: 'string', description: 'Nueva sede/oficina (opcional, solo si cambia de sede).' } }, required: ['appointment_id', 'start_time', 'end_time'] } } },
   { type: 'function', function: { name: 'cancel_appointment', description: 'Cancela una cita existente.', parameters: { type: 'object', properties: { appointment_id: { type: 'string' } }, required: ['appointment_id'] } } },
   { type: 'function', function: { name: 'search_knowledge', description: 'Busca en la base del estudio. Usala SIEMPRE antes de responder temas previsionales.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'handoff_to_human', description: 'Deriva la conversación a una persona del estudio.', parameters: { type: 'object', properties: { motivo: { type: 'string' }, resumen_caso: { type: 'string' } }, required: ['motivo', 'resumen_caso'] } } },
@@ -111,16 +111,18 @@ export class ToolRegistry {
           if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
             return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
           }
-          const office = await this.deps.availability.getOffice(ctx.accountId, appt.oficina ?? '');
+          // Permite cambiar de SEDE: si viene args.oficina, valida cupo en la nueva.
+          const targetOficina = (args.oficina ?? appt.oficina ?? '') as string;
+          const office = await this.deps.availability.getOffice(ctx.accountId, targetOficina);
           const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
           let assigned: string | null = null;
           if (hasProfs) {
             assigned = await this.deps.availability.pickProfessional(office!, args.start_time, args.end_time);
             if (!assigned) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
-          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, appt.oficina ?? '', args.start_time, args.end_time))) {
+          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, targetOficina, args.start_time, args.end_time))) {
             return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
-          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, assigned_profile_id: assigned });
+          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, oficina: targetOficina, assigned_profile_id: assigned });
           return { ok: true };
         }
         case 'cancel_appointment': {
