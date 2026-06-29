@@ -31,8 +31,25 @@ describe('AgentRuntime.handle', () => {
     deps.tools.execute = vi.fn().mockResolvedValue({ ok: true, data: { encontrado: true, snippets: ['x'] } });
     const rt = new AgentRuntime(deps as any);
     const out = await rt.handle('acc1', '549111', '¿moratoria?', {});
-    expect(deps.tools.execute).toHaveBeenCalledWith('search_knowledge', { query: 'moratoria' }, { accountId: 'acc1', phone: '549111' });
+    expect(deps.tools.execute).toHaveBeenCalledWith('search_knowledge', { query: 'moratoria' }, expect.objectContaining({ accountId: 'acc1', phone: '549111' }));
     expect(out).toEqual(['Sí, gestionamos moratoria.']);
+  });
+
+  it('inyecta continuidad al persona y la conversación al ctx de las tools', async () => {
+    const deps = makeDeps([
+      { toolCalls: [{ id: 'c1', name: 'book_appointment', args: {} }] },
+      { content: 'Listo' },
+    ]);
+    deps.tools.execute = vi.fn().mockResolvedValue({ ok: true, data: {} });
+    (deps as any).contextLoader = { load: vi.fn().mockResolvedValue({ isKnown: true, isReturning: true, recentHistory: [], lastOfferedOptions: [] }) };
+    (deps as any).buildContinuity = vi.fn(() => 'CONTINUIDAD: ya habló antes.');
+    const rt = new AgentRuntime(deps as any);
+    await rt.handle('acc1', '549111', 'quiero turno', {});
+    // persona recibió el bloque de continuidad
+    expect(deps.persona.build).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'CONTINUIDAD: ya habló antes.');
+    // las tools reciben la conversación (para armar la ficha en book_appointment)
+    const ctxArg = deps.tools.execute.mock.calls[0][2];
+    expect(ctxArg.conversation).toContain('quiero turno');
   });
 
   it('si la IA falla (sin saldo/caída), degrada con cortesía y NO tira', async () => {
@@ -45,6 +62,34 @@ describe('AgentRuntime.handle', () => {
     expect(deps.tools.execute).not.toHaveBeenCalled();
   });
 
+  it('si hay un agendado activo, lo conduce el flujo determinístico (sin LLM)', async () => {
+    const deps = makeDeps([{ content: 'no debería llamarse' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(true),
+      advance: vi.fn().mockResolvedValue({ messages: ['Elegí 1, 2 o 3'], active: true }),
+      start: vi.fn(),
+    };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'el primero', {});
+    expect(out).toEqual(['Elegí 1, 2 o 3']);
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();   // NO pasó por el LLM
+    expect((deps as any).booking.advance).toHaveBeenCalled();
+  });
+
+  it('start_booking del modelo arranca el flujo y corta el loop', async () => {
+    const deps = makeDeps([{ toolCalls: [{ id: 'c1', name: 'start_booking', args: { modalidad: 'presencial', zona: 'Lanús' } }] }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn().mockResolvedValue({ messages: ['Tengo estos turnos en Quilmes: 1...'], active: true }),
+    };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'quiero un turno presencial, soy de Lanús', {});
+    expect((deps as any).booking.start).toHaveBeenCalledWith('acc1', '549111', { modalidad: 'presencial', zona: 'Lanús' }, expect.any(String));
+    expect(out[0]).toMatch(/Quilmes/);
+    expect(deps.tools.execute).not.toHaveBeenCalled();          // no ejecutó tools genéricas
+  });
+
   it('corta y deriva si supera el máximo de iteraciones', async () => {
     const loopResp = { toolCalls: [{ id: 'c', name: 'search_knowledge', args: {} }] };
     const deps = makeDeps(Array(20).fill(loopResp));
@@ -53,5 +98,83 @@ describe('AgentRuntime.handle', () => {
     const out = await rt.handle('acc1', '549111', 'loop', {});
     expect(out[0].toLowerCase()).toContain('persona'); // mensaje de cortesía + derivación
     expect(deps.ai.completeWithTools.mock.calls.length).toBe(5);
+  });
+});
+
+describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', () => {
+  function withGuard(aiScript: any[], accountLoopGuard: any, initialState: any) {
+    const deps = makeDeps(aiScript);
+    deps.loadAccount = vi.fn().mockResolvedValue({ accountId: 'acc1', agentName: 'Sofía', loopGuard: accountLoopGuard });
+    const saveState = vi.fn().mockResolvedValue(undefined);
+    const onBlock = vi.fn().mockResolvedValue(undefined);
+    (deps as any).now = () => 1_000_000;
+    (deps as any).loopGuard = {
+      loadState: vi.fn().mockResolvedValue(initialState),
+      saveState,
+      onBlock,
+    };
+    return { deps, saveState, onBlock };
+  }
+
+  it('al superar el tope: deriva a humano y NO llama a la IA (action=handoff)', async () => {
+    const now = 1_000_000;
+    const { deps, onBlock } = withGuard(
+      [{ content: 'no debería llamarse' }],
+      { enabled: true, maxCalls: 2, windowMin: 60, action: 'handoff' },
+      { calls: [now - 1000, now - 2000], replies: [] },
+    );
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola?', {});
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();
+    expect(onBlock).toHaveBeenCalledWith('acc1', '549111', 'rate');
+    expect(out).toHaveLength(1);
+    expect(out[0].toLowerCase()).toContain('persona'); // FALLBACK de derivación
+  });
+
+  it('al superar el tope con action=silence: no responde nada (devuelve [])', async () => {
+    const now = 1_000_000;
+    const { deps, onBlock } = withGuard(
+      [{ content: 'no debería llamarse' }],
+      { enabled: true, maxCalls: 2, windowMin: 60, action: 'silence' },
+      { calls: [now - 1000, now - 2000], replies: [] },
+    );
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola?', {});
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();
+    expect(onBlock).not.toHaveBeenCalled(); // silence no deriva
+    expect(out).toEqual([]);
+  });
+
+  it('por debajo del tope: responde normal, cuenta la llamada y persiste el estado', async () => {
+    const { deps, saveState } = withGuard(
+      [{ content: 'Hola, soy Sofía' }],
+      { enabled: true, maxCalls: 5, windowMin: 60, action: 'handoff' },
+      { calls: [], replies: [] },
+    );
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola', {});
+    expect(out).toEqual(['Hola, soy Sofía']);
+    expect(saveState).toHaveBeenCalled();
+    const saved = saveState.mock.calls[0][2];
+    expect(saved.calls).toHaveLength(1); // contó esta llamada
+  });
+
+  it('anti-eco: si la respuesta repite la anterior, no la reenvía y deriva', async () => {
+    const { deps, onBlock } = withGuard(
+      [{ content: 'Hola, soy Sofía del estudio.' }],
+      { enabled: true, maxCalls: 50, windowMin: 60, echoGuard: true, echoLookback: 3, action: 'handoff' },
+      { calls: [], replies: ['hola, soy sofía del estudio.'] },
+    );
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola', {});
+    expect(onBlock).toHaveBeenCalledWith('acc1', '549111', 'echo');
+    expect(out[0].toLowerCase()).toContain('persona'); // derivó en vez de repetir
+  });
+
+  it('sin deps.loopGuard funciona igual que antes (no rompe nada)', async () => {
+    const deps = makeDeps([{ content: 'Hola' }]);
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'hola', {});
+    expect(out).toEqual(['Hola']);
   });
 });

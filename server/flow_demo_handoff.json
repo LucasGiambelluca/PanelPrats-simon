@@ -1,0 +1,56 @@
+{
+  "name": "DEMO Agente IA + Handoff humano",
+  "trigger_word": "iademo",
+  "is_active": true,
+  "nodes": [
+    {
+      "id": "start",
+      "type": "input",
+      "data": { "label": "Inicio (trigger: iademo)" },
+      "style": { "color": "white", "border": "none", "background": "#22c55e", "fontWeight": "bold" },
+      "position": { "x": 80, "y": 0 }
+    },
+    {
+      "id": "ask",
+      "type": "questionNode",
+      "data": { "question": "Hola! Soy Siro, el asistente del estudio Prats & Simmon. En que puedo ayudarte?", "variable": "consulta_user" },
+      "position": { "x": 60, "y": 130 }
+    },
+    {
+      "id": "agent",
+      "type": "aiAgentNode",
+      "data": {
+        "system_prompt": "Eres Siro, el asistente virtual del estudio juridico Prats & Simmon. Respondes de forma amable y breve. Solo ayudas con consultas legales y turnos del estudio.",
+        "model": "gpt-4o-mini",
+        "inputVariable": "consulta_user",
+        "output_variable": "agent_intent",
+        "tools": ["tool_memory", "tool_history"],
+        "threshold": 0.7
+      },
+      "position": { "x": 60, "y": 270 }
+    },
+    {
+      "id": "reply",
+      "type": "messageNode",
+      "data": { "text": "{{agent_intent_response}}" },
+      "position": { "x": 520, "y": 180 }
+    },
+    {
+      "id": "handover",
+      "type": "handoverNode",
+      "data": { "message": "Entiendo {{pushName}}. Te derivo con un asesor humano del estudio, aguarda un momento por favor." },
+      "position": { "x": 520, "y": 460 }
+    }
+  ],
+  "edges": [
+    { "id": "e-start-ask", "source": "start", "target": "ask", "animated": true, "style": { "stroke": "#6366f1", "strokeWidth": 2 } },
+    { "id": "e-ask-agent", "source": "ask", "target": "agent", "animated": true, "style": { "stroke": "#6366f1", "strokeWidth": 2 } },
+    { "id": "e-agent-humano", "source": "agent", "target": "handover", "sourceHandle": "humano", "label": "humano", "style": { "stroke": "#e11d48", "strokeWidth": 2 } },
+    { "id": "e-agent-saludo", "source": "agent", "target": "reply", "sourceHandle": "saludo" },
+    { "id": "e-agent-consulta", "source": "agent", "target": "reply", "sourceHandle": "consulta" },
+    { "id": "e-agent-pedido", "source": "agent", "target": "reply", "sourceHandle": "pedido" },
+    { "id": "e-agent-checkout", "source": "agent", "target": "reply", "sourceHandle": "checkout" },
+    { "id": "e-agent-cancelar", "source": "agent", "target": "reply", "sourceHandle": "cancelar" },
+    { "id": "e-agent-desconocido", "source": "agent", "target": "reply", "sourceHandle": "desconocido" }
+  ]
+}

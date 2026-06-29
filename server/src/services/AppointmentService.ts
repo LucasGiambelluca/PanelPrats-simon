@@ -27,6 +27,10 @@ export interface Appointment {
   seguimiento?: string | null;           // notas de seguimiento
   resultado?: AppointmentResultado | null; // disposición del lead (SI/NO/PENSAR/TRAER DOC)
   atendido_por?: string | null;          // empleada/recepcionista (profiles.id)
+
+  // Ficha IA al agendar (migración 0025). Resumen natural + snapshot del perfil.
+  resumen_ia?: string | null;
+  perfil_json?: Record<string, any> | null;
 }
 
 export type AppointmentMotivo =
@@ -73,6 +77,8 @@ function withIntakeDefaults(out: Appointment, raw: any): Appointment {
     seguimiento: raw.seguimiento ?? null,
     resultado: raw.resultado ?? null,
     atendido_por: raw.atendido_por ?? null,
+    resumen_ia: raw.resumen_ia ?? null,
+    perfil_json: raw.perfil_json ?? null,
   };
 }
 
@@ -228,6 +234,8 @@ export const AppointmentService = {
           seguimiento: appointment.seguimiento ?? null,
           resultado: appointment.resultado ?? null,
           atendido_por: appointment.atendido_por ?? null,
+          resumen_ia: appointment.resumen_ia ?? null,
+          perfil_json: appointment.perfil_json ?? null,
         })
         .select('*')
         .single();
@@ -293,6 +301,8 @@ export const AppointmentService = {
           seguimiento: merged.seguimiento ?? null,
           resultado: merged.resultado ?? null,
           atendido_por: merged.atendido_por ?? null,
+          resumen_ia: merged.resumen_ia ?? null,
+          perfil_json: merged.perfil_json ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)

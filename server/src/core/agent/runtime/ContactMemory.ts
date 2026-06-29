@@ -58,6 +58,78 @@ export class ContactMemory {
     return { profile, preferences, summary, fichaText: buildFichaText(profile, preferences, summary, proximaCita) };
   }
 
+  /**
+   * Carga extendida con el hilo (columnas 0024). Para el ConversationContextLoader.
+   * Tolerante a esquemas viejos: si las columnas no existen, cae a load() básico.
+   */
+  async loadExtended(accountId: string, phone: string): Promise<{
+    profile: Record<string, any>; preferences: Record<string, any>; summary: string | null;
+    lastInteractionAt: Date | null; lastTopic: string | null; currentThread: any;
+  }> {
+    try {
+      const { data } = await supabase
+        .from('contact_memory')
+        .select('profile, preferences, long_term_summary, last_interaction_at, last_topic, current_thread')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      return {
+        profile: (data?.profile ?? {}) as any,
+        preferences: (data?.preferences ?? {}) as any,
+        summary: (data?.long_term_summary ?? null) as any,
+        lastInteractionAt: data?.last_interaction_at ? new Date(data.last_interaction_at as any) : null,
+        lastTopic: (data?.last_topic ?? null) as any,
+        currentThread: (data?.current_thread ?? null) as any,
+      };
+    } catch {
+      const basic = await this.load(accountId, phone);
+      return { profile: basic.profile, preferences: basic.preferences, summary: basic.summary, lastInteractionAt: null, lastTopic: null, currentThread: null };
+    }
+  }
+
+  /** Persiste el puntero de hilo + toca last_interaction_at. Best-effort. */
+  async saveThread(accountId: string, phone: string, patch: { lastTopic?: string | null; currentThread?: any }): Promise<void> {
+    try {
+      await supabase.from('contact_memory').upsert({
+        account_id: accountId, phone,
+        last_topic: patch.lastTopic ?? null,
+        current_thread: patch.currentThread ?? null,
+        last_interaction_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,phone' });
+    } catch (e: any) {
+      console.warn(`[ContactMemory] saveThread error for ${phone}:`, e?.message || e);
+    }
+  }
+
+  /**
+   * Estado del LoopGuard por contacto (columna loop_guard_state, migración 0029).
+   * Tolerante a esquemas viejos: si la columna no existe, devuelve null.
+   */
+  async loadLoopGuardState(accountId: string, phone: string): Promise<{ calls: number[]; replies: string[] } | null> {
+    try {
+      const { data } = await supabase
+        .from('contact_memory').select('loop_guard_state')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      const s = (data as any)?.loop_guard_state;
+      if (!s || typeof s !== 'object') return null;
+      return { calls: Array.isArray(s.calls) ? s.calls : [], replies: Array.isArray(s.replies) ? s.replies : [] };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Persiste el estado del LoopGuard. Best-effort (no rompe la respuesta si falla). */
+  async saveLoopGuardState(accountId: string, phone: string, state: { calls: number[]; replies: string[] }): Promise<void> {
+    try {
+      await supabase.from('contact_memory').upsert({
+        account_id: accountId, phone,
+        loop_guard_state: state,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,phone' });
+    } catch (e: any) {
+      console.warn(`[ContactMemory] saveLoopGuardState error for ${phone}:`, e?.message || e);
+    }
+  }
+
   /** Mergea perfil/preferencias y reescribe el resumen. Upsert por (account_id, phone). */
   async merge(accountId: string, phone: string, patch: {
     profile?: Record<string, any>; preferences?: Record<string, any>; summary?: string | null;
@@ -74,6 +146,8 @@ export class ContactMemory {
       profile, preferences,
       long_term_summary: patch.summary ?? (data?.long_term_summary as any) ?? null,
       last_summary_at: patch.summary ? new Date().toISOString() : ((data?.last_summary_at as any) ?? null),
+      // toca la última interacción para la detección de "contacto que vuelve" (0024).
+      last_interaction_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'account_id,phone' });
   }

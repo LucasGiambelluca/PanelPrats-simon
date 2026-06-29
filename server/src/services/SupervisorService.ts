@@ -16,6 +16,7 @@
 import { AIService } from './AIService';
 import { SupportAgentService } from './SupportAgentService';
 import { logger } from '../utils/logger';
+import { resolveOption } from '../core/agent/context/OptionResolver';
 
 export interface SupervisorDecision {
     action: 'fill' | 'side' | 'switch' | 'human' | 'answer' | 'none';
@@ -35,6 +36,17 @@ export class SupervisorService {
     }): Promise<SupervisorDecision> {
         const { accountId, question, expectedOptions, userInput } = params;
         if (!userInput || !userInput.trim()) return { action: 'none' };
+
+        // Pre-pass determinístico (Capacidad 4): si el usuario se refiere a una opción
+        // por orden/posición ("el tercero", "la opción 1"), la resolvemos sin gastar IA.
+        if (expectedOptions.length) {
+            const offered = expectedOptions.map((o, i) => ({ index: i + 1, label: o, value: o }));
+            const picked = resolveOption({ userText: userInput, offered });
+            if (picked.matchedValue && picked.confianza >= 0.8) {
+                logger.info(`[Supervisor] pre-pass OptionResolver → fill "${picked.matchedValue}"`);
+                return { action: 'fill', value: picked.matchedValue };
+            }
+        }
 
         const { flows, config } = await SupportAgentService.loadAccountContext(accountId);
         if (!config.apiKey) {

@@ -40,7 +40,7 @@ async function nextAppointment(accountId: string, phone: string): Promise<OpenAp
 
 async function loadAccount(accountId: string) {
   const { data } = await supabase.from('accounts')
-    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model')
+    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard')
     .eq('id', accountId).maybeSingle();
   return {
     accountId,
@@ -51,6 +51,8 @@ async function loadAccount(accountId: string) {
     estudioNombre: data?.name ?? null,
     apiKey: data?.ai_api_key ?? null,
     model: data?.ai_model ?? null,
+    // Config del LoopGuard (jsonb). null → el runtime usa los defaults.
+    loopGuard: (data as any)?.agent_loop_guard ?? null,
   };
 }
 
@@ -144,6 +146,16 @@ export function getAgentRuntime(): AgentRuntime {
       start: (a, p, args, c) => booking.start(a, p, args, c),
     },
     bookingIntent: detectBookingIntent,
+    // LoopGuard: estado persistido en contact_memory (sobrevive reinicios del VPS);
+    // al tocar el tope con action=handoff reusa el handover real (bot calla, pasa a Atención).
+    loopGuard: {
+      loadState: (a, p) => memory.loadLoopGuardState(a, p),
+      saveState: (a, p, s) => memory.saveLoopGuardState(a, p, s),
+      onBlock: (a, p, reason) => handoff(a, p, {
+        motivo: reason === 'echo' ? 'loop_guard_echo' : 'loop_guard_rate',
+        resumen_caso: 'Tope de respuestas IA alcanzado — derivado para evitar loop.',
+      }),
+    },
     updateMemory: async (accountId, phone, turns) => {
       const patch = await extractMemoryPatch({ complete: (o) => AIService.complete(o) }, turns);
       await memory.merge(accountId, phone, patch);
