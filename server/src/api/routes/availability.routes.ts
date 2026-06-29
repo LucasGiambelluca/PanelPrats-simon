@@ -42,11 +42,17 @@ export function availabilityRouter(): Router {
       const accountId = String(req.query.account_id || '');
       const oficina = String(req.query.oficina || '');
       const profesional = req.query.profesional ? String(req.query.profesional) : null;
-      const max = Math.min(Number(req.query.max) || 12, 30);
+      // `date` (YYYY-MM-DD) = un día concreto del selector de fecha. AR es UTC-3 todo
+      // el año (sin DST) → la ventana del día se acota con offset fijo -03:00.
+      const date = req.query.date ? String(req.query.date) : null;
+      const window = date
+        ? { desde: `${date}T00:00:00.000-03:00`, hasta: `${date}T23:59:59.999-03:00` }
+        : {};
+      const max = Math.min(Number(req.query.max) || (date ? 48 : 12), 96);
       if (!oficina) return res.status(400).json({ error: 'falta oficina' });
 
       if (!profesional) {
-        const slots = await svc.freeSlots(accountId, oficina, { max });
+        const slots = await svc.freeSlots(accountId, oficina, { ...window, max });
         return res.json(slots);
       }
 
@@ -54,7 +60,7 @@ export function availabilityRouter(): Router {
       // los slots donde ese profesional aparece como disponible.
       const office = await svc.getOffice(accountId, oficina);
       if (!office) return res.json([]);
-      const candidatos = await svc.freeSlots(accountId, oficina, { max: max * 4 });
+      const candidatos = await svc.freeSlots(accountId, oficina, { ...window, max: max * 4 });
       const out: Array<{ start: string; end: string }> = [];
       for (const s of candidatos) {
         if (out.length >= max) break;

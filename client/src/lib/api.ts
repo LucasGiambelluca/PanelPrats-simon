@@ -272,9 +272,10 @@ export const availabilityApi = {
   offices: (accountId: string) =>
     api<AvailabilityOffice[]>(`/api/availability/offices?account_id=${encodeURIComponent(accountId)}`),
 
-  slots: (accountId: string, oficina: string, profesional?: string | null, max = 12) => {
-    const q = new URLSearchParams({ account_id: accountId, oficina, max: String(max) });
-    if (profesional) q.set('profesional', profesional);
+  slots: (accountId: string, oficina: string, opts: { profesional?: string | null; date?: string | null } = {}) => {
+    const q = new URLSearchParams({ account_id: accountId, oficina });
+    if (opts.profesional) q.set('profesional', opts.profesional);
+    if (opts.date) q.set('date', opts.date);
     return api<FreeSlot[]>(`/api/availability/slots?${q.toString()}`);
   },
 };

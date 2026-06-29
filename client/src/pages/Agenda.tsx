@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -13,7 +14,7 @@ import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
   Phone, UserCheck, Shield, Plus, ChevronLeft, ChevronRight, Info, User,
-  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon, Minus
+  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon, Minus, MessageSquare
 } from 'lucide-react';
 
 function formatDistanceToNow(dateInput: Date | string): string {
@@ -154,6 +155,14 @@ function FieldSelect({ theme, label, value, onChange, options, hint }: {
 
 export default function Agenda() {
   const { activeAccountId, accounts } = useAccounts();
+  const navigate = useNavigate();
+
+  // Abre el inbox directamente en la conversación de este contacto (deep-link).
+  const goToChat = (app: Appointment) => {
+    if (!app.phone && !app.telefono) { toast.error('La cita no tiene teléfono'); return; }
+    const phone = app.phone || app.telefono;
+    navigate(`/inbox?account=${encodeURIComponent(app.account_id)}&phone=${encodeURIComponent(phone)}`);
+  };
   const { user, role } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
@@ -1955,7 +1964,7 @@ export default function Agenda() {
               <div className={`flex items-center justify-between border-t pt-4 mt-6 ${
                 theme === 'light' ? 'border-brand-hairline' : 'border-white/5'
               }`}>
-                <div>
+                <div className="flex gap-2">
                   {selectedApp && (
                     <button
                       type="button"
@@ -1964,6 +1973,16 @@ export default function Agenda() {
                     >
                       <Trash2 size={13} />
                       <span>Eliminar Cita</span>
+                    </button>
+                  )}
+                  {selectedApp && (selectedApp.phone || selectedApp.telefono) && (
+                    <button
+                      type="button"
+                      onClick={() => goToChat(selectedApp)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-bold rounded-xl border border-brand-primary/20 transition-all"
+                    >
+                      <MessageSquare size={13} />
+                      <span>Ir al chat</span>
                     </button>
                   )}
                 </div>

@@ -15,19 +15,22 @@ interface Props {
   onBooked?: () => void;
 }
 
-function slotLabel(iso: string): string {
-  return new Date(iso).toLocaleString('es-AR', {
-    weekday: 'short', day: '2-digit', month: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  });
+// 'YYYY-MM-DD' en hora local (para <input type="date">).
+function todayStr(): string {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 export default function BookFromChatModal({ open, onClose, accountId, phone, contactName, onBooked }: Props) {
   const [offices, setOffices] = useState<AvailabilityOffice[]>([]);
   const [officeId, setOfficeId] = useState('');
   const [profesionalId, setProfesionalId] = useState('');
+  const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<FreeSlot[]>([]);
-  const [slotIdx, setSlotIdx] = useState<number | null>(null);
+  const [selectedStart, setSelectedStart] = useState<string | null>(null);
   const [nombre, setNombre] = useState(contactName || '');
   const [motivo, setMotivo] = useState<AppointmentMotivo | ''>('');
   const [nota, setNota] = useState('');
@@ -41,8 +44,8 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
   useEffect(() => {
     if (!open) return;
     setNombre(contactName || '');
-    setOfficeId(''); setProfesionalId(''); setSlots([]); setSlotIdx(null);
-    setMotivo(''); setNota('');
+    setOfficeId(''); setProfesionalId(''); setSlots([]); setSelectedStart(null);
+    setDate(todayStr()); setMotivo(''); setNota('');
     setLoadingOffices(true);
     availabilityApi.offices(accountId)
       .then((os) => setOffices(os))
@@ -50,26 +53,26 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
       .finally(() => setLoadingOffices(false));
   }, [open, accountId, contactName]);
 
-  // Cargar slots cuando cambia oficina o profesional.
+  // Cargar slots del día elegido cuando cambia oficina / profesional / fecha.
   const loadSlots = useCallback(() => {
     if (!office) { setSlots([]); return; }
     setLoadingSlots(true);
-    setSlotIdx(null);
-    availabilityApi.slots(accountId, office.nombre, profesionalId || null)
+    setSelectedStart(null);
+    availabilityApi.slots(accountId, office.nombre, { profesional: profesionalId || null, date })
       .then((s) => setSlots(s))
       .catch((e) => toast.error(e?.message || 'No se pudieron cargar los horarios'))
       .finally(() => setLoadingSlots(false));
-  }, [accountId, office, profesionalId]);
+  }, [accountId, office, profesionalId, date]);
 
-  useEffect(() => { if (open && office) loadSlots(); }, [open, office, profesionalId, loadSlots]);
+  useEffect(() => { if (open && office) loadSlots(); }, [open, office, profesionalId, date, loadSlots]);
 
   if (!open) return null;
 
   const submit = async () => {
     if (!nombre.trim()) return toast.error('Falta el nombre');
     if (!office) return toast.error('Elegí una oficina');
-    if (slotIdx === null || !slots[slotIdx]) return toast.error('Elegí un horario');
-    const slot = slots[slotIdx];
+    const slot = slots.find((s) => s.start === selectedStart);
+    if (!slot) return toast.error('Elegí un horario');
     setSaving(true);
     try {
       await appointmentsApi.create({
@@ -149,24 +152,46 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
             </select>
           </label>
 
-          {/* Slot */}
-          <label className="block">
-            <span className="text-xs font-semibold text-brand-inkmuted">Horario</span>
-            <select
-              value={slotIdx === null ? '' : String(slotIdx)}
-              onChange={(e) => setSlotIdx(e.target.value === '' ? null : Number(e.target.value))}
-              disabled={!office || loadingSlots}
-              className="mt-1 w-full rounded-lg border border-brand-hairline bg-brand-bg px-3 py-2 text-sm text-brand-ink disabled:opacity-50"
-            >
-              <option value="">
-                {!office ? 'Elegí una oficina primero'
-                  : loadingSlots ? 'Cargando horarios…'
-                  : slots.length === 0 ? 'Sin horarios disponibles'
-                  : 'Elegí un horario'}
-              </option>
-              {slots.map((s, i) => <option key={s.start} value={i}>{slotLabel(s.start)}</option>)}
-            </select>
-          </label>
+          {/* Fecha + grilla de horarios del día */}
+          <div className="block">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-brand-inkmuted">Fecha</span>
+              <input
+                type="date" value={date} min={todayStr()}
+                onChange={(e) => setDate(e.target.value)}
+                disabled={!office}
+                className="rounded-lg border border-brand-hairline bg-brand-bg px-3 py-1.5 text-sm text-brand-ink disabled:opacity-50"
+              />
+            </div>
+            <div className="mt-2 min-h-[44px]">
+              {!office ? (
+                <p className="text-xs text-brand-inkmuted py-2">Elegí una oficina para ver horarios.</p>
+              ) : loadingSlots ? (
+                <p className="text-xs text-brand-inkmuted py-2 flex items-center gap-2"><Loader2 size={13} className="animate-spin" /> Cargando horarios…</p>
+              ) : slots.length === 0 ? (
+                <p className="text-xs text-brand-inkmuted py-2">Sin horarios disponibles ese día.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {slots.map((s) => {
+                    const sel = s.start === selectedStart;
+                    return (
+                      <button
+                        key={s.start} type="button"
+                        onClick={() => setSelectedStart(s.start)}
+                        className={`rounded-lg px-2 py-1.5 text-xs font-semibold border transition-all ${
+                          sel
+                            ? 'bg-brand-primary text-white border-brand-primary'
+                            : 'bg-brand-bg text-brand-ink border-brand-hairline hover:border-brand-primary/50'
+                        }`}
+                      >
+                        {timeLabel(s.start)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Motivo */}
           <label className="block">

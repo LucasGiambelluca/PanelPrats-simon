@@ -108,8 +108,12 @@ export class AvailabilityService {
     const office = await this.getOffice(accountId, nombre);
     if (!office) return [];
     const max = opts.max ?? 3;
-    const now = opts.now ?? new Date();
-    const minStart = new Date(now.getTime() + (office.buffer_min ?? 0) * 60000);
+    const realNow = opts.now ?? new Date();
+    // Ventana opcional [desde, hasta] (ej. un día concreto desde el selector de fecha).
+    // El scan arranca en `desde` si vino; minStart nunca cae en el pasado real.
+    const base = opts.desde ? new Date(opts.desde) : realNow;
+    const minStart = new Date(Math.max(realNow.getTime(), base.getTime()) + (office.buffer_min ?? 0) * 60000);
+    const hasta = opts.hasta ? new Date(opts.hasta).getTime() : Infinity;
 
     const [sh, sm] = office.hora_inicio.split(':').map(Number);
     const [eh, em] = office.hora_fin.split(':').map(Number);
@@ -117,15 +121,17 @@ export class AvailabilityService {
 
     const out: Slot[] = [];
     for (let dayOffset = 0; dayOffset < 14 && out.length < max; dayOffset++) {
-      const day = new Date(now.getTime() + dayOffset * 86400000);
+      const day = new Date(base.getTime() + dayOffset * 86400000);
       const { dia } = localParts(day);
       if (!office.dias.includes(dia)) continue;
       const workStart = studioDateAt(day, sh || 9, sm || 0);
       const workEnd = studioDateAt(day, eh || 18, em || 0);
+      if (workStart.getTime() > hasta) break; // pasado el fin de ventana → no seguir días
 
       for (let t = new Date(workStart); t.getTime() + slotMs <= workEnd.getTime() && out.length < max; t = new Date(t.getTime() + slotMs)) {
         const s = t.getTime(), e = s + slotMs;
         if (s < minStart.getTime()) continue;
+        if (s >= hasta) break;
         const startIso = new Date(s).toISOString(), endIso = new Date(e).toISOString();
         if (!(await this.hasCapacity(accountId, office.nombre, startIso, endIso))) continue;
         out.push({ start: startIso, end: endIso });

@@ -1,14 +1,34 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw, RotateCcw,
-  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft, Calendar,
+  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft, Calendar, CalendarCheck,
   Check
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
-import { conversationsApi, messagesApi } from '../lib/api';
+import { conversationsApi, messagesApi, appointmentsApi } from '../lib/api';
 import { toast } from 'sonner';
 import type { WhatsAppConversation, WhatsAppMessage } from '../types';
 import BookFromChatModal from '../components/BookFromChatModal';
+
+// Normaliza teléfono a sus últimos 10 dígitos (cubre el '9' de AR y separadores)
+// para cruzar conversaciones con citas, donde el formato puede diferir.
+function normPhone(p: string): string {
+  return (p || '').replace(/\D/g, '').slice(-10);
+}
+
+// Badge de estado de agendado para una conversación.
+function ApptBadge({ agendado }: { agendado: boolean }) {
+  return agendado ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+      <CalendarCheck size={9} /> Agendado
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-brand-inkmuted/10 text-brand-inkmuted border border-brand-hairline">
+      Sin agendar
+    </span>
+  );
+}
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
 
@@ -67,6 +87,9 @@ export default function WhatsAppInbox() {
   const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
   const [loadError, setLoadError] = useState(false); // error en la carga de conversaciones
   const [bookOpen, setBookOpen] = useState(false); // modal de agendado manual desde el chat
+  const [apptPhones, setApptPhones] = useState<Set<string>>(new Set()); // teléfonos con cita activa
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -135,6 +158,49 @@ export default function WhatsAppInbox() {
     pollConvoRef.current = setInterval(() => { if (!document.hidden) loadConversations(); }, 5000);
     return () => { if (pollConvoRef.current) clearInterval(pollConvoRef.current); };
   }, [loadConversations]);
+
+  // Teléfonos con cita activa (no cancelada) → etiqueta "Agendado" / "Sin agendar".
+  const loadApptPhones = useCallback(async () => {
+    try {
+      const scope = allLines ? 'all' : (activeAccountId || 'all');
+      const appts = await appointmentsApi.list(scope);
+      const set = new Set<string>();
+      for (const a of appts) {
+        if (a.status === 'cancelada') continue;
+        const p = normPhone(a.phone || a.telefono || '');
+        if (p) set.add(p);
+      }
+      setApptPhones(set);
+    } catch { /* no romper el inbox por la etiqueta */ }
+  }, [allLines, activeAccountId]);
+  useEffect(() => { loadApptPhones(); }, [loadApptPhones]);
+
+  const isAgendado = useCallback((phone: string) => apptPhones.has(normPhone(phone)), [apptPhones]);
+
+  // Deep-link desde la Agenda: /inbox?account=&phone= → abre esa conversación.
+  // Forzamos bandeja unificada para garantizar que la conversación esté cargada.
+  useEffect(() => {
+    if (searchParams.get('phone')) setAllLines(true);
+    // sólo al montar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const ph = searchParams.get('phone');
+    if (!ph || deepLinkedRef.current || conversations.length === 0) return;
+    const acc = searchParams.get('account');
+    const target = normPhone(ph);
+    const match =
+      conversations.find(c => normPhone(c.phone) === target && (!acc || c.account_id === acc)) ||
+      conversations.find(c => normPhone(c.phone) === target);
+    deepLinkedRef.current = true;
+    if (match) {
+      setActiveConvo(match);
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    } else {
+      toast.error('No hay conversación con este contacto');
+    }
+    setSearchParams({}, { replace: true });
+  }, [conversations, searchParams, setSearchParams]);
 
   // Load messages for active convo
   const loadMessages = useCallback(async (showLoader = false) => {
@@ -354,6 +420,7 @@ export default function WhatsAppInbox() {
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] text-brand-inkmuted truncate pr-2">{c.last_message || '…'}</p>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <ApptBadge agendado={isAgendado(c.phone)} />
                       {c.unread_count > 0 && (
                         <span className="bg-emerald-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full flex items-center justify-center px-1.5">
                           {c.unread_count}
@@ -439,6 +506,7 @@ export default function WhatsAppInbox() {
                         Bot
                       </span>
                     )}
+                    <ApptBadge agendado={isAgendado(activeConvo.phone)} />
                   </div>
                 </div>
               </div>
@@ -481,6 +549,7 @@ export default function WhatsAppInbox() {
               accountId={activeConvo.account_id}
               phone={activeConvo.phone}
               contactName={activeConvo.contact_name || ''}
+              onBooked={() => loadApptPhones()}
             />
 
             {/* Messages */}
