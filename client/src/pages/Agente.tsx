@@ -119,8 +119,8 @@ export default function Agente() {
               </Card>
 
               <Card icon={<Sparkles size={16} />} title="Procedimientos">
-                <FieldEditor value={procDraft} onChange={setProcDraft} rows={4} placeholder="Cómo proceder en cada caso (los “flujos” en lenguaje natural)…"
-                  busy={busy} onSave={() => applyChange({ type: 'set_procedimientos', texto: procDraft, modo: 'reemplazar' }, 'Procedimientos actualizados')} />
+                <ProceduresTabs initialText={procDraft} busy={busy}
+                  onSave={(text) => applyChange({ type: 'set_procedimientos', texto: text, modo: 'reemplazar' }, 'Procedimientos actualizados')} />
               </Card>
 
               <Card icon={<BookOpen size={16} />} title={`FAQs (${state.faqs.length})`}>
@@ -346,6 +346,109 @@ function AddZonaForm({ busy, applyChange }: { busy: boolean; applyChange: ApplyF
       <button onClick={add} disabled={busy} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:brightness-125 disabled:opacity-50 transition shrink-0">
         <Plus size={15} /> Agregar
       </button>
+    </div>
+  );
+}
+
+/* ── Procedimientos en pestañas ──────────────────────────────────
+ * `agent_procedures` sigue siendo un solo texto, estructurado por secciones
+ * `## Nombre`. La UI lo parsea en pestañas con nombre; al guardar re-serializa
+ * todo al mismo campo (el runtime lo inyecta crudo, los `## Nombre` quedan como
+ * títulos en el prompt). El texto previo sin `##` cae en una pestaña "General".
+ */
+export type Procedure = { name: string; body: string };
+
+export function parseProcedures(text: string): Procedure[] {
+  const t = (text || '').replace(/\r\n/g, '\n');
+  if (!t.trim()) return [];
+  const out: Procedure[] = [];
+  const pre: string[] = [];
+  let cur: { name: string; body: string[] } | null = null;
+  for (const line of t.split('\n')) {
+    const m = line.match(/^##\s+(.*)$/);
+    if (m) {
+      if (cur) out.push({ name: cur.name, body: cur.body.join('\n').trim() });
+      cur = { name: m[1].trim(), body: [] };
+    } else if (cur) {
+      cur.body.push(line);
+    } else {
+      pre.push(line);
+    }
+  }
+  if (cur) out.push({ name: cur.name, body: cur.body.join('\n').trim() });
+  const preText = pre.join('\n').trim();
+  if (preText) out.unshift({ name: 'General', body: preText });
+  return out;
+}
+
+export function serializeProcedures(list: Procedure[]): string {
+  return list
+    .filter((p) => p.name.trim() || p.body.trim())
+    .map((p) => `## ${p.name.trim() || 'Sin nombre'}\n${p.body.trim()}`)
+    .join('\n\n');
+}
+
+function ProceduresTabs({ initialText, busy, onSave }:
+  { initialText: string; busy: boolean; onSave: (text: string) => void }) {
+  const [list, setList] = useState<Procedure[]>(() => parseProcedures(initialText));
+  const [active, setActive] = useState(0);
+  // Re-sincroniza al cargar/guardar (initialText viene del estado del cerebro).
+  useEffect(() => { setList(parseProcedures(initialText)); setActive(0); }, [initialText]);
+
+  const cur = list[active];
+  const patchActive = (patch: Partial<Procedure>) =>
+    setList((l) => l.map((p, i) => (i === active ? { ...p, ...patch } : p)));
+  const addTab = () => {
+    setList((l) => [...l, { name: `Procedimiento ${l.length + 1}`, body: '' }]);
+    setActive(list.length);
+  };
+  const removeActive = () => {
+    if (!cur) return;
+    if (!window.confirm(`¿Borrar el procedimiento "${cur.name || 'Sin nombre'}"?`)) return;
+    setList((l) => l.filter((_, i) => i !== active));
+    setActive((a) => Math.max(0, a - 1));
+  };
+
+  return (
+    <div>
+      {/* Pestañas */}
+      <div className="flex flex-wrap gap-1.5 mb-2.5">
+        {list.map((p, i) => (
+          <button key={i} onClick={() => setActive(i)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+              i === active
+                ? 'bg-brand-secondary text-white border-brand-secondary'
+                : 'bg-gray-50 text-brand-ink border-gray-200 hover:border-brand-secondary/40'
+            }`}>
+            {p.name.trim() || 'Sin nombre'}
+          </button>
+        ))}
+        <button onClick={addTab}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border border-dashed border-gray-300 text-brand-secondary hover:bg-brand-secondary/10 transition">
+          <Plus size={12} /> Nuevo
+        </button>
+      </div>
+
+      {/* Pestaña activa */}
+      {cur ? (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <input value={cur.name} onChange={(e) => patchActive({ name: e.target.value })}
+              placeholder="Nombre del procedimiento (ej: Jubilación Hombre)" className={inputCls} />
+            <IconBtn label="Borrar procedimiento" danger busy={busy} onClick={removeActive}><Trash2 size={14} /></IconBtn>
+          </div>
+          <textarea value={cur.body} onChange={(e) => patchActive({ body: e.target.value })} rows={8}
+            placeholder="Pasos del procedimiento, en lenguaje natural…" className={textareaCls} />
+        </>
+      ) : (
+        <p className="text-sm text-gray-400 italic">Sin procedimientos. Agregá uno con “Nuevo”.</p>
+      )}
+
+      <div className="flex justify-end mt-2">
+        <button onClick={() => onSave(serializeProcedures(list))} disabled={busy} className={saveBtnCls}>
+          Guardar procedimientos
+        </button>
+      </div>
     </div>
   );
 }
