@@ -51,23 +51,11 @@ export function availabilityRouter(): Router {
       const max = Math.min(Number(req.query.max) || (date ? 48 : 12), 96);
       if (!oficina) return res.status(400).json({ error: 'falta oficina' });
 
-      if (!profesional) {
-        const slots = await svc.freeSlots(accountId, oficina, { ...window, max });
-        return res.json(slots);
-      }
-
-      // Filtrado por profesional: generamos candidatos amplios y nos quedamos con
-      // los slots donde ese profesional aparece como disponible.
-      const office = await svc.getOffice(accountId, oficina);
-      if (!office) return res.json([]);
-      const candidatos = await svc.freeSlots(accountId, oficina, { ...window, max: max * 4 });
-      const out: Array<{ start: string; end: string }> = [];
-      for (const s of candidatos) {
-        if (out.length >= max) break;
-        const avail = await svc.availableProfessionals(office, s.start, s.end);
-        if (avail.includes(profesional)) out.push(s);
-      }
-      res.json(out);
+      // freeSlots filtra por profesional en memoria (ctx cargado una sola vez) → sin N+1.
+      const slots = await svc.freeSlots(accountId, oficina, {
+        ...window, max, ...(profesional ? { professionalId: profesional } : {}),
+      });
+      res.json(slots);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'error' });
     }

@@ -9,6 +9,15 @@ export interface Office {
 }
 export interface Slot { start: string; end: string; }
 
+// Contexto de una oficina cargado UNA vez (profes/ventanas/bloqueos/citas) para
+// evaluar capacidad de muchos slots en memoria, sin N+1 de round-trips a la DB.
+interface OfficeCtx {
+  profIds: string[];
+  windows: Array<{ profile_id: string; dia: number; hora_inicio: string; hora_fin: string }>;
+  blocks: Array<{ profile_id: string; office_id: string | null; start_time: string; end_time: string }>;
+  appts: any[];
+}
+
 const norm = (s: string) => (s || '').trim().toLowerCase();
 const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) => aStart < bEnd && aEnd > bStart;
 
@@ -65,10 +74,9 @@ export class AvailabilityService {
     return list.find((o) => norm(o.nombre) === norm(nombre)) ?? null;
   }
 
-  /** Cuenta citas activas de esa oficina que solapan [start,end). */
-  private async countOverlap(accountId: string, nombre: string, start: string, end: string): Promise<number> {
+  /** Cuenta citas activas de la oficina que solapan [start,end). Puro (sobre `appts` ya cargadas). */
+  private countOverlapPure(appts: any[], nombre: string, start: string, end: string): number {
     const reqS = new Date(start).getTime(), reqE = new Date(end).getTime();
-    const appts = await AppointmentService.list();
     return appts.filter((a: any) =>
       a.status !== 'cancelada' && a.start_time && a.end_time &&
       norm(a.oficina || '') === norm(nombre) &&
@@ -76,37 +84,82 @@ export class AvailabilityService {
     ).length;
   }
 
-  /** Cuenta citas solapantes de la oficina con assigned_profile_id null (legacy). */
-  private async countLegacyOverlap(accountId: string, nombre: string, start: string, end: string): Promise<number> {
+  /** Igual que countOverlapPure pero sólo citas legacy (sin assigned_profile_id). */
+  private countLegacyOverlapPure(appts: any[], nombre: string, start: string, end: string): number {
     const reqS = new Date(start).getTime(), reqE = new Date(end).getTime();
-    const appts = await AppointmentService.list();
     return appts.filter((a: any) =>
-      a.status !== 'cancelada' && a.start_time && a.end_time &&
-      !a.assigned_profile_id &&
+      a.status !== 'cancelada' && a.start_time && a.end_time && !a.assigned_profile_id &&
       norm(a.oficina || '') === norm(nombre) &&
       overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), reqS, reqE),
     ).length;
+  }
+
+  /** Carga (en paralelo, UNA vez) todo lo necesario para evaluar capacidad de una oficina. */
+  private async loadOfficeCtx(office: Office): Promise<OfficeCtx> {
+    const [profIds, windows, blocks, appts] = await Promise.all([
+      this.officeProfIds(office.id),
+      this.windowsForOffice(office.id),
+      this.blocksForOffice(office.id),
+      AppointmentService.list(),
+    ]);
+    return { profIds, windows, blocks, appts };
+  }
+
+  /** profile_ids disponibles para [start,end) — puro, sobre un contexto ya cargado. */
+  private availableProfsPure(ctx: OfficeCtx, office: Office, start: string, end: string): string[] {
+    if (ctx.profIds.length === 0) return [];
+    const { dia, hhmm: startHHMM } = localParts(new Date(start));
+    const { hhmm: endHHMM } = localParts(new Date(end));
+    const withWindow = ctx.profIds.filter((pid) => {
+      const myWindows = ctx.windows.filter((w) => w.profile_id === pid);
+      // Sin ventanas propias → disponibilidad = horario de la oficina (agenda 1-profesional).
+      if (myWindows.length === 0) {
+        return office.dias.includes(dia) && office.hora_inicio <= startHHMM && office.hora_fin >= endHHMM;
+      }
+      return myWindows.some((w) => w.dia === dia && w.hora_inicio <= startHHMM && w.hora_fin >= endHHMM);
+    });
+    if (withWindow.length === 0) return [];
+    const s = new Date(start).getTime(), e = new Date(end).getTime();
+    const notBlocked = withWindow.filter((pid) =>
+      !ctx.blocks.some((b) => b.profile_id === pid &&
+        (b.office_id === null || b.office_id === office.id) &&
+        new Date(b.start_time).getTime() < e && new Date(b.end_time).getTime() > s));
+    if (notBlocked.length === 0) return [];
+    const busy = new Set(ctx.appts.filter((a: any) =>
+      a.status !== 'cancelada' && a.start_time && a.end_time &&
+      norm(a.oficina || '') === norm(office.nombre) &&
+      overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), s, e))
+      .map((a: any) => a.assigned_profile_id).filter(Boolean));
+    return notBlocked.filter((pid) => !busy.has(pid));
+  }
+
+  /** ¿Queda cupo en [start,end)? — puro, sobre un contexto ya cargado. */
+  private hasCapacityPure(ctx: OfficeCtx, office: Office, start: string, end: string): boolean {
+    if (ctx.profIds.length === 0) {
+      const cap = office.capacidad ?? 1;
+      return this.countOverlapPure(ctx.appts, office.nombre, start, end) < cap;
+    }
+    const disponibles = this.availableProfsPure(ctx, office, start, end).length;
+    const legacy = this.countLegacyOverlapPure(ctx.appts, office.nombre, start, end);
+    return disponibles - legacy > 0;
   }
 
   async hasCapacity(accountId: string, nombre: string, start: string, end: string): Promise<boolean> {
     const office = await this.getOffice(accountId, nombre);
     if (!office) {
       // Oficina no configurada → capacidad 1 (comportamiento viejo).
-      return (await this.countOverlap(accountId, nombre, start, end)) < 1;
+      const appts = await AppointmentService.list();
+      return this.countOverlapPure(appts, nombre, start, end) < 1;
     }
-    const profIds = await this.officeProfIds(office.id);
-    if (profIds.length === 0) {
-      const cap = office.capacidad ?? 1;
-      return (await this.countOverlap(accountId, nombre, start, end)) < cap;
-    }
-    const disponibles = (await this.availableProfessionals(office, start, end)).length;
-    const legacy = await this.countLegacyOverlap(accountId, nombre, start, end);
-    return disponibles - legacy > 0;
+    const ctx = await this.loadOfficeCtx(office);
+    return this.hasCapacityPure(ctx, office, start, end);
   }
 
-  async freeSlots(accountId: string, nombre: string, opts: { desde?: string; hasta?: string; max?: number; now?: Date } = {}): Promise<Slot[]> {
+  async freeSlots(accountId: string, nombre: string, opts: { desde?: string; hasta?: string; max?: number; now?: Date; professionalId?: string } = {}): Promise<Slot[]> {
     const office = await this.getOffice(accountId, nombre);
     if (!office) return [];
+    // Contexto de la oficina UNA sola vez (no por slot) → elimina el N+1 de round-trips.
+    const ctx = await this.loadOfficeCtx(office);
     const max = opts.max ?? 3;
     const realNow = opts.now ?? new Date();
     // Ventana opcional [desde, hasta] (ej. un día concreto desde el selector de fecha).
@@ -133,7 +186,11 @@ export class AvailabilityService {
         if (s < minStart.getTime()) continue;
         if (s >= hasta) break;
         const startIso = new Date(s).toISOString(), endIso = new Date(e).toISOString();
-        if (!(await this.hasCapacity(accountId, office.nombre, startIso, endIso))) continue;
+        // Filtro por profesional concreto, o cupo general — ambos en memoria sobre `ctx`.
+        const ok = opts.professionalId
+          ? this.availableProfsPure(ctx, office, startIso, endIso).includes(opts.professionalId)
+          : this.hasCapacityPure(ctx, office, startIso, endIso);
+        if (!ok) continue;
         out.push({ start: startIso, end: endIso });
       }
     }
@@ -166,37 +223,8 @@ export class AvailabilityService {
 
   /** profile_ids que pueden tomar el slot [start,end): ventana cubre + sin bloqueo + no asignados. */
   async availableProfessionals(office: Office, start: string, end: string): Promise<string[]> {
-    const profIds = await this.officeProfIds(office.id);
-    if (profIds.length === 0) return [];
-
-    const { dia, hhmm: startHHMM } = localParts(new Date(start));
-    const { hhmm: endHHMM } = localParts(new Date(end));
-    const windows = await this.windowsForOffice(office.id);
-    const withWindow = profIds.filter((pid) => {
-      const myWindows = windows.filter((w) => w.profile_id === pid);
-      // Sin ventanas propias cargadas → la disponibilidad es el horario de la oficina.
-      // Así una agenda 1-profesional funciona sin tener que cargar professional_availability.
-      if (myWindows.length === 0) {
-        return office.dias.includes(dia) && office.hora_inicio <= startHHMM && office.hora_fin >= endHHMM;
-      }
-      return myWindows.some((w) => w.dia === dia && w.hora_inicio <= startHHMM && w.hora_fin >= endHHMM);
-    });
-    if (withWindow.length === 0) return [];
-
-    const s = new Date(start).getTime(), e = new Date(end).getTime();
-    const blocks = await this.blocksForOffice(office.id);
-    const notBlocked = withWindow.filter((pid) =>
-      !blocks.some((b) => b.profile_id === pid &&
-        (b.office_id === null || b.office_id === office.id) &&
-        new Date(b.start_time).getTime() < e && new Date(b.end_time).getTime() > s));
-    if (notBlocked.length === 0) return [];
-
-    const appts = (await AppointmentService.list()).filter((a: any) =>
-      a.status !== 'cancelada' && a.start_time && a.end_time &&
-      norm(a.oficina || '') === norm(office.nombre) &&
-      overlaps(new Date(a.start_time).getTime(), new Date(a.end_time).getTime(), s, e));
-    const busy = new Set(appts.map((a: any) => a.assigned_profile_id).filter(Boolean));
-    return notBlocked.filter((pid) => !busy.has(pid));
+    const ctx = await this.loadOfficeCtx(office);
+    return this.availableProfsPure(ctx, office, start, end);
   }
 
   /** Elige el profesional libre con menos turnos ese día (local). Desempate por nombre. */

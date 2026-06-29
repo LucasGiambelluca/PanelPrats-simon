@@ -106,6 +106,27 @@ describe('AvailabilityService.freeSlots', () => {
     const svc = new AvailabilityService();
     expect(await svc.freeSlots('acc1', 'Inexistente', { now: new Date('2026-06-22T12:00:00.000Z') } as any)).toEqual([]);
   });
+
+  it('NO hace N+1: consulta las citas una sola vez sin importar la cantidad de slots', async () => {
+    db.account_offices[0] = { ...OFICINA, slot_min: 30, capacidad: 1 };
+    apptList.mockResolvedValue([]);
+    const svc = new AvailabilityService();
+    const slots = await svc.freeSlots('acc1', 'CABA', { now: new Date('2026-06-22T12:00:00.000Z'), max: 15 } as any);
+    expect(slots.length).toBeGreaterThan(1); // genera varios slots
+    expect(apptList.mock.calls.length).toBeLessThanOrEqual(1); // …pero pide las citas 1 sola vez
+  });
+
+  it('professionalId: sólo slots donde ese profesional está libre', async () => {
+    db.account_offices[0] = { ...OFICINA, slot_min: 60, capacidad: 5 };
+    db.office_professionals.push({ office_id: 'o1', profile_id: 'p1', activa: true });
+    for (const dia of [1,2,3,4,5]) db.professional_availability.push({ profile_id: 'p1', office_id: 'o1', dia, hora_inicio: '09:00', hora_fin: '18:00' });
+    apptList.mockResolvedValue([]);
+    const svc = new AvailabilityService();
+    const conP1 = await svc.freeSlots('acc1', 'CABA', { now: new Date('2026-06-22T12:00:00.000Z'), max: 5, professionalId: 'p1' } as any);
+    expect(conP1.length).toBeGreaterThan(0);
+    const conP9 = await svc.freeSlots('acc1', 'CABA', { now: new Date('2026-06-22T12:00:00.000Z'), max: 5, professionalId: 'p9-inexistente' } as any);
+    expect(conP9).toEqual([]); // ese profesional no está en la oficina → sin slots
+  });
 });
 
 describe('AvailabilityService.availableProfessionals', () => {
