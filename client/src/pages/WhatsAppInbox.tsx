@@ -81,6 +81,7 @@ export default function WhatsAppInbox() {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'todos' | 'agendados'>('todos'); // pestaña activa del inbox
   const [loadingConvos, setLoadingConvos] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -301,9 +302,11 @@ export default function WhatsAppInbox() {
     }
   };
 
-  const filtered = search
-    ? conversations.filter(c => (c.contact_name || c.phone).toLowerCase().includes(search.toLowerCase()))
-    : conversations;
+  const filtered = conversations.filter(c => {
+    if (tab === 'agendados' && !isAgendado(c.phone)) return false;
+    if (search && !(c.contact_name || c.phone).toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const messageGroups = groupByDate(messages);
   // En modo unificado el chat abierto puede ser de otra línea: la conexión se
@@ -360,6 +363,39 @@ export default function WhatsAppInbox() {
               className="w-full bg-white border border-brand-hairline text-brand-ink text-xs rounded-xl pl-9 pr-3 py-2.5 placeholder-brand-inkmuted focus:outline-none focus:ring-2 focus:ring-brand-primary/40 transition-all"
             />
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 px-3 pt-2 border-b border-brand-hairline">
+          {([
+            { id: 'todos', label: 'Todos' },
+            { id: 'agendados', label: 'Agendados' },
+          ] as const).map((t) => {
+            const count = t.id === 'agendados'
+              ? conversations.filter(c => isAgendado(c.phone)).length
+              : conversations.length;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`relative px-3 py-2 text-xs font-semibold transition-colors ${
+                  tab === t.id ? 'text-brand-primary' : 'text-brand-inkmuted hover:text-brand-ink'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  {t.label}
+                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                    tab === t.id ? 'bg-brand-primary/[0.10] text-brand-primary' : 'bg-black/[0.04] text-brand-inkmuted'
+                  }`}>
+                    {count}
+                  </span>
+                </span>
+                {tab === t.id && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-brand-primary" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Conversation List */}
@@ -444,6 +480,19 @@ export default function WhatsAppInbox() {
                 {isAccountConnected
                   ? 'Los mensajes aparecerán acá cuando alguien te escriba'
                   : 'Conectá un número primero desde "Mis Números"'}
+              </p>
+            </div>
+          )}
+          {!loadingConvos && conversations.length > 0 && filtered.length === 0 && (
+            <div className="text-center py-20 px-6">
+              <MessageSquare size={36} className="text-brand-primary/30 mx-auto mb-3" />
+              <p className="text-brand-inkmuted text-sm font-medium">
+                {tab === 'agendados' ? 'Sin chats agendados' : 'Sin resultados'}
+              </p>
+              <p className="text-brand-inkmuted text-xs mt-1">
+                {tab === 'agendados'
+                  ? 'Acá aparecen los contactos con una cita activa'
+                  : 'Probá con otro término de búsqueda'}
               </p>
             </div>
           )}
