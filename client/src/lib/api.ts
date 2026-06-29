@@ -259,6 +259,26 @@ export const appointmentsApi = {
     }),
 };
 
+// ── Disponibilidad (modal de agendado manual desde el chat) ──
+export interface AvailabilityOffice {
+  id: string;
+  nombre: string;
+  modalidad: 'presencial' | 'video' | 'ambas';
+  profesionales: Array<{ id: string; name: string }>;
+}
+export interface FreeSlot { start: string; end: string; }
+
+export const availabilityApi = {
+  offices: (accountId: string) =>
+    api<AvailabilityOffice[]>(`/api/availability/offices?account_id=${encodeURIComponent(accountId)}`),
+
+  slots: (accountId: string, oficina: string, profesional?: string | null, max = 12) => {
+    const q = new URLSearchParams({ account_id: accountId, oficina, max: String(max) });
+    if (profesional) q.set('profesional', profesional);
+    return api<FreeSlot[]>(`/api/availability/slots?${q.toString()}`);
+  },
+};
+
 // ── Configuration & Environment ──────────────────────────────
 export const configApi = {
   get: () =>

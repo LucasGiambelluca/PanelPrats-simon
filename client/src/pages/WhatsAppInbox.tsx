@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, UserCheck, Bot, Search, RefreshCw, RotateCcw,
-  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft,
+  Phone, Clock, Facebook, Instagram, Layers, ArrowLeft, Calendar,
   Check
 } from 'lucide-react';
 import { useAccounts } from '../context/AccountContext';
 import { conversationsApi, messagesApi } from '../lib/api';
 import { toast } from 'sonner';
 import type { WhatsAppConversation, WhatsAppMessage } from '../types';
+import BookFromChatModal from '../components/BookFromChatModal';
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
 
@@ -65,6 +66,7 @@ export default function WhatsAppInbox() {
   const [sending, setSending] = useState(false);
   const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
   const [loadError, setLoadError] = useState(false); // error en la carga de conversaciones
+  const [bookOpen, setBookOpen] = useState(false); // modal de agendado manual desde el chat
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -442,6 +444,14 @@ export default function WhatsAppInbox() {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setBookOpen(true)}
+                  title="Agendar una cita para este contacto"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-brand-primary/20 bg-brand-primary/[0.08] text-brand-primary transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-primary/[0.14]"
+                >
+                  <Calendar size={14} />
+                  Agendar
+                </button>
+                <button
                   onClick={resetConversation}
                   disabled={resetting}
                   title="Reiniciar: el bot se olvida del contexto y arranca de cero"
@@ -464,8 +474,17 @@ export default function WhatsAppInbox() {
               </div>
             </div>
 
+            {/* Modal de agendado manual desde el chat */}
+            <BookFromChatModal
+              open={bookOpen}
+              onClose={() => setBookOpen(false)}
+              accountId={activeConvo.account_id}
+              phone={activeConvo.phone}
+              contactName={activeConvo.contact_name || ''}
+            />
+
             {/* Messages */}
-            <div 
+            <div
               className="flex-1 overflow-y-auto px-6 py-4 relative"
               style={{ 
                 backgroundColor: '#f4f3ef',

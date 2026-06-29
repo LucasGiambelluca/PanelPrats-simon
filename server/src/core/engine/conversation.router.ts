@@ -25,6 +25,11 @@ export class ConversationRouter {
     // Las cuentas en 'flows' (default) siguen el camino scripteado de abajo, intacto.
     const { data: acc } = await supabase.from('accounts').select('agent_mode').eq('id', accountId).maybeSingle();
     if (acc?.agent_mode === 'ai_first') {
+      // Respeta la atención humana: si la conversación fue tomada (HANDOVER), el bot
+      // calla aunque el cliente siga respondiendo. Se reactiva con "Devolver al Bot"
+      // (status → BOT). Sin esto, el agente reaparecía y pisaba la atención manual.
+      const status = await this.getConversationStatus(accountId, phone);
+      if (status === 'HANDOVER') return [];
       return getAgentRuntime().handle(accountId, phone, text, fileCtx);
     }
 
