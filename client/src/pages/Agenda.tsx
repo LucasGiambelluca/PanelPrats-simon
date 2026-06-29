@@ -490,9 +490,13 @@ export default function Agenda() {
       date: dateString,
       startHour: startHourStr,
       endHour: endHourStr,
-      account_id: activeAccountId || '',
+      // En vista unificada activeAccountId === 'all' (no es una cuenta real). Para una
+      // cita nueva prefijamos una cuenta real (la primera) — el usuario la confirma/cambia
+      // en el select "Asignar a Cuenta". Sin esto se enviaba account_id='all' → la DB
+      // rechazaba (uuid inválido) y no se podía agendar desde la agenda.
+      account_id: (activeAccountId && activeAccountId !== 'all') ? activeAccountId : (accounts[0]?.id || ''),
       ...emptyIntake(),
-      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === activeAccountId)?.channel),
+      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === ((activeAccountId && activeAccountId !== 'all') ? activeAccountId : accounts[0]?.id))?.channel),
     });
     setIsModalOpen(true);
   };
@@ -512,9 +516,13 @@ export default function Agenda() {
       date: dateString,
       startHour: startHourStr,
       endHour: endHourStr,
-      account_id: activeAccountId || '',
+      // En vista unificada activeAccountId === 'all' (no es una cuenta real). Para una
+      // cita nueva prefijamos una cuenta real (la primera) — el usuario la confirma/cambia
+      // en el select "Asignar a Cuenta". Sin esto se enviaba account_id='all' → la DB
+      // rechazaba (uuid inválido) y no se podía agendar desde la agenda.
+      account_id: (activeAccountId && activeAccountId !== 'all') ? activeAccountId : (accounts[0]?.id || ''),
       ...emptyIntake(),
-      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === activeAccountId)?.channel),
+      canal_origen: autoCanalFromAccount(accounts.find(a => a.id === ((activeAccountId && activeAccountId !== 'all') ? activeAccountId : accounts[0]?.id))?.channel),
     });
     setIsModalOpen(true);
   };
@@ -566,6 +574,17 @@ export default function Agenda() {
     }
     if (submitting) return; // evita doble-submit → citas duplicadas
 
+    // Cuenta resuelta: nunca 'all' (vista unificada) ni vacío. La cita pertenece a una
+    // línea concreta; sin esto se mandaba 'all' y la DB rechazaba (uuid inválido).
+    const resolvedAccountId =
+      (formData.account_id && formData.account_id !== 'all') ? formData.account_id
+      : (activeAccountId && activeAccountId !== 'all') ? activeAccountId
+      : (accounts[0]?.id || '');
+    if (!resolvedAccountId) {
+      toast.error('Elegí la cuenta/línea de la cita');
+      return;
+    }
+
     try {
       setSubmitting(true);
       const startTimeISO = new Date(`${formData.date}T${formData.startHour}`).toISOString();
@@ -601,14 +620,14 @@ export default function Agenda() {
           status: formData.status,
           start_time: startTimeISO,
           end_time: endTimeISO,
-          account_id: formData.account_id || activeAccountId || '',
+          account_id: resolvedAccountId,
           ...intake,
         });
         toast.success('Cita actualizada con éxito');
       } else {
         // Create mode
         await appointmentsApi.create({
-          account_id: formData.account_id || activeAccountId || '',
+          account_id: resolvedAccountId,
           nombre: formData.nombre,
           telefono: formData.telefono,
           phone: formData.telefono,
