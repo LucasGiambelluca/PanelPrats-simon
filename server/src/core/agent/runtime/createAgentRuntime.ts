@@ -173,6 +173,7 @@ export function getAgentRuntime(): AgentRuntime {
   // redacta (redactarMensaje). El control de flujo es 100% código.
   const conversationController = new ConversationController({
     classify: (text, cctx) => classifyIntent({ complete: (o) => AIService.complete(o) }, { text, ctx: cctx }),
+    history: (a, p) => recentHistory(a, p),
     loadState: (a, p) => memory.getDialogueState(a, p),
     saveState: (a, p, s) => memory.saveDialogueState(a, p, s),
     setOptOut: (a, p) => memory.setOptOut(a, p),

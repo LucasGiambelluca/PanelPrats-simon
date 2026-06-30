@@ -136,6 +136,35 @@ describe('ConversationController — despedida CON slot pendiente', () => {
   });
 });
 
+describe('ConversationController — Fix 1: contexto (historial) al clasificador', () => {
+  it('pasa el historial reciente al classify (para que respuestas cortas no sean off_topic)', async () => {
+    const intent = makeIntent({ intent: 'responder_dato', slots_detectados: { nacionalidad: 'argentino' } });
+    const hist = [
+      { role: 'assistant' as const, content: '¿De qué nacionalidad es?' },
+      { role: 'user' as const, content: 'Argentino' },
+    ];
+    const deps = makeDeps(intent, { history: vi.fn().mockResolvedValue(hist) });
+    const ctrl = new ConversationController(deps);
+    await ctrl.handleTurn(ACCOUNT, PHONE, 'Argentino');
+    expect(deps.history).toHaveBeenCalledWith(ACCOUNT, PHONE);
+    // el classify recibió el historial en su ctx
+    expect(deps.classify).toHaveBeenCalledWith('Argentino', expect.objectContaining({ history: hist }));
+  });
+});
+
+describe('ConversationController — Fix 2: no cerrar a mitad de proceso', () => {
+  it('despedida en fase calificacion (sin slots pendientes) NO cierra: continúa', async () => {
+    const stateEnCalif = { ...createDialogueState(), fase: 'calificacion' as const, area: 'jubilacion', slots: {} };
+    const intent = makeIntent({ intent: 'despedida', es_cierre: true });
+    const deps = makeDeps(intent, { loadState: vi.fn().mockResolvedValue(stateEnCalif) });
+    const ctrl = new ConversationController(deps);
+    const outcome = await ctrl.handleTurn(ACCOUNT, PHONE, 'ok gracias');
+    expect(deps.closeConversation).not.toHaveBeenCalled(); // NO cierra a mitad de calificación
+    // jubilacion en calificacion siembra 'edad' → termina preguntándola
+    expect(outcome.kind).toBe('resolved');
+  });
+});
+
 describe('ConversationController — backstop cierre en contacto fresco', () => {
   it('es_cierre alucinado SIN despedida explícita en contacto fresco → NO cierra', async () => {
     // intent.es_cierre=true pero el label NO es 'despedida' y el contacto recién abre

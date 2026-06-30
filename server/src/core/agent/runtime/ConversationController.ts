@@ -19,6 +19,9 @@ import {
 
 export interface ControllerDeps {
   classify: (text: string, ctx: IntentContext) => Promise<IntentResult>;
+  // Historial reciente (ambas direcciones) para darle CONTEXTO al clasificador: sin
+  // esto, respuestas cortas ("Argentino", "a la tarde") se confunden con off_topic.
+  history?: (accountId: string, phone: string) => Promise<Array<{ role: 'user' | 'assistant'; content: string }>>;
   loadState: (accountId: string, phone: string) => Promise<DialogueState | null>;
   saveState: (accountId: string, phone: string, state: DialogueState) => Promise<void>;
   setOptOut: (accountId: string, phone: string) => Promise<void>;
@@ -58,6 +61,7 @@ export class ConversationController {
   ): Promise<ControllerOutcome> {
     const {
       classify,
+      history: loadHistory,
       loadState,
       saveState,
       setOptOut,
@@ -73,9 +77,10 @@ export class ConversationController {
     const loaded = await loadState(accountId, phone);
     const state: DialogueState = loaded ?? createDialogueState();
 
-    // ── Detectar área + clasificar intención ───────────────────────────────────
+    // ── Detectar área + clasificar intención (con historial como contexto) ─────
     const area = detectArea(text) ?? state.area;
-    const intent = await classify(text, { dialogueState: state, area });
+    const hist = loadHistory ? await loadHistory(accountId, phone).catch(() => []) : [];
+    const intent = await classify(text, { dialogueState: state, area, history: hist });
 
     // ── Helper: persistir SIEMPRE y devolver resolved ──────────────────────────
     const finish = async (
@@ -129,7 +134,10 @@ export class ConversationController {
       Object.keys(state.slots).length > 0 ||
       state.redirecciones_offtopic > 0;
     const quiereCerrar = intent.intent === 'despedida' || (intent.es_cierre && tuvoEnganche);
-    if (quiereCerrar) {
+    // NO cerrar a mitad de proceso: en calificación/agendado un "ok gracias" suele ser
+    // acuse, no chau. Se trata como continuación (cae al slot-filling / tool-loop).
+    const enProceso = state.fase === 'calificacion' || state.fase === 'agendado';
+    if (quiereCerrar && !enProceso) {
       // Solo cerrar si no hay nada crítico a medio llenar
       if (nextPendingSlot(state) === null) {
         const s: DialogueState = {
