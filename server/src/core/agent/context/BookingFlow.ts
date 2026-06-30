@@ -30,7 +30,7 @@ export interface BookingSlot { start: string; end: string; profileId?: string | 
 export interface BookingDeps {
   suggestOffice: (text: string) => Promise<{ oficina_sugerida: string | null; necesita_aclaracion: boolean; pregunta_aclaracion?: string }>;
   videoOfficeName: () => Promise<string | null>;
-  defaultOffice: () => Promise<string | null>; // sede presencial por defecto (presencial es la opción principal)
+  defaultOffice: () => Promise<string | null>; // sede presencial por defecto (fallback fuera de cobertura si no hay video)
   // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
   freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
   book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
@@ -186,31 +186,28 @@ function showSlotsMessage(state: BookingState, offered: OfferedOption[], lead?: 
   return `${diaPrefix}tengo disponible ${lugarLabel(state)} ${lista}. Confirmame cuál te queda más cómodo (decime el horario). 🙂`;
 }
 
-// Fuera de cobertura: presencial es SIEMPRE la opción principal. Ofrecemos presencial
-// en una sede igual (la videollamada queda como alternativa si el cliente la pide).
+// Fuera de cobertura (otra provincia / lejos de toda sede): el libreto del estudio dice
+// VIDEOLLAMADA. Ofrecemos video; solo si NO hay oficina de video caemos a una sede
+// presencial por defecto (no tendría sentido mandar a alguien de Mendoza a CABA).
 async function outOfCoverage(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
+  const video = await deps.videoOfficeName();
+  if (video) {
+    const step = await loadSlots({ ...state, modalidad: 'video', oficina: video }, deps);
+    if (step.messages.length && step.state.stage === 'await_slot') {
+      step.messages[0] = `En esa zona no tenemos sede, así que lo hacemos por videollamada. ${step.messages[0]}`;
+    }
+    return step;
+  }
+  // Sin oficina de video → recién ahí, una sede presencial por defecto.
   const sede = await deps.defaultOffice();
   if (sede) {
     const step = await loadSlots({ ...state, modalidad: 'presencial', oficina: sede }, deps);
     if (step.messages.length && step.state.stage === 'await_slot') {
-      step.messages[0] = `En esa zona no tenemos sede, pero podés venir a una de nuestras oficinas (o, si preferís, lo hacemos por videollamada). ${step.messages[0]}`;
+      step.messages[0] = `En esa zona no tenemos sede; te ofrezco una de nuestras oficinas. ${step.messages[0]}`;
     }
     return step;
   }
-  return farToVideo(state, deps); // sin sede presencial → recién ahí, videollamada
-}
-
-// Videollamada (solo si el cliente la pide o no hay sede presencial).
-async function farToVideo(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
-  const video = await deps.videoOfficeName();
-  if (!video) {
-    return { state: { ...state, stage: 'ask_modality' }, messages: ['Esa zona nos queda lejos de nuestras oficinas. ¿Lo hacemos por videollamada?'], active: true };
-  }
-  const step = await loadSlots({ ...state, modalidad: 'video', oficina: video }, deps);
-  if (step.messages.length && step.state.stage === 'await_slot') {
-    step.messages[0] = `Lo hacemos por videollamada. ${step.messages[0]}`;
-  }
-  return step;
+  return { state: { ...state, stage: 'ask_modality' }, messages: ['Esa zona nos queda lejos de nuestras oficinas. ¿Lo hacemos por videollamada?'], active: true };
 }
 
 // Carga slots de UNA oficina y arma el paso await_slot. Si no hay, ofrece alternativa.

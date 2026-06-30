@@ -83,14 +83,23 @@ describe('BookingFlow — modalidad y zona', () => {
     expect(r.state.stage).toBe('ask_zone');
   });
 
-  it('zona fuera de cobertura → ofrece PRESENCIAL en una sede (presencial es la opción principal)', async () => {
+  it('zona fuera de cobertura → ofrece VIDEOLLAMADA (otra provincia/lejos → video, libreto)', async () => {
     const deps = makeDeps();
     const start = await startBooking({ modalidad: 'presencial' }, deps);
     const step = await advanceBooking(start.state, 'soy de Córdoba', deps);
-    expect(step.state.oficina).toBe('Capital');       // sede por defecto, NO video
-    expect(step.state.modalidad).toBe('presencial');
+    expect(step.state.oficina).toBe('Videollamada');  // video, NO la sede presencial lejana
+    expect(step.state.modalidad).toBe('video');
     expect(step.state.stage).toBe('await_slot');
     expect(step.messages.join(' ')).toMatch(/no tenemos sede|videollamada/i);
+  });
+
+  it('fuera de cobertura SIN oficina de video → recién ahí, sede presencial por defecto', async () => {
+    const deps = makeDeps({ videoOfficeName: vi.fn(async () => null) });
+    const start = await startBooking({ modalidad: 'presencial' }, deps);
+    const step = await advanceBooking(start.state, 'soy de Córdoba', deps);
+    expect(step.state.modalidad).toBe('presencial');
+    expect(step.state.oficina).toBe('Capital');
+    expect(step.state.stage).toBe('await_slot');
   });
 });
 
