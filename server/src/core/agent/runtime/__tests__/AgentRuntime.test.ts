@@ -99,6 +99,38 @@ describe('AgentRuntime.handle', () => {
     expect(out[0].toLowerCase()).toContain('persona'); // mensaje de cortesía + derivación
     expect(deps.ai.completeWithTools.mock.calls.length).toBe(5);
   });
+
+  it('gate NO arranca booking si el mensaje toca un área de calificación (manda el LLM)', async () => {
+    const deps = makeDeps([{ content: 'Soy Estela. ¿Me decís tu edad?' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn().mockResolvedValue({ messages: ['NO debería arrancar'], active: true }),
+    };
+    (deps as any).bookingIntent = vi.fn(() => ({ start: true }));
+    (deps as any).areaDetector = vi.fn(() => 'jubilacion_mujer');
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', '¿Puedo reservar una cita por Jubilación de mujer?', {});
+    expect((deps as any).booking.start).not.toHaveBeenCalled();   // NO saltea el libreto
+    expect(deps.ai.completeWithTools).toHaveBeenCalled();          // sí pasó por el LLM
+    expect(out).toEqual(['Soy Estela. ¿Me decís tu edad?']);
+  });
+
+  it('gate SÍ arranca booking en un pedido de turno sin área', async () => {
+    const deps = makeDeps([{ content: 'no debería llamarse el LLM' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn().mockResolvedValue({ messages: ['¿Presencial o por videollamada?'], active: true }),
+    };
+    (deps as any).bookingIntent = vi.fn(() => ({ start: true }));
+    (deps as any).areaDetector = vi.fn(() => null);
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'quiero sacar un turno', {});
+    expect((deps as any).booking.start).toHaveBeenCalled();
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();
+    expect(out).toEqual(['¿Presencial o por videollamada?']);
+  });
 });
 
 describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', () => {

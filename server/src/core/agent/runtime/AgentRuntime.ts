@@ -7,6 +7,7 @@ import {
   recordReply,
   type LoopGuardState,
 } from './LoopGuard';
+import type { AreaKey } from '../context/AreaDetector';
 
 const MAX_ITERATIONS = 5;
 const FALLBACK = 'Disculpá, esto mejor lo ve una persona del estudio. Ya te derivo. 🙌';
@@ -31,6 +32,9 @@ export interface RuntimeDeps {
   };
   // Gate determinístico de intención: arranca el agendado sin esperar al LLM.
   bookingIntent?: (text: string) => { start: boolean; modalidad?: 'presencial' | 'video' };
+  // Clasifica el área de la consulta. Si el mensaje toca un área de calificación,
+  // el gate NO arranca el booking determinístico (deja calificar al LLM/libreto).
+  areaDetector?: (text: string) => AreaKey | null;
   // LoopGuard: tope de llamadas IA por contacto (config en account.loopGuard).
   // Sin esto, el guard queda inactivo (comportamiento previo intacto).
   loopGuard?: {
@@ -105,8 +109,14 @@ export class AgentRuntime {
       // Intención clara de turno nuevo → arrancamos el flujo de una, sin esperar al LLM.
       const intent = this.deps.bookingIntent(text);
       if (intent.start) {
-        const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad }, ctx.conversation ?? text);
-        if (r.messages.length) return finishWith(r.messages);
+        // PERO: si el mensaje toca un área de calificación (jubilación, etc.), NO
+        // arrancamos el booking: lo conduce el LLM/libreto, que califica primero y
+        // recién después llama start_booking. El gate solo arranca pedidos "pelados".
+        const area = this.deps.areaDetector?.(text) ?? null;
+        if (!area) {
+          const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad }, ctx.conversation ?? text);
+          if (r.messages.length) return finishWith(r.messages);
+        }
       }
     }
 
