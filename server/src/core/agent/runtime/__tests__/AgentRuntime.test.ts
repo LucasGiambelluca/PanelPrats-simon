@@ -131,6 +131,24 @@ describe('AgentRuntime.handle', () => {
     expect(deps.ai.completeWithTools).not.toHaveBeenCalled();
     expect(out).toEqual(['¿Presencial o por videollamada?']);
   });
+
+  it('inyecta la CALIFICACIÓN PREVIA vigente en la ficha del persona', async () => {
+    const deps = makeDeps([{ content: 'Listo' }]);
+    (deps as any).memory = {
+      load: vi.fn().mockResolvedValue({
+        profile: {}, preferences: {}, summary: null, fichaText: 'FICHA: María.',
+        calificacion: { jubilacion_mujer: { resultado: 'gratis', datos: { edad: 61 }, calificado_at: new Date().toISOString() } },
+      }),
+    };
+    (deps as any).areaDetector = vi.fn(() => 'jubilacion_mujer');
+    (deps as any).loadAccount = vi.fn().mockResolvedValue({ accountId: 'acc1', agentName: 'Sofía', calificacionTtlDays: 30 });
+    const rt = new AgentRuntime(deps as any);
+    await rt.handle('acc1', '549111', 'hola de nuevo', {});
+    const fichaArg = (deps.persona.build.mock.calls[0] as unknown[])[1] as string;
+    expect(fichaArg).toContain('FICHA: María.');
+    expect(fichaArg).toContain('CALIFICACIÓN PREVIA');
+    expect(fichaArg).toContain('Jubilación Mujer');
+  });
 });
 
 describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', () => {

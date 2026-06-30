@@ -1,4 +1,5 @@
 import type { ToolContext } from './types';
+import { buildCalificacionFicha } from './ContactMemory';
 import {
   normalizeLoopGuardConfig,
   evaluateRate,
@@ -16,7 +17,7 @@ const FALLBACK = 'Disculpá, esto mejor lo ve una persona del estudio. Ya te der
 export interface RuntimeDeps {
   ai: { completeWithTools: (opts: any) => Promise<{ content?: string; toolCalls?: Array<{ id: string; name: string; args: any }> }> };
   persona: { build: (account: any, fichaText: string, continuityBlock?: string) => string };
-  memory: { load: (accountId: string, phone: string) => Promise<{ fichaText: string }> };
+  memory: { load: (accountId: string, phone: string) => Promise<{ fichaText: string; calificacion?: Record<string, any> | null }> };
   tools: { schemas: () => any[]; execute: (name: string, args: any, ctx: ToolContext) => Promise<{ ok: boolean; data?: any; error?: string }> };
   loadAccount: (accountId: string) => Promise<any>;
   history: (accountId: string, phone: string) => Promise<Array<{ role: 'user' | 'assistant'; content: string }>>;
@@ -61,7 +62,12 @@ export class AgentRuntime {
 
     // Bloque de continuidad ("este contacto ya habló antes, retomá") al system prompt.
     const continuity = convCtx && this.deps.buildContinuity ? this.deps.buildContinuity(convCtx) : '';
-    const systemPrompt = this.deps.persona.build(account, ficha.fichaText, continuity);
+    // Calificación previa vigente (< TTL por cuenta) → a la ficha, para no re-preguntar.
+    const msgArea = this.deps.areaDetector?.(text) ?? null;
+    const ttlDays = Number((account as any)?.calificacionTtlDays) || 30;
+    const calBlock = buildCalificacionFicha(ficha.calificacion, msgArea, ttlDays, (this.deps.now ?? Date.now)());
+    const fichaText = calBlock ? `${ficha.fichaText}\n${calBlock}` : ficha.fichaText;
+    const systemPrompt = this.deps.persona.build(account, fichaText, continuity);
     const tools = this.deps.tools.schemas();
     const messages: any[] = [...history, { role: 'user', content: text }];
 
