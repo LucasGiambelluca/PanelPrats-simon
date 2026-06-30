@@ -1,9 +1,10 @@
 import type { AgentAccountConfig } from './types';
 
-export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string, continuityBlock = ''): string {
+export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string, continuityBlock = '', objetivo = ''): string {
   const nombre = account.agentName?.trim() || 'Sofía';
   const estudio = account.estudioNombre?.trim() || 'el estudio';
   const tono = account.agentPersona?.trim();
+  const objetivoTrim = objetivo.trim();
 
   return [
     `Sos ${nombre}, asistente de ${estudio}. Atendés por WhatsApp.`,
@@ -45,5 +46,10 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     account.businessContext ? `DATOS DEL ESTUDIO:\n${account.businessContext}\n` : '',
     continuityBlock ? `${continuityBlock}\n` : '',
     fichaText,
+    // OBJETIVO DEL TURNO (inyectado por el ConversationController): el flujo lo decide
+    // el código; vos SOLO redactás este mensaje. No decidas vos los próximos pasos.
+    objetivoTrim
+      ? `\nOBJETIVO DE ESTE MENSAJE (decidido por el sistema, no por vos): ${objetivoTrim}\nRespondé SOLO ese mensaje: UNA sola pregunta o frase, breve. No avances el flujo por tu cuenta.`
+      : '',
   ].filter((l) => l !== '').join('\n');
 }

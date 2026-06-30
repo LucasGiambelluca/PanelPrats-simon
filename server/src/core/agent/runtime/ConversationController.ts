@@ -32,7 +32,7 @@ export interface ControllerDeps {
     phone: string,
     payload: { motivo: string; resumen_caso: string },
   ) => Promise<void>;
-  redactar: (objetivo: string, ctx: { area?: string | null }) => Promise<string>;
+  redactar: (objetivo: string, ctx: { area?: string | null; accountId?: string }) => Promise<string>;
   detectArea: (text: string) => string | null;
   now: () => string; // ISO inyectable (no usa new Date() adentro)
   offtopicTope?: number; // default 2
@@ -166,7 +166,7 @@ export class ConversationController {
 
       const msg = await redactar(
         'Redirigí amablemente al tema del estudio (jubilaciones, pensiones, laboral / despido, ART, accidentes). Una sola frase, cordial.',
-        { area },
+        { area, accountId },
       );
       return finish(s, [msg]);
     }
@@ -194,7 +194,7 @@ export class ConversationController {
       s = markAsked(s, slot, now());
       const msg = await redactar(
         `Pedí el dato "${slot}" de forma natural y breve, UNA sola pregunta, sin re-saludar.`,
-        { area },
+        { area, accountId },
       );
       return finish(s, [msg]);
     }

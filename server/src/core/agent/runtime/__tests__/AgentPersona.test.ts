@@ -31,6 +31,14 @@ describe('buildPersona', () => {
     expect(prompt.toUpperCase()).toContain('CALIFICACIÓN PREVIA');
   });
 
+  it('inyecta el OBJETIVO del turno cuando el controller lo pasa', () => {
+    const conObjetivo = buildPersona({ accountId: 'acc1', agentName: 'Sofía' } as any, 'FICHA: nuevo.', '', 'Pedí la edad, una sola pregunta');
+    expect(conObjetivo.toUpperCase()).toContain('OBJETIVO DE ESTE MENSAJE');
+    expect(conObjetivo).toContain('Pedí la edad');
+    const sinObjetivo = buildPersona({ accountId: 'acc1', agentName: 'Sofía' } as any, 'FICHA: nuevo.');
+    expect(sinObjetivo.toUpperCase()).not.toContain('OBJETIVO DE ESTE MENSAJE');
+  });
+
   it('inyecta PROCEDIMIENTOS cuando la cuenta los tiene', () => {
     const prompt = buildPersona(
       { accountId: 'acc1', agentName: 'Sofía', agentProcedures: 'Despido: preguntá hace cuánto y la edad.' } as any,

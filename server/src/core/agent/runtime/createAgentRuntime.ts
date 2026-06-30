@@ -20,16 +20,19 @@ import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
 
-// Redacta UN mensaje (pregunta de slot / redirección off-topic) con tono del estudio.
-// El controller le da el OBJETIVO; el LLM SOLO redacta, no decide flujo. La persona
-// completa con el OBJETIVO inyectado se afina en la Fase 6.
-async function redactarMensaje(objetivo: string): Promise<string> {
-  const sys = [
-    'Sos la secretaria de un estudio jurídico previsional y laboral. Atendés por WhatsApp,',
-    'cálida y profesional, de "usted", en español rioplatense. No re-saludes si la charla ya empezó.',
-    `OBJETIVO DE ESTE MENSAJE: ${objetivo}`,
-    'Respondé SOLO ese mensaje: UNA sola pregunta o frase, breve, sin listas ni rodeos. No inventes datos.',
-  ].join('\n');
+// Redacta UN mensaje (pregunta de slot / redirección off-topic) con la persona REAL
+// del estudio + el OBJETIVO inyectado por el controller. El LLM SOLO redacta; el flujo
+// lo decide el código.
+async function redactarMensaje(objetivo: string, accountId?: string): Promise<string> {
+  let sys: string;
+  if (accountId) {
+    const account = await loadAccount(accountId).catch(() => null);
+    sys = account
+      ? buildPersona(account, 'FICHA: (redacción puntual).', '', objetivo)
+      : `Secretaria de un estudio jurídico previsional/laboral, de "usted", cálida. OBJETIVO: ${objetivo}. Respondé SOLO ese mensaje, una sola frase.`;
+  } else {
+    sys = `Secretaria de un estudio jurídico previsional/laboral, de "usted", cálida. OBJETIVO: ${objetivo}. Respondé SOLO ese mensaje, una sola frase.`;
+  }
   try {
     const out = await AIService.complete({ systemPrompt: sys, userMessage: objetivo, temperature: 0.3, maxTokens: 120 });
     return (out && out.trim()) || '¿Me puede dar ese dato, por favor?';
@@ -175,7 +178,7 @@ export function getAgentRuntime(): AgentRuntime {
     setOptOut: (a, p) => memory.setOptOut(a, p),
     closeConversation: (a, p, motivo) => memory.closeConversation(a, p, motivo),
     handoff: (a, p, payload) => handoff(a, p, payload),
-    redactar: (objetivo) => redactarMensaje(objetivo),
+    redactar: (objetivo, rctx) => redactarMensaje(objetivo, rctx?.accountId),
     detectArea,
     now: () => new Date().toISOString(),
   });
