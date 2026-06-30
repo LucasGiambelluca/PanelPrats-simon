@@ -29,4 +29,13 @@ describe('detectArea', () => {
   it('vacío → null', () => {
     expect(detectArea('')).toBeNull();
   });
+  it('viudez con "fallecieron" (plural)', () => {
+    expect(detectArea('fallecieron mis padres, consulto por pensión')).toBe('pension_viudez');
+  });
+  it('ART standalone (sigla suelta)', () => {
+    expect(detectArea('quiero consultar por ART')).toBe('art');
+  });
+  it('laboral standalone', () => {
+    expect(detectArea('es un tema laboral')).toBe('laboral');
+  });
 });
