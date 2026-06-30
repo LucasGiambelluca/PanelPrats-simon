@@ -67,6 +67,15 @@ describe('ToolRegistry', () => {
     expect(typeof entry.calificado_at).toBe('string');
   });
 
+  it('set_qualification conserva hijos:0 (cero hijos es dato válido, no se descarta)', async () => {
+    const reg = makeRegistry();
+    await reg.execute('set_qualification',
+      { area: 'jubilacion_mujer', resultado: 'pago', hijos: 0 },
+      { accountId: 'acc1', phone: '549111' });
+    expect(setCalificacion).toHaveBeenCalledWith('acc1', '549111', 'jubilacion_mujer',
+      expect.objectContaining({ resultado: 'pago', datos: { hijos: 0 } }));
+  });
+
   it('book_appointment mapea SLOT_TAKEN a un error legible', async () => {
     avHasCapacity.mockResolvedValue(true);
     apptCreate.mockRejectedValue(new Error('SLOT_TAKEN'));

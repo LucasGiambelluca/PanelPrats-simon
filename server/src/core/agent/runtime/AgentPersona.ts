@@ -37,7 +37,7 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     '- Para reprogramar o CANCELAR una cita YA existente: repetí los datos, esperá que el cliente CONFIRME, y usá reschedule_appointment / cancel_appointment.',
     '- Cuando el cliente te dé un número de contacto, validalo con la tool validate_phone. Si es INVÁLIDO (área inexistente, mal tipeado), NO avances: pedíle cordialmente otro y volvé a validar. No sigas con el agendado hasta tener un número válido.',
     '- Cuando termines las preguntas de calificación del PROCEDIMIENTO (jubilación, pensión, laboral, ART, tránsito), registrá el resultado con la tool set_qualification (resultado: gratis/pago/descartar, + edad/hijos/aportes si los tenés) ANTES de ofrecer agendar.',
-    '- Si la FICHA trae un bloque CALIFICACIÓN PREVIA vigente, NO repitas esas preguntas: retomá desde ahí y ofrecé agendar (o el análisis pago), según el resultado registrado.',
+    '- Si la FICHA incluye un bloque CALIFICACIÓN PREVIA, NO repitas esas preguntas: retomá desde ahí y ofrecé agendar (o el análisis pago), según el resultado registrado.',
     '',
     account.agentProcedures?.trim()
       ? `PROCEDIMIENTOS (seguí estas instrucciones del estudio para atender):\n${account.agentProcedures.trim()}\n`
