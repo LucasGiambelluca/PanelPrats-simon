@@ -63,4 +63,21 @@ describe('ContactMemory.buildCalificacionFicha', () => {
     const out = buildCalificacionFicha(fresca, null, 30, NOW);
     expect(out).toContain('Jubilación Mujer');
   });
+
+  it('con área del mensaje, suprime las otras áreas presentes', () => {
+    const dos = {
+      ...fresca,
+      laboral: { resultado: 'pago', datos: {}, calificado_at: '2026-06-29T12:00:00.000Z' },
+    };
+    const out = buildCalificacionFicha(dos, 'jubilacion_mujer', 30, NOW);
+    expect(out).toContain('Jubilación Mujer');
+    expect(out).not.toContain('Laboral');
+  });
+
+  it('usa "día" singular cuando calificó hace 1 día', () => {
+    const ayer = { jubilacion: { resultado: 'gratis', datos: {}, calificado_at: '2026-06-29T11:00:00.000Z' } };
+    const out = buildCalificacionFicha(ayer, 'jubilacion', 30, NOW);
+    expect(out).toContain('hace 1 día');
+    expect(out).not.toContain('hace 1 días');
+  });
 });

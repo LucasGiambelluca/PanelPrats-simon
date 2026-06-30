@@ -75,14 +75,24 @@ export function buildCalificacionFicha(
 export class ContactMemory {
   /** Carga la memoria del contacto + próxima cita; arma la ficha lista para el prompt. */
   async load(accountId: string, phone: string): Promise<ContactFicha> {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('contact_memory').select('profile, preferences, long_term_summary, calificacion')
       .eq('account_id', accountId).eq('phone', phone).maybeSingle();
 
-    const profile = (data?.profile ?? {}) as Record<string, any>;
-    const preferences = (data?.preferences ?? {}) as Record<string, any>;
-    const summary = (data?.long_term_summary ?? null) as string | null;
-    const calificacion = ((data as any)?.calificacion ?? null) as Record<string, any> | null;
+    // Columna calificacion aún no migrada (0030 pendiente): recaer al select sin ella
+    // para NO perder profile/preferences/summary de todos los contactos.
+    let row: any = data;
+    if (error) {
+      const { data: d2 } = await supabase
+        .from('contact_memory').select('profile, preferences, long_term_summary')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      row = d2;
+    }
+
+    const profile = (row?.profile ?? {}) as Record<string, any>;
+    const preferences = (row?.preferences ?? {}) as Record<string, any>;
+    const summary = (row?.long_term_summary ?? null) as string | null;
+    const calificacion = (row?.calificacion ?? null) as Record<string, any> | null;
 
     let proximaCita: string | null = null;
     try {
