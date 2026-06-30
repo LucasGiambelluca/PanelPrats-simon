@@ -173,6 +173,21 @@ describe('AgentRuntime.handle', () => {
     expect(deps.ai.completeWithTools).toHaveBeenCalled();        // delegó al tool-loop
     expect(out).toEqual(['Sí, gestionamos moratoria.']);
   });
+
+  it('con agendado ACTIVO, BookingFlow conduce y el controller NO se invoca', async () => {
+    const deps = makeDeps([{ content: 'no debería' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(true),
+      advance: vi.fn().mockResolvedValue({ messages: ['Elegí 1, 2 o 3'], active: true }),
+      start: vi.fn(),
+    };
+    (deps as any).conversation = { handleTurn: vi.fn() };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'el primero', {});
+    expect((deps as any).booking.advance).toHaveBeenCalled();
+    expect((deps as any).conversation.handleTurn).not.toHaveBeenCalled(); // mid-agendado saltea el controller
+    expect(out).toEqual(['Elegí 1, 2 o 3']);
+  });
 });
 
 describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', () => {

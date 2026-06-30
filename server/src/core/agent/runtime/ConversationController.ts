@@ -120,7 +120,16 @@ export class ConversationController {
     }
 
     // ── 3. Cierre natural / despedida ──────────────────────────────────────────
-    if (intent.es_cierre || intent.intent === 'despedida') {
+    // Backstop anti-falso-positivo: un 'es_cierre' alucinado sobre un contacto FRESCO
+    // (recién abre, sin interacción previa) NO debe cerrar la conversación. Para cerrar
+    // exigimos despedida EXPLÍCITA (label del modelo) o que ya haya habido enganche
+    // (fase avanzada, algún slot, o redirecciones previas).
+    const tuvoEnganche =
+      state.fase !== 'consulta' ||
+      Object.keys(state.slots).length > 0 ||
+      state.redirecciones_offtopic > 0;
+    const quiereCerrar = intent.intent === 'despedida' || (intent.es_cierre && tuvoEnganche);
+    if (quiereCerrar) {
       // Solo cerrar si no hay nada crítico a medio llenar
       if (nextPendingSlot(state) === null) {
         const s: DialogueState = {

@@ -136,6 +136,21 @@ describe('ConversationController — despedida CON slot pendiente', () => {
   });
 });
 
+describe('ConversationController — backstop cierre en contacto fresco', () => {
+  it('es_cierre alucinado SIN despedida explícita en contacto fresco → NO cierra', async () => {
+    // intent.es_cierre=true pero el label NO es 'despedida' y el contacto recién abre
+    // (fase consulta, sin slots, sin redirecciones) → no debe cerrar.
+    const intent = makeIntent({ intent: 'consultar', es_cierre: true });
+    const deps = makeDeps(intent); // loadState default → estado fresco
+    const ctrl = new ConversationController(deps);
+
+    const outcome = await ctrl.handleTurn(ACCOUNT, PHONE, '¿hacen jubilaciones?');
+
+    expect(deps.closeConversation).not.toHaveBeenCalled();
+    expect(outcome.kind).toBe('advance');
+  });
+});
+
 describe('ConversationController — off_topic primera vez', () => {
   it('llama redactar con objetivo de redirección; resolved; redirecciones_offtopic=1; NO cierra', async () => {
     const intent = makeIntent({ intent: 'off_topic' });
