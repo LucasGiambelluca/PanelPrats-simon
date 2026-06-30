@@ -621,6 +621,8 @@ export default function Agenda() {
 
       if (selectedApp) {
         // Edit mode
+        // account_id NO se manda en el update: la cita no cambia de cuenta al
+        // editar y updateAppointmentSchema es .strict() → una key extra da 400.
         await appointmentsApi.update(selectedApp.id, {
           nombre: formData.nombre,
           telefono: formData.telefono,
@@ -629,7 +631,6 @@ export default function Agenda() {
           status: formData.status,
           start_time: startTimeISO,
           end_time: endTimeISO,
-          account_id: resolvedAccountId,
           ...intake,
         });
         toast.success('Cita actualizada con éxito');
