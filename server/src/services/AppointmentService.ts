@@ -346,5 +346,29 @@ export const AppointmentService = {
     memoryAppointments.delete(id);
     console.log(`🗑️ [memory] Appointment deleted: ${id}`);
     return true;
-  }
+  },
+
+  /** Persiste el resultado de la auditoría en la cita. Best-effort si la columna no existe (0032 sin aplicar). */
+  async saveAudit(id: string, audit: import('../core/agent/context/AppointmentAuditor').AuditResult): Promise<void> {
+    if (!isSupabaseConfigured) {
+      const a = memoryAppointments.get(id);
+      if (a) (a as any).audit_json = audit;
+      return;
+    }
+    const { error } = await supabase
+      .from('appointments')
+      .update({ audit_json: audit as any, audit_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error && !/column .*audit_/.test(error.message || '')) throw new Error(error.message);
+  },
+
+  /** Marca un campo del audit_json como resuelto (tras aplicar la sugerencia) y recalcula revisar. */
+  async resolveAuditField(id: string, campo: string): Promise<void> {
+    const appt = await this.getById(id);
+    const audit: any = (appt as any)?.audit_json;
+    if (!audit || !Array.isArray(audit.campos)) return;
+    for (const c of audit.campos) if (c.campo === campo) c.resuelto = true;
+    audit.revisar = audit.campos.some((c: any) => !c.coincide && !c.resuelto && (c.confianza ?? 0) >= 0.6);
+    await this.saveAudit(id, audit);
+  },
 };
