@@ -71,7 +71,19 @@ Reglas DURAS:
 - Sugerí un valor SOLO si hay evidencia explícita y clara en el chat.
 - confianza 0..1: qué tan seguro estás de la discrepancia.
 - motivo válido: jubilacion, puam, pension_v, reajuste, rti, laboral, pension_discapacidad, asesoramiento_pago, otro.
+- La fecha de la cita ya está expresada en HORA DE ARGENTINA. Compará el horario real acordado; NO marques discrepancia por diferencias de huso horario, formato o zona (UTC vs -03:00). Solo marcá fecha si el DÍA u HORA acordados en el chat son realmente distintos.
 Respondé SOLO JSON: {"campos":[{"campo":"nombre|motivo|fecha|oficina","valor_cita":string|null,"valor_chat":string|null,"coincide":boolean,"confianza":number,"sugerencia":string|null,"nota":string}]}`;
+
+function fmtFechaAR(iso: string | null): string {
+  if (!iso) return '(vacío)';
+  try {
+    return new Date(iso).toLocaleString('es-AR', {
+      weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: 'America/Argentina/Buenos_Aires',
+    });
+  } catch { return iso; }
+}
 
 function buildUserMessage(input: AuditInput): string {
   const a = input.appointment;
@@ -79,7 +91,7 @@ function buildUserMessage(input: AuditInput): string {
     'CITA:',
     `- nombre: ${a.nombre ?? '(vacío)'}`,
     `- motivo: ${a.motivo ?? '(vacío)'}`,
-    `- fecha: ${a.start_time ?? '(vacío)'}`,
+    `- fecha: ${fmtFechaAR(a.start_time)} (hora Argentina)`,
     `- oficina: ${a.oficina ?? '(vacío)'}`,
     '',
     'CONVERSACIÓN:',

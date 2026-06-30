@@ -1974,33 +1974,41 @@ export default function Agenda() {
                 <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
                   <div className="font-semibold text-amber-800 mb-2">⚠ Auditoría: datos a revisar</div>
                   {(selectedApp as any).audit_json.campos
-                    .filter((c: any) => !c.coincide && !c.resuelto && c.sugerencia)
-                    .map((c: any) => (
-                      <div key={c.campo} className="flex items-center justify-between gap-2 py-1 text-sm">
-                        <div>
-                          <b>{c.campo}</b>:{' '}
-                          <span className="line-through text-gray-500">{c.valor_cita ?? '—'}</span>{' '}
-                          → <span className="text-emerald-700">{c.sugerencia}</span>
-                          {c.nota && <div className="text-xs text-gray-500">{c.nota}</div>}
+                    .filter((c: any) => !c.coincide && !c.resuelto)
+                    .map((c: any) => {
+                      // Solo estos campos se pueden aplicar con 1 clic (la fecha se corrige a mano:
+                      // la ruta no la escribe y un string de fecha no es seguro de aplicar automático).
+                      const aplicable = ['telefono', 'nombre', 'motivo', 'oficina'].includes(c.campo) && !!c.sugerencia;
+                      return (
+                        <div key={c.campo} className="flex items-center justify-between gap-2 py-1 text-sm">
+                          <div>
+                            <b>{c.campo}</b>:{' '}
+                            <span className="line-through text-gray-500">{c.valor_cita ?? '—'}</span>
+                            {c.sugerencia && <> → <span className="text-emerald-700">{c.sugerencia}</span></>}
+                            {c.nota && <div className="text-xs text-gray-500">{c.nota}</div>}
+                            {!aplicable && <div className="text-xs text-amber-700">Revisá y corregí a mano si corresponde.</div>}
+                          </div>
+                          {aplicable && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await appointmentsApi.applyAuditFix(selectedApp.id, c.campo);
+                                  toast.success('Aplicado');
+                                  loadAppointments(true);
+                                  setIsModalOpen(false);
+                                } catch (err: any) {
+                                  toast.error(err.message);
+                                }
+                              }}
+                              className="px-2 py-1 rounded bg-emerald-600 text-white text-xs whitespace-nowrap"
+                            >
+                              Aplicar
+                            </button>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await appointmentsApi.applyAuditFix(selectedApp.id, c.campo);
-                              toast.success('Aplicado');
-                              loadAppointments(true);
-                              setIsModalOpen(false);
-                            } catch (err: any) {
-                              toast.error(err.message);
-                            }
-                          }}
-                          className="px-2 py-1 rounded bg-emerald-600 text-white text-xs whitespace-nowrap"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
 
