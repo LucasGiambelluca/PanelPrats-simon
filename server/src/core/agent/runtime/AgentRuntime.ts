@@ -36,6 +36,13 @@ export interface RuntimeDeps {
   // Clasifica el área de la consulta. Si el mensaje toca un área de calificación,
   // el gate NO arranca el booking determinístico (deja calificar al LLM/libreto).
   areaDetector?: (text: string) => AreaKey | null;
+  // Capa de interpretación + dialogue state (controller manda): corre ANTES del
+  // tool-loop. 'resolved' → el turno ya está resuelto (no se llama al LLM con tools).
+  // 'advance' → delega al tool-loop (set_qualification / start_booking / FAQ).
+  conversation?: {
+    handleTurn: (accountId: string, phone: string, text: string) =>
+      Promise<{ kind: 'resolved'; messages: string[] } | { kind: 'advance' }>;
+  };
   // LoopGuard: tope de llamadas IA por contacto (config en account.loopGuard).
   // Sin esto, el guard queda inactivo (comportamiento previo intacto).
   loopGuard?: {
@@ -108,20 +115,29 @@ export class AgentRuntime {
     };
 
     // Agendado en curso: el state machine determinístico conduce, sin pasar por el LLM.
+    // (La fase 'agendado' está DELEGADA a BookingFlow; el controller no interfiere a medio agendar.)
     if (this.deps.booking && (await this.deps.booking.isActive(accountId, phone).catch(() => false))) {
       const r = await this.deps.booking.advance(accountId, phone, text, ctx.conversation ?? text);
       if (r.messages.length) return finishWith(r.messages);
-    } else if (this.deps.booking && this.deps.bookingIntent) {
-      // Intención clara de turno nuevo → arrancamos el flujo de una, sin esperar al LLM.
-      const intent = this.deps.bookingIntent(text);
-      if (intent.start) {
-        // PERO: si el mensaje toca un área de calificación (jubilación, etc.), NO
-        // arrancamos el booking: lo conduce el LLM/libreto, que califica primero y
-        // recién después llama start_booking. El gate solo arranca pedidos "pelados".
-        const area = this.deps.areaDetector?.(text) ?? null;
-        if (!area) {
-          const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad }, ctx.conversation ?? text);
-          if (r.messages.length) return finishWith(r.messages);
+    } else {
+      // Capa de interpretación (controller manda): interpreta intención + slot-filling
+      // determinístico ANTES del tool-loop. Resuelve opt-out / cierre / frustración /
+      // off-topic / preguntas de calificación sin tocar el LLM-con-tools.
+      if (this.deps.conversation) {
+        const outcome = await this.deps.conversation.handleTurn(accountId, phone, text).catch(() => ({ kind: 'advance' as const }));
+        if (outcome.kind === 'resolved') return finishWith(outcome.messages);
+        // 'advance' → sigue al gate de booking pelado + tool-loop de abajo.
+      }
+      // Gate de turno NUEVO sin área (pedido "pelado"): lo arranca el flujo determinístico.
+      // Si el mensaje toca un área de calificación, NO se arranca: el LLM/libreto califica primero.
+      if (this.deps.booking && this.deps.bookingIntent) {
+        const intent = this.deps.bookingIntent(text);
+        if (intent.start) {
+          const area = this.deps.areaDetector?.(text) ?? null;
+          if (!area) {
+            const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad }, ctx.conversation ?? text);
+            if (r.messages.length) return finishWith(r.messages);
+          }
         }
       }
     }

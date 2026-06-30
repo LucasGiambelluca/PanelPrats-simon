@@ -149,6 +149,30 @@ describe('AgentRuntime.handle', () => {
     expect(fichaArg).toContain('CALIFICACIÓN PREVIA');
     expect(fichaArg).toContain('Jubilación Mujer');
   });
+
+  it('controller "resolved" corta el turno: devuelve sus mensajes y NO llama al tool-loop', async () => {
+    const deps = makeDeps([{ content: 'NO debería llamarse el LLM' }]);
+    (deps as any).conversation = {
+      handleTurn: vi.fn().mockResolvedValue({ kind: 'resolved', messages: ['Listo, no le vamos a escribir más. 🙏'] }),
+    };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'no me escriban mas', {});
+    expect((deps as any).conversation.handleTurn).toHaveBeenCalledWith('acc1', '549111', 'no me escriban mas');
+    expect(out).toEqual(['Listo, no le vamos a escribir más. 🙏']);
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();   // turno resuelto antes del tool-loop
+  });
+
+  it('controller "advance" delega: corre el tool-loop normalmente', async () => {
+    const deps = makeDeps([{ content: 'Sí, gestionamos moratoria.' }]);
+    (deps as any).conversation = {
+      handleTurn: vi.fn().mockResolvedValue({ kind: 'advance' }),
+    };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', '¿hacen moratoria?', {});
+    expect((deps as any).conversation.handleTurn).toHaveBeenCalled();
+    expect(deps.ai.completeWithTools).toHaveBeenCalled();        // delegó al tool-loop
+    expect(out).toEqual(['Sí, gestionamos moratoria.']);
+  });
 });
 
 describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', () => {

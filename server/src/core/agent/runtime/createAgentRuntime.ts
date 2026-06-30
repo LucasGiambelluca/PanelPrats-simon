@@ -17,6 +17,26 @@ import { BookingService } from '../context/BookingService';
 import { BookingStateStore } from '../context/BookingStateStore';
 import { detectBookingIntent } from '../context/BookingFlow';
 import { detectArea } from '../context/AreaDetector';
+import { ConversationController } from './ConversationController';
+import { classifyIntent } from '../context/IntentClassifier';
+
+// Redacta UN mensaje (pregunta de slot / redirección off-topic) con tono del estudio.
+// El controller le da el OBJETIVO; el LLM SOLO redacta, no decide flujo. La persona
+// completa con el OBJETIVO inyectado se afina en la Fase 6.
+async function redactarMensaje(objetivo: string): Promise<string> {
+  const sys = [
+    'Sos la secretaria de un estudio jurídico previsional y laboral. Atendés por WhatsApp,',
+    'cálida y profesional, de "usted", en español rioplatense. No re-saludes si la charla ya empezó.',
+    `OBJETIVO DE ESTE MENSAJE: ${objetivo}`,
+    'Respondé SOLO ese mensaje: UNA sola pregunta o frase, breve, sin listas ni rodeos. No inventes datos.',
+  ].join('\n');
+  try {
+    const out = await AIService.complete({ systemPrompt: sys, userMessage: objetivo, temperature: 0.3, maxTokens: 120 });
+    return (out && out.trim()) || '¿Me puede dar ese dato, por favor?';
+  } catch {
+    return '¿Me puede dar ese dato, por favor?';
+  }
+}
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -145,6 +165,21 @@ export function getAgentRuntime(): AgentRuntime {
     },
   });
 
+  // Capa de interpretación (controller manda): interpreta intención + slot-filling
+  // determinístico antes del tool-loop. El LLM solo clasifica (IntentClassifier) y
+  // redacta (redactarMensaje). El control de flujo es 100% código.
+  const conversationController = new ConversationController({
+    classify: (text, cctx) => classifyIntent({ complete: (o) => AIService.complete(o) }, { text, ctx: cctx }),
+    loadState: (a, p) => memory.getDialogueState(a, p),
+    saveState: (a, p, s) => memory.saveDialogueState(a, p, s),
+    setOptOut: (a, p) => memory.setOptOut(a, p),
+    closeConversation: (a, p, motivo) => memory.closeConversation(a, p, motivo),
+    handoff: (a, p, payload) => handoff(a, p, payload),
+    redactar: (objetivo) => redactarMensaje(objetivo),
+    detectArea,
+    now: () => new Date().toISOString(),
+  });
+
   singleton = new AgentRuntime({
     ai: { completeWithTools: (o) => AIService.completeWithTools(o) },
     persona: { build: buildPersona },
@@ -161,6 +196,7 @@ export function getAgentRuntime(): AgentRuntime {
     },
     bookingIntent: detectBookingIntent,
     areaDetector: detectArea,
+    conversation: { handleTurn: (a, p, t) => conversationController.handleTurn(a, p, t) },
     // LoopGuard: estado persistido en contact_memory (sobrevive reinicios del VPS);
     // al tocar el tope con action=handoff reusa el handover real (bot calla, pasa a Atención).
     loopGuard: {
