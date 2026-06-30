@@ -67,6 +67,10 @@ export class AgentRuntime {
       this.deps.contextLoader?.load(accountId, phone).catch(() => null) ?? Promise.resolve(null),
     ]);
 
+    // FB/IG: el "phone" del contacto es el id de la red (PSID/IGSID), NO un teléfono.
+    // El agendado debe pedir el número real en el chat (needsPhone). WhatsApp ya lo tiene.
+    const needsPhone = !!(account as any)?.channel && (account as any).channel !== 'whatsapp';
+
     // Bloque de continuidad ("este contacto ya habló antes, retomá") al system prompt.
     const continuity = convCtx && this.deps.buildContinuity ? this.deps.buildContinuity(convCtx) : '';
     // Calificación previa vigente (< TTL por cuenta) → a la ficha, para no re-preguntar.
@@ -135,7 +139,7 @@ export class AgentRuntime {
         if (intent.start) {
           const area = this.deps.areaDetector?.(text) ?? null;
           if (!area) {
-            const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad }, ctx.conversation ?? text);
+            const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad, needsPhone }, ctx.conversation ?? text);
             if (r.messages.length) return finishWith(r.messages);
           }
         }
@@ -173,7 +177,7 @@ export class AgentRuntime {
       // El modelo dispara el agendado: a partir de acá conduce el flujo determinístico.
       const startCall = res.toolCalls.find((c) => c.name === 'start_booking');
       if (this.deps.booking && startCall) {
-        const r = await this.deps.booking.start(accountId, phone, startCall.args ?? {}, ctx.conversation ?? text);
+        const r = await this.deps.booking.start(accountId, phone, { ...(startCall.args ?? {}), needsPhone }, ctx.conversation ?? text);
         if (r.messages.length) return finishWith(r.messages);
       }
 

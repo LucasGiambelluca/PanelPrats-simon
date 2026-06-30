@@ -85,7 +85,7 @@ describe('AgentRuntime.handle', () => {
     };
     const rt = new AgentRuntime(deps as any);
     const out = await rt.handle('acc1', '549111', 'quiero un turno presencial, soy de Lanús', {});
-    expect((deps as any).booking.start).toHaveBeenCalledWith('acc1', '549111', { modalidad: 'presencial', zona: 'Lanús' }, expect.any(String));
+    expect((deps as any).booking.start).toHaveBeenCalledWith('acc1', '549111', { modalidad: 'presencial', zona: 'Lanús', needsPhone: false }, expect.any(String));
     expect(out[0]).toMatch(/Quilmes/);
     expect(deps.tools.execute).not.toHaveBeenCalled();          // no ejecutó tools genéricas
   });

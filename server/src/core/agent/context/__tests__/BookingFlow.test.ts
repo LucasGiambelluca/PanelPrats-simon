@@ -62,6 +62,42 @@ describe('BookingFlow — camino feliz presencial con zona', () => {
     expect(step.active).toBe(false);
     expect(step.messages.join(' ')).toMatch(/Moreno 609/);   // dirección al confirmar
   });
+
+  it('WhatsApp (needsPhone=false): NO pide teléfono, va directo a confirmar', async () => {
+    const deps = makeDeps();
+    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    let step = await advanceBooking(state, 'el primero', deps);   // → ask_name
+    step = await advanceBooking(step.state, 'Juan Pérez', deps);  // nombre → confirm (sin teléfono)
+    expect(step.state.stage).toBe('confirm');
+  });
+});
+
+describe('BookingFlow — FB/IG piden teléfono real (needsPhone)', () => {
+  it('tras el nombre pide el número, lo valida y lo pasa a book()', async () => {
+    const deps = makeDeps();
+    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús', needsPhone: true }, deps);
+
+    let step = await advanceBooking(state, 'el primero', deps);
+    expect(step.state.stage).toBe('ask_name');
+
+    step = await advanceBooking(step.state, 'Juan Pérez', deps);
+    // Con needsPhone NO confirma todavía: pide el teléfono.
+    expect(step.state.stage).toBe('ask_phone');
+    expect(step.messages.join(' ')).toMatch(/n[úu]mero/i);
+
+    // Número inválido → repregunta, sigue en ask_phone.
+    step = await advanceBooking(step.state, 'no sé', deps);
+    expect(step.state.stage).toBe('ask_phone');
+
+    // Número válido → guarda normalizado y pasa a confirmar.
+    step = await advanceBooking(step.state, '11 2345-6789', deps);
+    expect(step.state.stage).toBe('confirm');
+    expect(step.state.telefono).toBe('541123456789');
+
+    step = await advanceBooking(step.state, 'sí', deps);
+    expect(deps.book).toHaveBeenCalledWith(expect.objectContaining({ telefono: '541123456789' }));
+    expect(step.state.stage).toBe('done');
+  });
 });
 
 describe('BookingFlow — modalidad y zona', () => {

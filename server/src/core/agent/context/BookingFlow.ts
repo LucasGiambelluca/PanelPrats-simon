@@ -8,10 +8,11 @@
 // Reducer puro (deps inyectadas, estado in/out): testeable sin Redis ni LLM.
 
 import { resolveOption, type OfferedOption } from './OptionResolver';
+import { validarTelefonoAR } from '../../../utils/phone-ar';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
-export type BookingStage = 'ask_modality' | 'ask_zone' | 'await_slot' | 'ask_name' | 'confirm' | 'done';
+export type BookingStage = 'ask_modality' | 'ask_zone' | 'await_slot' | 'ask_name' | 'ask_phone' | 'confirm' | 'done';
 
 export interface BookingState {
   stage: BookingStage;
@@ -22,6 +23,8 @@ export interface BookingState {
   meta?: Record<string, { end: string; profileId?: string | null; oficina: string }>;
   chosenStart?: string;
   nombre?: string;
+  telefono?: string;                                          // teléfono real dado en el chat (FB/IG: el id de la red NO es teléfono)
+  needsPhone?: boolean;                                       // canal sin número real (FB/IG) → pedirlo explícito
   desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
 }
 
@@ -33,7 +36,7 @@ export interface BookingDeps {
   defaultOffice: () => Promise<string | null>; // sede presencial por defecto (fallback fuera de cobertura si no hay video)
   // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
   freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
-  book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
+  book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
 }
 
 export interface BookingStep { state: BookingState; messages: string[]; active: boolean }
@@ -287,9 +290,23 @@ function confirmMessage(state: BookingState): string {
   return `Perfecto${state.nombre ? ', ' + state.nombre : ''}. Te agendo el ${fecha} ${lugarLabel(state)}. ¿Confirmo? (sí / no)`;
 }
 
+// Tras resolver el nombre: si el canal NO trae número real (FB/IG → needsPhone),
+// pedir el teléfono antes de confirmar; si ya lo tenemos (WhatsApp), confirmar directo.
+function afterName(state: BookingState): BookingStep {
+  if (state.needsPhone && !state.telefono) {
+    return {
+      state: { ...state, stage: 'ask_phone' },
+      messages: ['¿A qué número de WhatsApp te contactamos? Pasámelo con código de área (ej: 11 1234-5678). 🙂'],
+      active: true,
+    };
+  }
+  const next = { ...state, stage: 'confirm' as const };
+  return { state: next, messages: [confirmMessage(next)], active: true };
+}
+
 /** Inicia el flujo (lo llama el LLM vía tool start_booking). */
 export async function startBooking(
-  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string },
+  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; needsPhone?: boolean },
   deps: BookingDeps,
 ): Promise<BookingStep> {
   const state: BookingState = {
@@ -297,6 +314,7 @@ export async function startBooking(
     modalidad: args.modalidad,
     zona: args.zona ?? null,
     nombre: args.nombre ? cleanName(args.nombre) : undefined,
+    needsPhone: !!args.needsPhone,
   };
   if (!state.modalidad) {
     return { state, messages: ['¡Dale! ¿Preferís la consulta presencial o por videollamada?'], active: true };
@@ -331,9 +349,9 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       }
       const picked = resolveOption({ userText: text, offered: state.offered ?? [] });
       if (picked.matchedValue && picked.confianza >= 0.55) {
-        const next = { ...state, chosenStart: picked.matchedValue, stage: state.nombre ? 'confirm' as const : 'ask_name' as const };
-        if (next.nombre) return { state: next, messages: [confirmMessage(next)], active: true };
-        return { state: next, messages: ['Genial. ¿A nombre de quién lo agendo?'], active: true };
+        const withSlot = { ...state, chosenStart: picked.matchedValue };
+        if (withSlot.nombre) return afterName(withSlot);
+        return { state: { ...withSlot, stage: 'ask_name' as const }, messages: ['Genial. ¿A nombre de quién lo agendo?'], active: true };
       }
       // No eligió. ¿Cambió de modalidad?
       const m = detectModalidad(text);
@@ -349,7 +367,15 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
     case 'ask_name': {
       const nombre = cleanName(text);
       if (!nombre || nombre.length < 2) return { state, messages: ['¿Me decís tu nombre y apellido para agendarlo?'], active: true };
-      const next = { ...state, nombre, stage: 'confirm' as const };
+      return afterName({ ...state, nombre });
+    }
+
+    case 'ask_phone': {
+      const v = validarTelefonoAR(text);
+      if (!v.valido || !v.normalizado) {
+        return { state, messages: ['Ese número no me cierra. Pasámelo con código de área (ej: 11 1234-5678), así te podemos contactar. 🙂'], active: true };
+      }
+      const next = { ...state, telefono: v.normalizado, stage: 'confirm' as const };
       return { state: next, messages: [confirmMessage(next)], active: true };
     }
 
@@ -358,7 +384,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
         const start = state.chosenStart!;
         const m = state.meta?.[start];
         try {
-          const res = await deps.book({ nombre: state.nombre!, start, end: m?.end ?? start, oficina: m?.oficina ?? state.oficina!, profileId: m?.profileId ?? null });
+          const res = await deps.book({ nombre: state.nombre!, start, end: m?.end ?? start, oficina: m?.oficina ?? state.oficina!, profileId: m?.profileId ?? null, telefono: state.telefono });
           const fecha = fmt(start);
           const extra = res.video_link ? `\nEnlace: ${res.video_link}` : res.direccion ? `\nDirección: ${res.direccion}` : '';
           return {

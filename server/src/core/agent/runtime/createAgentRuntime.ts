@@ -64,7 +64,7 @@ async function nextAppointment(accountId: string, phone: string): Promise<OpenAp
 
 async function loadAccount(accountId: string) {
   const { data, error } = await supabase.from('accounts')
-    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard, calificacion_ttl_days')
+    .select('id, name, channel, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard, calificacion_ttl_days')
     .eq('id', accountId).maybeSingle();
 
   // Columna calificacion_ttl_days aún no migrada (0030 pendiente): recaer al select
@@ -72,13 +72,14 @@ async function loadAccount(accountId: string) {
   let row: any = data;
   if (error) {
     const { data: d2 } = await supabase.from('accounts')
-      .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard')
+      .select('id, name, channel, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard')
       .eq('id', accountId).maybeSingle();
     row = d2;
   }
 
   return {
     accountId,
+    channel: row?.channel ?? 'whatsapp',
     agentName: row?.agent_name ?? 'Sofía',
     agentPersona: row?.agent_persona ?? null,
     businessContext: row?.business_context ?? null,
@@ -160,8 +161,9 @@ export function getAgentRuntime(): AgentRuntime {
     freeSlots: (a, oficina, opts) => availability.freeSlots(a, oficina, { max: opts?.max ?? 3, ...(opts?.desde ? { now: opts.desde } : {}) }),
     book: async (a, phone, conversation, _zona, b) => {
       // zona NO se thread-ea cruda: que gpt-4o extraiga la localidad limpia del diálogo.
+      // telefono: número real dado en el chat (FB/IG). Si falta, book_appointment cae al id de canal.
       const r = await tools.execute('book_appointment',
-        { nombre: b.nombre, start_time: b.start, end_time: b.end, oficina: b.oficina, resumen: '' },
+        { nombre: b.nombre, start_time: b.start, end_time: b.end, oficina: b.oficina, resumen: '', telefono: b.telefono },
         { accountId: a, phone, conversation });
       if (!r.ok) throw new Error(r.error || 'sin cupo');
       return { direccion: r.data?.direccion ?? null, video_link: r.data?.video_link ?? null, modalidad: r.data?.modalidad };

@@ -92,16 +92,19 @@ export class ToolRegistry {
           // natural, en el MISMO registro. Best-effort: si falla, se agenda igual.
           let resumen_ia: string | null = null;
           let perfil_json: Record<string, any> | null = null;
+          // telefono real: en FB/IG ctx.phone es el id de la red (PSID/IGSID), NO un teléfono.
+          // El BookingFlow lo pide al usuario y lo pasa en args.telefono. WhatsApp: ctx.phone ya es el número.
+          const telefono = (args?.telefono && String(args.telefono).trim()) || ctx.phone;
           if (this.deps.buildFicha && ctx.conversation) {
             try {
               const modalidad = office?.modalidad === 'video' ? 'video' : 'presencial';
-              const ficha = await this.deps.buildFicha(ctx.conversation, { telefono: ctx.phone, modalidad, zona: ctx.zona });
+              const ficha = await this.deps.buildFicha(ctx.conversation, { telefono, modalidad, zona: ctx.zona });
               resumen_ia = ficha.resumen_ia || null;
               perfil_json = ficha.perfil ?? null;
             } catch { /* sin ficha: la cita se crea igual */ }
           }
           const appt = await this.deps.appointments.create({
-            account_id: ctx.accountId, phone: ctx.phone, telefono: ctx.phone,
+            account_id: ctx.accountId, phone: ctx.phone, telefono,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
             assigned_profile_id: assigned,

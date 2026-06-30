@@ -13,7 +13,8 @@ export interface BookingServiceDeps {
   listOffices: (accountId: string) => Promise<Array<{ nombre: string; modalidad: string }>>;
   freeSlots: (accountId: string, oficina: string, opts?: { desde?: Date; max?: number }) => Promise<Array<{ start: string; end: string }>>;
   // Agenda reusando book_appointment del ToolRegistry. Throw si no hay cupo.
-  book: (accountId: string, phone: string, conversation: string, zona: string | null, b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
+  // b.telefono: número real dado en el chat (FB/IG); si falta, el caller usa el id de canal.
+  book: (accountId: string, phone: string, conversation: string, zona: string | null, b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
 }
 
 export class BookingService {
@@ -45,7 +46,7 @@ export class BookingService {
     return !!s && s.stage !== 'done';
   }
 
-  async start(accountId: string, phone: string, args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string }, conversation: string): Promise<{ messages: string[]; active: boolean }> {
+  async start(accountId: string, phone: string, args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; needsPhone?: boolean }, conversation: string): Promise<{ messages: string[]; active: boolean }> {
     let current: BookingState | undefined;
     const step = await startBooking(args, this.buildDeps(accountId, phone, conversation, () => current));
     current = step.state;
