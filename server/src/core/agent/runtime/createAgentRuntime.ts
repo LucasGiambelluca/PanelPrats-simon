@@ -16,6 +16,7 @@ import { buildReceptionFicha } from '../context/ReceptionFichaBuilder';
 import { BookingService } from '../context/BookingService';
 import { BookingStateStore } from '../context/BookingStateStore';
 import { detectBookingIntent } from '../context/BookingFlow';
+import { detectArea } from '../context/AreaDetector';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -39,20 +40,32 @@ async function nextAppointment(accountId: string, phone: string): Promise<OpenAp
 }
 
 async function loadAccount(accountId: string) {
-  const { data } = await supabase.from('accounts')
-    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard')
+  const { data, error } = await supabase.from('accounts')
+    .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard, calificacion_ttl_days')
     .eq('id', accountId).maybeSingle();
+
+  // Columna calificacion_ttl_days aún no migrada (0030 pendiente): recaer al select
+  // sin ella para NO perder la config de cuenta mientras la migración no está aplicada.
+  let row: any = data;
+  if (error) {
+    const { data: d2 } = await supabase.from('accounts')
+      .select('id, name, agent_name, agent_persona, business_context, agent_procedures, ai_api_key, ai_model, agent_loop_guard')
+      .eq('id', accountId).maybeSingle();
+    row = d2;
+  }
+
   return {
     accountId,
-    agentName: data?.agent_name ?? 'Sofía',
-    agentPersona: data?.agent_persona ?? null,
-    businessContext: data?.business_context ?? null,
-    agentProcedures: data?.agent_procedures ?? null,
-    estudioNombre: data?.name ?? null,
-    apiKey: data?.ai_api_key ?? null,
-    model: data?.ai_model ?? null,
+    agentName: row?.agent_name ?? 'Sofía',
+    agentPersona: row?.agent_persona ?? null,
+    businessContext: row?.business_context ?? null,
+    agentProcedures: row?.agent_procedures ?? null,
+    estudioNombre: row?.name ?? null,
+    apiKey: row?.ai_api_key ?? null,
+    model: row?.ai_model ?? null,
     // Config del LoopGuard (jsonb). null → el runtime usa los defaults.
-    loopGuard: (data as any)?.agent_loop_guard ?? null,
+    loopGuard: (row as any)?.agent_loop_guard ?? null,
+    calificacionTtlDays: (row as any)?.calificacion_ttl_days ?? 30,
   };
 }
 
@@ -104,6 +117,7 @@ export function getAgentRuntime(): AgentRuntime {
     buildFicha: (conversation, ctx) =>
       buildReceptionFicha({ complete: (o) => AIService.complete(o) }, { conversation, ctx, model: 'gpt-4o' })
         .then((f) => ({ resumen_ia: f.resumen_ia, perfil: f })),
+    setCalificacion: (a, p, area, entry) => memory.setCalificacion(a, p, area, entry),
   });
 
   // Capacidad 1: loader de continuidad.
@@ -146,6 +160,7 @@ export function getAgentRuntime(): AgentRuntime {
       start: (a, p, args, c) => booking.start(a, p, args, c),
     },
     bookingIntent: detectBookingIntent,
+    areaDetector: detectArea,
     // LoopGuard: estado persistido en contact_memory (sobrevive reinicios del VPS);
     // al tocar el tope con action=handoff reusa el handover real (bot calla, pasa a Atención).
     loopGuard: {
