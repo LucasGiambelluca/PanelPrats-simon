@@ -232,6 +232,7 @@ export default function Agenda() {
   // Modal settings
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [auditing, setAuditing] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
@@ -569,6 +570,19 @@ export default function Agenda() {
 
   const handleOpenNewAppointment = () => {
     handleDayClick(currentDate);
+  };
+
+  const runAudit = async () => {
+    setAuditing(true);
+    try {
+      const r = await appointmentsApi.audit({ account_id: activeAccountId || undefined });
+      toast.success(`Auditadas ${r.audited}: ${r.flagged} para revisar${r.truncated ? ' (se auditaron las primeras 50)' : ''}`);
+      loadAppointments(true);
+    } catch (err: any) {
+      toast.error('Error al auditar: ' + err.message);
+    } finally {
+      setAuditing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1130,6 +1144,20 @@ export default function Agenda() {
               <RefreshCw size={14} className={loading ? 'animate-spin text-brand-secondary' : ''} />
             </button>
 
+            {/* Audit Button */}
+            <button
+              onClick={runAudit}
+              disabled={auditing}
+              className={`px-3 py-2 rounded-xl border transition text-xs font-bold disabled:opacity-50 whitespace-nowrap ${
+                theme === 'light'
+                  ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  : 'bg-white/5 border-white/10 text-brand-textMuted hover:text-brand-secondary'
+              }`}
+              title="Auditar datos de citas contra el chat"
+            >
+              {auditing ? 'Auditando…' : '🔍 Auditar'}
+            </button>
+
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
@@ -1227,6 +1255,9 @@ export default function Agenda() {
                             >
                               <span className="font-mono text-[8px] opacity-75">{hr}</span>
                               <span className="truncate flex-1">{app.nombre}</span>
+                              {(app as any).audit_json?.revisar && (
+                                <span title="Datos a revisar" className="text-amber-200 text-[8px] font-bold flex-shrink-0">⚠</span>
+                              )}
                             </div>
                           );
                         })}
@@ -1331,7 +1362,12 @@ export default function Agenda() {
                                 <span className={`font-bold text-[10px] leading-tight block truncate ${
                                   theme === 'light' ? 'text-slate-800 font-extrabold' : 'text-white'
                                 }`}>{app.nombre}</span>
-                                <StatusBadge status={app.status} size={10} />
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {(app as any).audit_json?.revisar && (
+                                    <span title="Datos a revisar contra el chat" className="text-amber-600 text-[8px] font-semibold leading-none">⚠</span>
+                                  )}
+                                  <StatusBadge status={app.status} size={10} />
+                                </div>
                               </div>
                               <span className={`text-[8.5px] font-mono opacity-80 block mt-0.5 leading-none ${
                                 theme === 'light' ? 'text-slate-600 font-bold' : ''
@@ -1445,7 +1481,12 @@ export default function Agenda() {
                           <span className={`font-bold text-xs block ${
                             theme === 'light' ? 'text-slate-800 font-extrabold' : 'text-white'
                           }`}>{app.nombre}</span>
-                          <StatusBadge status={app.status} size={14} />
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {(app as any).audit_json?.revisar && (
+                              <span title="Datos a revisar contra el chat" className="text-amber-600 text-xs font-semibold">⚠</span>
+                            )}
+                            <StatusBadge status={app.status} size={14} />
+                          </div>
                         </div>
                         <div className={`flex items-center gap-1.5 mt-1 text-[10px] opacity-80 font-mono ${
                           theme === 'light' ? 'text-slate-600 font-bold' : ''
@@ -1510,6 +1551,9 @@ export default function Agenda() {
                             <h3 className={`font-serif font-bold text-base leading-tight transition-colors duration-300 ${
                               theme === 'light' ? 'text-brand-ink group-hover:text-brand-primary' : 'text-white group-hover:text-brand-secondary'
                             }`}>{app.nombre}</h3>
+                            {(app as any).audit_json?.revisar && (
+                              <span title="Datos a revisar contra el chat" className="inline-block ml-0 mt-0.5 text-amber-600 text-xs font-semibold">⚠ revisar</span>
+                            )}
                             <div className={`flex items-center gap-1.5 text-xs mt-1.5 font-mono ${theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}`}>
                               <Phone size={12} className={theme === 'light' ? 'text-brand-primary' : 'text-brand-secondary/70'} />
                               <span>{app.phone}</span>
@@ -1924,6 +1968,41 @@ export default function Agenda() {
                   <span>Carpeta armada</span>
                 </label>
               </div>
+
+              {/* Auditoría: diferencias entre datos de la cita y el chat */}
+              {selectedApp && (selectedApp as any).audit_json?.campos?.some((c: any) => !c.coincide && !c.resuelto) && (
+                <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <div className="font-semibold text-amber-800 mb-2">⚠ Auditoría: datos a revisar</div>
+                  {(selectedApp as any).audit_json.campos
+                    .filter((c: any) => !c.coincide && !c.resuelto && c.sugerencia)
+                    .map((c: any) => (
+                      <div key={c.campo} className="flex items-center justify-between gap-2 py-1 text-sm">
+                        <div>
+                          <b>{c.campo}</b>:{' '}
+                          <span className="line-through text-gray-500">{c.valor_cita ?? '—'}</span>{' '}
+                          → <span className="text-emerald-700">{c.sugerencia}</span>
+                          {c.nota && <div className="text-xs text-gray-500">{c.nota}</div>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await appointmentsApi.applyAuditFix(selectedApp.id, c.campo);
+                              toast.success('Aplicado');
+                              loadAppointments(true);
+                              setIsModalOpen(false);
+                            } catch (err: any) {
+                              toast.error(err.message);
+                            }
+                          }}
+                          className="px-2 py-1 rounded bg-emerald-600 text-white text-xs whitespace-nowrap"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
 
               {/* Profesional asignado (reasignar — solo admin, citas existentes) */}
               {selectedApp && role === 'admin' && (
