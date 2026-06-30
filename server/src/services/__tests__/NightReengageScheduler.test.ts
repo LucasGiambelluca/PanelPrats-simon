@@ -10,12 +10,13 @@ function makeDeps(over: any = {}) {
       { id: 'acc1', reengage_text: '¡Buen día! ¿Seguimos?' },
     ]),
     listConversations: over.listConversations ?? vi.fn().mockResolvedValue([
-      { id: 'c1', account_id: 'acc1', phone: '5491111', status: 'BOT', last_message_at: arLocal(2026, 7, 1, 23).toISOString(), reengaged_for: null },
+      { id: 'c1', account_id: 'acc1', phone: '5491111', status: 'BOT', last_message_at: arLocal(2026, 7, 1, 23).toISOString(), reengaged_for: null, close_reason: null },
     ]),
     lastInboundAt: over.lastInboundAt ?? vi.fn().mockResolvedValue(arLocal(2026, 7, 1, 23)),
     isConnected: over.isConnected ?? vi.fn().mockReturnValue(true),
     sendMessage: over.sendMessage ?? vi.fn().mockResolvedValue(undefined),
     markReengaged: over.markReengaged ?? vi.fn().mockResolvedValue(undefined),
+    isOptedOut: over.isOptedOut ?? vi.fn().mockResolvedValue(false),
     now: over.now ?? (() => arLocal(2026, 7, 2, 9, 30)),
   };
 }
@@ -48,7 +49,21 @@ describe('NightReengageScheduler.tick', () => {
 
   it('no repite si ya se re-enganchó para ese last_message_at', async () => {
     const deps = makeDeps({ listConversations: vi.fn().mockResolvedValue([
-      { id: 'c1', account_id: 'acc1', phone: '5491111', status: 'BOT', last_message_at: arLocal(2026, 7, 1, 23).toISOString(), reengaged_for: arLocal(2026, 7, 1, 23).toISOString() },
+      { id: 'c1', account_id: 'acc1', phone: '5491111', status: 'BOT', last_message_at: arLocal(2026, 7, 1, 23).toISOString(), reengaged_for: arLocal(2026, 7, 1, 23).toISOString(), close_reason: null },
+    ]) });
+    await new NightReengageScheduler(deps as any).tick();
+    expect(deps.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('opt-out respetado en re-enganche — contacto con isOptedOut=true NO recibe sendMessage', async () => {
+    const deps = makeDeps({ isOptedOut: vi.fn().mockResolvedValue(true) });
+    await new NightReengageScheduler(deps as any).tick();
+    expect(deps.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('conversación cerrada con close_reason=opt_out NO recibe sendMessage', async () => {
+    const deps = makeDeps({ listConversations: vi.fn().mockResolvedValue([
+      { id: 'c1', account_id: 'acc1', phone: '5491111', status: 'BOT', last_message_at: arLocal(2026, 7, 1, 23).toISOString(), reengaged_for: null, close_reason: 'opt_out' },
     ]) });
     await new NightReengageScheduler(deps as any).tick();
     expect(deps.sendMessage).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import { supabase } from '../../../config/supabase';
 import { AppointmentService } from '../../../services/AppointmentService';
 import type { ContactFicha } from './types';
 import type { AreaKey } from '../context/AreaDetector';
+import type { DialogueState } from '../context/DialogueState';
 
 // Merge incremental: agrega/actualiza solo con valores no-nulos (nunca borra).
 export function mergeProfile(prev: Record<string, any>, next: Record<string, any>): Record<string, any> {
@@ -201,6 +202,85 @@ export class ContactMemory {
       }, { onConflict: 'account_id,phone' });
     } catch (e: any) {
       console.warn(`[ContactMemory] setCalificacion error for ${phone}:`, e?.message || e);
+    }
+  }
+
+  // ─── Opt-out ──────────────────────────────────────────────────────────────────
+
+  /** Marca al contacto como opt-out (pidió no ser contactado). Best-effort. */
+  async setOptOut(accountId: string, phone: string): Promise<void> {
+    try {
+      await supabase.from('contact_memory').upsert({
+        account_id: accountId, phone,
+        opt_out: true,
+        opt_out_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,phone' });
+    } catch (e: any) {
+      console.warn(`[ContactMemory] setOptOut error for ${phone}:`, e?.message || e);
+    }
+  }
+
+  /**
+   * ¿El contacto pidió opt-out?
+   * En error de lectura devuelve false (best-effort: no bloquea flujos normales).
+   */
+  async isOptedOut(accountId: string, phone: string): Promise<boolean> {
+    try {
+      const { data } = await supabase
+        .from('contact_memory').select('opt_out')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      return (data as any)?.opt_out === true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ─── Dialogue state ───────────────────────────────────────────────────────────
+
+  /** Devuelve el estado de diálogo persistido o null. Best-effort (error → null). */
+  async getDialogueState(accountId: string, phone: string): Promise<DialogueState | null> {
+    try {
+      const { data } = await supabase
+        .from('contact_memory').select('dialogue_state')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      const s = (data as any)?.dialogue_state;
+      if (!s || typeof s !== 'object') return null;
+      return s as DialogueState;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Persiste el estado de diálogo. Best-effort. */
+  async saveDialogueState(accountId: string, phone: string, state: DialogueState): Promise<void> {
+    try {
+      await supabase.from('contact_memory').upsert({
+        account_id: accountId, phone,
+        dialogue_state: state,
+        last_interaction_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,phone' });
+    } catch (e: any) {
+      console.warn(`[ContactMemory] saveDialogueState error for ${phone}:`, e?.message || e);
+    }
+  }
+
+  // ─── Cierre de conversación ───────────────────────────────────────────────────
+
+  /**
+   * Registra el cierre de una conversación con su motivo.
+   * Toca whatsapp_conversations.closed_at + close_reason. Best-effort.
+   */
+  async closeConversation(accountId: string, phone: string, motivo: string): Promise<void> {
+    try {
+      await supabase
+        .from('whatsapp_conversations')
+        .update({ closed_at: new Date().toISOString(), close_reason: motivo })
+        .eq('account_id', accountId)
+        .eq('phone', phone);
+    } catch (e: any) {
+      console.warn(`[ContactMemory] closeConversation error for ${phone}:`, e?.message || e);
     }
   }
 

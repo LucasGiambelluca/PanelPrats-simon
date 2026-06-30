@@ -5,6 +5,7 @@ export const DEFAULT_REENGAGE_TEXT = '¡Buen día! ¿Seguimos con tu consulta de
 export interface ReengageConversation {
   id: string; account_id: string; phone: string; status: string;
   last_message_at: string | null; reengaged_for: string | null;
+  close_reason: string | null;
 }
 export interface ReengageDeps {
   listEnabledAccounts: () => Promise<Array<{ id: string; reengage_text: string | null }>>;
@@ -13,6 +14,7 @@ export interface ReengageDeps {
   isConnected: (accountId: string) => boolean;
   sendMessage: (accountId: string, phone: string, text: string) => Promise<void>;
   markReengaged: (conversationId: string, lastMessageAt: string) => Promise<void>;
+  isOptedOut: (accountId: string, phone: string) => Promise<boolean>;
   now?: () => Date;
 }
 
@@ -49,13 +51,18 @@ export class NightReengageScheduler {
         const convos = await this.deps.listConversations(acc.id);
         for (const c of convos) {
           if (!c.last_message_at) continue;
-          const lastInbound = await this.deps.lastInboundAt(acc.id, c.phone);
+          const [lastInbound, optOut] = await Promise.all([
+            this.deps.lastInboundAt(acc.id, c.phone),
+            this.deps.isOptedOut(acc.id, c.phone),
+          ]);
           const ok = shouldReengage({
             lastMessageAt: new Date(c.last_message_at),
             reengagedFor: c.reengaged_for ? new Date(c.reengaged_for) : null,
             lastInboundAt: lastInbound,
             status: c.status,
             now,
+            optOut,
+            closeReason: c.close_reason ?? null,
           });
           if (!ok) continue;
           const guardKey = `${c.id}:${c.last_message_at}`;
@@ -78,12 +85,14 @@ export class NightReengageScheduler {
 
 import { supabase } from '../config/supabase';
 import { messageStore } from './MessageStore';
+import { ContactMemory } from '../core/agent/runtime/ContactMemory';
 import type { AccountManager } from '../core/accounts/AccountManager';
 
 const WINDOW_24H_MS = 24 * 60 * 60 * 1000;
 
 /** Construye el scheduler con las fuentes reales (Supabase + AccountManager). */
 export function createNightReengageScheduler(manager: AccountManager): NightReengageScheduler {
+  const contactMemory = new ContactMemory();
   return new NightReengageScheduler({
     listEnabledAccounts: async () => {
       const { data } = await supabase.from('accounts').select('id, reengage_text').eq('reengage_enabled', true);
@@ -93,7 +102,7 @@ export function createNightReengageScheduler(manager: AccountManager): NightReen
       const since = new Date(Date.now() - WINDOW_24H_MS).toISOString();
       const { data } = await supabase
         .from('whatsapp_conversations')
-        .select('id, account_id, phone, status, last_message_at, reengaged_for')
+        .select('id, account_id, phone, status, last_message_at, reengaged_for, close_reason')
         .eq('account_id', accountId)
         .eq('status', 'BOT')
         .gt('last_message_at', since)
@@ -109,5 +118,6 @@ export function createNightReengageScheduler(manager: AccountManager): NightReen
     markReengaged: async (conversationId, lastMessageAt) => {
       await supabase.from('whatsapp_conversations').update({ reengaged_for: lastMessageAt }).eq('id', conversationId);
     },
+    isOptedOut: (accountId, phone) => contactMemory.isOptedOut(accountId, phone),
   });
 }

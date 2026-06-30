@@ -55,3 +55,37 @@ describe('shouldReengage', () => {
     expect(shouldReengage({ ...base, status: 'HANDOVER' })).toBe(false);
   });
 });
+
+describe('shouldReengage — compliance opt-out / cierre', () => {
+  const base = {
+    lastMessageAt: arLocal(2026, 7, 1, 23),
+    reengagedFor: null as Date | null,
+    lastInboundAt: arLocal(2026, 7, 1, 23),
+    status: 'BOT',
+    now: arLocal(2026, 7, 2, 9, 30),
+  };
+
+  it('opt-out se respeta en re-enganche', () => {
+    expect(shouldReengage({ ...base, optOut: true })).toBe(false);
+  });
+
+  it('closeReason opt_out → NO re-engancha', () => {
+    expect(shouldReengage({ ...base, closeReason: 'opt_out' })).toBe(false);
+  });
+
+  it('closeReason despedida → NO re-engancha', () => {
+    expect(shouldReengage({ ...base, closeReason: 'despedida' })).toBe(false);
+  });
+
+  it('closeReason frustracion_handoff → NO re-engancha', () => {
+    expect(shouldReengage({ ...base, closeReason: 'frustracion_handoff' })).toBe(false);
+  });
+
+  it('closeReason null + optOut false → camino feliz, re-engancha', () => {
+    expect(shouldReengage({ ...base, optOut: false, closeReason: null })).toBe(true);
+  });
+
+  it('closeReason inesperado (ej: "completada") → NO bloquea, re-engancha si el resto OK', () => {
+    expect(shouldReengage({ ...base, closeReason: 'completada' })).toBe(true);
+  });
+});
