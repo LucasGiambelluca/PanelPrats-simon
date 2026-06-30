@@ -39,3 +39,27 @@ describe('POST /api/appointments/audit', () => {
     expect(res.body.flagged).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('POST /api/appointments/:id/audit/apply', () => {
+  it('aplica la sugerencia de teléfono y marca resuelto', async () => {
+    const { AppointmentService } = await import('../../../services/AppointmentService');
+    (AppointmentService.getById as any) = async () => ({
+      id: 'a1', account_id: 'acc1', phone: 'PSID1', telefono: 'PSID1',
+      audit_json: { revisar: true, campos: [{ campo: 'telefono', coincide: false, confianza: 0.95, sugerencia: '541123456789' }] },
+    });
+    const res = await request(app()).post('/api/appointments/a1/audit/apply').send({ campo: 'telefono' });
+    expect(res.status).toBe(200);
+    expect(AppointmentService.update).toHaveBeenCalledWith('a1', { telefono: '541123456789' });
+    expect(AppointmentService.resolveAuditField).toHaveBeenCalledWith('a1', 'telefono');
+  });
+
+  it('rechaza teléfono sugerido inválido con 400', async () => {
+    const { AppointmentService } = await import('../../../services/AppointmentService');
+    (AppointmentService.getById as any) = async () => ({
+      id: 'a1', account_id: 'acc1', phone: 'PSID1',
+      audit_json: { campos: [{ campo: 'telefono', coincide: false, confianza: 0.9, sugerencia: 'no-numero' }] },
+    });
+    const res = await request(app()).post('/api/appointments/a1/audit/apply').send({ campo: 'telefono' });
+    expect(res.status).toBe(400);
+  });
+});

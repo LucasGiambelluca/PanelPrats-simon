@@ -6,6 +6,7 @@ import { AppointmentAuditor, type AuditInput } from '../../core/agent/context/Ap
 import { messageStore } from '../../services/MessageStore';
 import { AIService } from '../../services/AIService';
 import { supabase } from '../../config/supabase';
+import { validarTelefonoAR } from '../../utils/phone-ar';
 
 // Enums de la ficha de recepción (migración 0023). Deben coincidir con los CHECK del SQL.
 const motivoEnum = z.enum([
@@ -162,6 +163,37 @@ export function appointmentsRouter(): Router {
       }
 
       res.json({ audited: citas.length, flagged, errored, truncated, results });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Mapea el campo del audit a la columna real de la cita.
+  const AUDIT_FIELD_TO_COL: Record<string, 'telefono' | 'nombre' | 'motivo' | 'oficina'> = {
+    telefono: 'telefono', nombre: 'nombre', motivo: 'motivo', oficina: 'oficina',
+  };
+
+  r.post('/:id/audit/apply', async (req, res) => {
+    try {
+      const { campo } = req.body || {};
+      const col = AUDIT_FIELD_TO_COL[campo];
+      if (!col) return res.status(400).json({ error: 'Campo no aplicable' });
+
+      const appt: any = await AppointmentService.getById(req.params.id);
+      if (!appt) return res.status(404).json({ error: 'Cita no encontrada' });
+      const field = appt.audit_json?.campos?.find((c: any) => c.campo === campo);
+      if (!field || field.sugerencia == null) return res.status(400).json({ error: 'No hay sugerencia para ese campo' });
+
+      let valor = String(field.sugerencia);
+      if (col === 'telefono') {
+        const v = validarTelefonoAR(valor);
+        if (!v.valido || !v.normalizado) return res.status(400).json({ error: 'La sugerencia de teléfono no es un número válido' });
+        valor = v.normalizado;
+      }
+
+      const updated = await AppointmentService.update(req.params.id, { [col]: valor } as any);
+      await AppointmentService.resolveAuditField(req.params.id, campo).catch(() => {});
+      res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
