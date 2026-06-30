@@ -25,6 +25,12 @@ describe('buildPersona', () => {
     expect(prompt).not.toMatch(/1\)\s*usá list_offices/i);
   });
 
+  it('instruye registrar la calificación y usar la CALIFICACIÓN PREVIA', () => {
+    const prompt = buildPersona({ accountId: 'acc1', agentName: 'Sofía' } as any, 'FICHA: nuevo.');
+    expect(prompt.toLowerCase()).toContain('set_qualification');
+    expect(prompt.toUpperCase()).toContain('CALIFICACIÓN PREVIA');
+  });
+
   it('inyecta PROCEDIMIENTOS cuando la cuenta los tiene', () => {
     const prompt = buildPersona(
       { accountId: 'acc1', agentName: 'Sofía', agentProcedures: 'Despido: preguntá hace cuánto y la edad.' } as any,
