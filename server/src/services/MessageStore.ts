@@ -69,6 +69,21 @@ export class MessageStore {
     }
   }
 
+  /** Conversación COMPLETA de (account_id, phone) como texto Cliente/Asistente, orden cronológico. */
+  async getTranscript(accountId: string, phone: string): Promise<string> {
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('direction, content, timestamp')
+      .eq('account_id', accountId)
+      .eq('phone', phone)
+      .order('timestamp', { ascending: true });
+    if (error || !data) return '';
+    return data
+      .filter((m: any) => typeof m.content === 'string' && m.content.trim())
+      .map((m: any) => `${m.direction === 'INBOUND' ? 'Cliente' : 'Asistente'}: ${m.content}`)
+      .join('\n');
+  }
+
   /** Atajo: upsert conversación + insert mensaje. Con un reintento ante fallo transitorio. */
   async record(msg: StoredMessage): Promise<void> {
     for (let attempt = 1; attempt <= 2; attempt++) {
