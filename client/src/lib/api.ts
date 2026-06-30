@@ -237,6 +237,18 @@ export const RESULTADO_LABELS: Record<AppointmentResultado, string> = {
   si: 'SÍ (cliente)', no: 'NO', pensar: 'PENSAR', traer_doc: 'Traer documentación',
 };
 
+export interface AuditField {
+  campo: 'telefono' | 'nombre' | 'motivo' | 'fecha' | 'oficina';
+  valor_cita: string | null;
+  valor_chat: string | null;
+  coincide: boolean;
+  confianza: number;
+  sugerencia: string | null;
+  nota?: string;
+  resuelto?: boolean;
+}
+export interface AuditResultDTO { revisar: boolean; campos: AuditField[]; sin_chat: boolean; error?: string }
+
 export const appointmentsApi = {
   list: (accountId: string) =>
     api<Appointment[]>(`/api/appointments?account_id=${encodeURIComponent(accountId)}`),
@@ -256,6 +268,17 @@ export const appointmentsApi = {
   delete: (id: string) =>
     api<{ ok: boolean }>(`/api/appointments/${id}`, {
       method: 'DELETE',
+    }),
+
+  audit: (body: { account_id?: string; ids?: string[] }) =>
+    api<{ audited: number; flagged: number; errored: number; truncated: boolean; results: Array<{ id: string } & AuditResultDTO> }>(
+      '/api/appointments/audit',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
+  applyAuditFix: (id: string, campo: string) =>
+    api<Appointment>(`/api/appointments/${id}/audit/apply`, {
+      method: 'POST', body: JSON.stringify({ campo }),
     }),
 };
 
