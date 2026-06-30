@@ -92,10 +92,10 @@ const OPT_OUT_PATTERNS = [
   /\bno\s+(me\s+)?escriban\s*(mas|más)?\b/,
   /\bno\s+quiero\s+que\s+me\s+(escriban|contacten|molesten)\b/,
   /\bdejen\s+de\s+(escribir|escribirme|molestar|contactar)\b/,
-  /\bdar(me)?\s+de\s+baja\b/,
-  /\bdarme\s+de\s+baja\b/,
+  // "darme de baja" = baja de los mensajes, PERO no "darme de baja del/de la X"
+  // (sindicato, plan médico, AFIP…) que es una consulta legítima del estudio.
+  /\bdar(me)?\s+de\s+baja\b(?!\s+(de|del)\b)/,
   /\bcancelar\s+(su\s+)?suscripcion\b/,
-  /\bno\s+me\s+molesten\b/,
   /^\s*baja\s*$/,
   /\bstop\b/,
 ];

@@ -127,6 +127,12 @@ describe('detectOptOut — regex offline, sin LLM', () => {
   it('NO matchea "no quiero presencial"', () => expect(detectOptOut('no quiero presencial')).toBe(false));
   it('NO matchea "gracias por todo"', () => expect(detectOptOut('gracias por todo')).toBe(false));
   it('NO matchea "ok dale"', () => expect(detectOptOut('ok dale')).toBe(false));
+
+  // Falso positivo de dominio: baja de un servicio ≠ opt-out de los mensajes.
+  it('NO matchea "darme de baja del plan medico"', () => expect(detectOptOut('quiero darme de baja del plan medico')).toBe(false));
+  it('NO matchea "darme de baja de la AFIP"', () => expect(detectOptOut('necesito darme de baja de la AFIP')).toBe(false));
+  it('NO matchea "darme de baja del sindicato"', () => expect(detectOptOut('quiero darme de baja del sindicato')).toBe(false));
+  it('SÍ matchea "darme de baja" a secas (baja de mensajes)', () => expect(detectOptOut('quiero darme de baja por favor')).toBe(true));
 });
 
 // ─── classifyIntent ────────────────────────────────────────────────────────────
