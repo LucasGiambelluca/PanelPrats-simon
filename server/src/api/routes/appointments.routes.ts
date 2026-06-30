@@ -190,6 +190,11 @@ export function appointmentsRouter(): Router {
         if (!v.valido || !v.normalizado) return res.status(400).json({ error: 'La sugerencia de teléfono no es un número válido' });
         valor = v.normalizado;
       }
+      // El motivo tiene CHECK en la DB (enum 0023): rechazar valores fuera del set
+      // para no romper con un 500 si el LLM alucina un motivo inválido.
+      if (col === 'motivo' && !motivoEnum.options.includes(valor as any)) {
+        return res.status(400).json({ error: 'La sugerencia de motivo no es válida' });
+      }
 
       const updated = await AppointmentService.update(req.params.id, { [col]: valor } as any);
       await AppointmentService.resolveAuditField(req.params.id, campo).catch(() => {});

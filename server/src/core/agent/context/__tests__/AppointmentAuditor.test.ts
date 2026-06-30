@@ -68,4 +68,29 @@ describe('AppointmentAuditor.audit', () => {
     expect(r.error).toBeTruthy();
     expect(r.revisar).toBe(false);
   });
+
+  it('NO marca motivo si el área es de la misma familia (puam + "jubilarme")', async () => {
+    // El cliente PUAM dice "jubilarme"; detectArea→jubilacion, pero puam es familia jubilación.
+    const a = new AppointmentAuditor(fakeAi({ campos: [] }));
+    const r = await a.audit({
+      appointment: { ...baseAppt, motivo: 'puam' },
+      transcript: 'Cliente: quiero jubilarme, tengo 70 años',
+      channel: 'whatsapp', contactPhone: '5491133334444',
+    });
+    expect(r.campos.find(c => c.campo === 'motivo')).toBeUndefined();
+    expect(r.revisar).toBe(false);
+  });
+
+  it('SÍ marca motivo si el área del chat no es de la familia (laboral cargado, jubilación en chat)', async () => {
+    const a = new AppointmentAuditor(fakeAi({ campos: [] }));
+    const r = await a.audit({
+      appointment: { ...baseAppt, motivo: 'laboral' },
+      transcript: 'Cliente: quiero jubilarme',
+      channel: 'whatsapp', contactPhone: '5491133334444',
+    });
+    const motivo = r.campos.find(c => c.campo === 'motivo')!;
+    expect(motivo.coincide).toBe(false);
+    expect(motivo.sugerencia).toBe('jubilacion');
+    expect(r.revisar).toBe(true);
+  });
 });

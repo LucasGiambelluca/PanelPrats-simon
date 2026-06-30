@@ -31,6 +31,10 @@ export interface Appointment {
   // Ficha IA al agendar (migración 0025). Resumen natural + snapshot del perfil.
   resumen_ia?: string | null;
   perfil_json?: Record<string, any> | null;
+
+  // Auditoría de la cita (migración 0032). Discrepancias detectadas vs el chat.
+  audit_json?: Record<string, any> | null;
+  audit_at?: string | null;
 }
 
 export type AppointmentMotivo =

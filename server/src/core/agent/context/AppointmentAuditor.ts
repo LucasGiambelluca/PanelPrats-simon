@@ -101,6 +101,21 @@ function normalizeField(raw: any): AuditField | null {
   };
 }
 
+// Motivos compatibles con cada área detectada. Evita falsos positivos: PUAM,
+// reajuste, RTI y pensión por discapacidad son "familia jubilación" y el cliente
+// suele decir "jubilarme" igual; no son una discrepancia. Un área que mapea a
+// 'otro' (tránsito) es demasiado débil para contradecir el motivo cargado.
+const MOTIVO_FAMILIA: Record<string, string[]> = {
+  jubilacion: ['jubilacion', 'puam', 'reajuste', 'rti', 'pension_discapacidad'],
+  pension_v: ['pension_v'],
+  laboral: ['laboral'],
+};
+
+function areaCompatibleConMotivo(areaMotivo: string, motivo: string): boolean {
+  const fam = MOTIVO_FAMILIA[areaMotivo];
+  return fam ? fam.includes(motivo) : true; // área débil (otro) → no flag
+}
+
 export class AppointmentAuditor {
   constructor(private deps: { complete: (o: any) => Promise<string> }) {}
 
@@ -128,7 +143,7 @@ export class AppointmentAuditor {
     if (tel) campos = [tel, ...campos.filter((c) => c.campo !== 'telefono')];
 
     const area = areaToMotivo(detectArea(input.transcript));
-    if (area && input.appointment.motivo && area !== input.appointment.motivo) {
+    if (area && input.appointment.motivo && !areaCompatibleConMotivo(area, input.appointment.motivo)) {
       const existing = campos.find((c) => c.campo === 'motivo');
       if (!existing || existing.coincide) {
         campos = [
