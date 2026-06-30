@@ -23,9 +23,40 @@ export interface MetaTokenCheck {
  *
  * Reutilizado por el endpoint "Probar conexión" y por el health-check.
  */
-export async function validateMetaToken(p: { externalId?: string | null; accessToken?: string | null }): Promise<MetaTokenCheck> {
+export async function validateMetaToken(p: { externalId?: string | null; accessToken?: string | null; channel?: string | null }): Promise<MetaTokenCheck> {
   if (!p.accessToken) return { ok: false, reason: 'Falta el Access Token' };
   if (!p.externalId) return { ok: false, reason: 'Falta el ID (Page ID / phone_number_id)' };
+
+  // WhatsApp Cloud API: el envío va a POST /{phone_number_id}/messages con el token
+  // del WABA/System User. Ese token NO está scopeado al phone_number_id: su propio id
+  // (profile_id/user_id que devuelve debug_token) es OTRO, así que el check de
+  // "el token es del ID configurado" daba un FALSO NEGATIVO ("El token es de OTRO ID").
+  // Validación correcta para WhatsApp: pedir GET /{phone_number_id} con el token.
+  // 200 => el token puede operar ese número (justo lo que necesita el envío).
+  if (p.channel === 'whatsapp') {
+    try {
+      const r = await axios.get(`${GRAPH_BASE}/${p.externalId}`, {
+        params: { fields: 'id,display_phone_number,verified_name,quality_rating', access_token: p.accessToken },
+        timeout: 10_000,
+      });
+      return {
+        ok: true,
+        info: {
+          type: 'WHATSAPP_CLOUD',
+          phone: r.data?.display_phone_number,
+          name: r.data?.verified_name,
+          quality: r.data?.quality_rating,
+        },
+      };
+    } catch (err: any) {
+      const e = err?.response?.data?.error;
+      if (e?.code === 190) return { ok: false, reason: 'Token vencido o inválido — regeneralo en Meta (WhatsApp → API setup) (code 190)' };
+      if (e?.code === 200 || e?.code === 100) {
+        return { ok: false, reason: `El token no tiene acceso al teléfono ${p.externalId} (${e.message}). Usá el token del WABA dueño de ese número.` };
+      }
+      return { ok: false, reason: e ? `${e.message} (code ${e.code})` : (err?.message ?? 'Error contactando a Meta') };
+    }
+  }
 
   // Token de "Instagram Login API" (IGAA…): va contra graph.instagram.com, no
   // graph.facebook.com. Se valida con GET /me y se chequea que el user_id coincida

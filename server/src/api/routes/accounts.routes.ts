@@ -198,7 +198,7 @@ export function accountsRouter(manager: AccountManager): Router {
       return res.status(400).json({ error: 'Esta línea no usa la API de Meta (es Baileys/QR). Conectala con el código QR.' });
     }
 
-    const result = await validateMetaToken({ externalId: acc.external_id, accessToken: acc.access_token });
+    const result = await validateMetaToken({ channel, externalId: acc.external_id, accessToken: acc.access_token });
     const newStatus = result.ok ? 'connected' : 'disconnected';
 
     // Persistir el estado resultante para que el badge del panel sea honesto.
