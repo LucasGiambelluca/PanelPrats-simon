@@ -2,6 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { AppointmentService } from '../../services/AppointmentService';
 import { validateBody } from '../middleware/validate';
+import { AppointmentAuditor, type AuditInput } from '../../core/agent/context/AppointmentAuditor';
+import { messageStore } from '../../services/MessageStore';
+import { AIService } from '../../services/AIService';
+import { supabase } from '../../config/supabase';
 
 // Enums de la ficha de recepción (migración 0023). Deben coincidir con los CHECK del SQL.
 const motivoEnum = z.enum([
@@ -119,6 +123,45 @@ export function appointmentsRouter(): Router {
     try {
       await AppointmentService.delete(req.params.id);
       res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  const auditor = new AppointmentAuditor({ complete: (o) => AIService.complete(o) });
+  const AUDIT_MAX = 50;
+
+  // Audita las citas (account_id+rango, o ids puntuales). Persiste audit_json.
+  r.post('/audit', async (req, res) => {
+    try {
+      const { account_id, ids } = req.body || {};
+      let citas = await AppointmentService.list(account_id && account_id !== 'all' ? account_id : undefined);
+      if (Array.isArray(ids) && ids.length) citas = citas.filter((c) => ids.includes(c.id));
+      const truncated = citas.length > AUDIT_MAX;
+      citas = citas.slice(0, AUDIT_MAX);
+
+      let flagged = 0; let errored = 0;
+      const results: any[] = [];
+      for (const c of citas) {
+        const transcript = await messageStore.getTranscript(c.account_id, c.phone).catch(() => '');
+        let channel = 'whatsapp';
+        try {
+          const { data } = await supabase.from('accounts').select('channel').eq('id', c.account_id).maybeSingle();
+          channel = (data as any)?.channel || 'whatsapp';
+        } catch { /* default whatsapp */ }
+
+        const input: AuditInput = {
+          appointment: { nombre: c.nombre ?? null, telefono: c.telefono ?? null, start_time: c.start_time ?? null, end_time: c.end_time ?? null, oficina: c.oficina ?? null, motivo: (c.motivo as any) ?? null },
+          transcript, channel, contactPhone: c.phone,
+        };
+        const result = await auditor.audit(input);
+        if (result.error) errored++;
+        if (result.revisar) flagged++;
+        await AppointmentService.saveAudit(c.id, result).catch(() => {});
+        results.push({ id: c.id, revisar: result.revisar, sin_chat: result.sin_chat, campos: result.campos });
+      }
+
+      res.json({ audited: citas.length, flagged, errored, truncated, results });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
