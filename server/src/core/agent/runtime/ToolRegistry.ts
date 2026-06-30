@@ -30,6 +30,8 @@ export interface ToolDeps {
   offered?: { set: (accountId: string, phone: string, opts: OfferedOption[]) => Promise<void>; get: (accountId: string, phone: string) => Promise<OfferedOption[]> };
   // Ficha IA al agendar (Capacidad 2).
   buildFicha?: (conversation: string, ctx: { telefono: string; modalidad: 'presencial' | 'video'; zona?: string | null }) => Promise<{ resumen_ia: string; perfil: Record<string, any> }>;
+  // Registro de la calificación del área (memoria estructurada por área).
+  setCalificacion?: (accountId: string, phone: string, area: string, entry: { resultado: string; datos: Record<string, any>; calificado_at: string }) => Promise<void>;
 }
 
 // Esquema de tools en formato OpenAI function-calling.
@@ -45,6 +47,7 @@ const SCHEMAS = [
   { type: 'function', function: { name: 'pick_option', description: 'Interpreta una respuesta del cliente que se refiere a una opción ya ofrecida ("el tercero", "el de videollamada", "a la tarde"). Devuelve el valor elegido o null si es ambiguo.', parameters: { type: 'object', properties: { user_text: { type: 'string' } }, required: ['user_text'] } } },
   { type: 'function', function: { name: 'start_booking', description: 'Iniciá el agendado de un turno cuando el cliente quiere una cita/consulta. A partir de ahí un flujo guiado propone horarios, toma la elección y confirma SOLO; vos NO sigas los pasos ni llames book_appointment manualmente. Pasá lo que ya sepas (modalidad, zona, nombre).', parameters: { type: 'object', properties: { modalidad: { type: 'string', enum: ['presencial', 'video'] }, zona: { type: 'string' }, nombre: { type: 'string' } } } } },
   { type: 'function', function: { name: 'validate_phone', description: 'Validá un número de teléfono que el cliente te DICE (no el de WhatsApp): chequea que tenga forma de número argentino con código de área real. Usala cuando el cliente te da un número de contacto. Si NO es válido, pedíle que lo confirme.', parameters: { type: 'object', properties: { numero: { type: 'string' } }, required: ['numero'] } } },
+  { type: 'function', function: { name: 'set_qualification', description: 'Registrá el resultado de la calificación del área (jubilación, pensión, laboral, ART, tránsito) cuando terminaste las preguntas del PROCEDIMIENTO, ANTES de ofrecer agendar.', parameters: { type: 'object', properties: { area: { type: 'string', enum: ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito'] }, resultado: { type: 'string', enum: ['gratis', 'pago', 'descartar'] }, edad: { type: 'number' }, hijos: { type: 'number' }, aportes_aprox: { type: 'number' }, notas: { type: 'string' } }, required: ['area', 'resultado'] } } },
 ];
 
 export class ToolRegistry {
@@ -154,6 +157,18 @@ export class ToolRegistry {
         case 'validate_phone': {
           const r = validarTelefonoAR(String(args.numero ?? ''));
           return { ok: true, data: { valido: r.valido, normalizado: r.normalizado, motivo: r.motivo ?? null } };
+        }
+        case 'set_qualification': {
+          if (!this.deps.setCalificacion || !args?.area || !args?.resultado) return { ok: true, data: { registrado: false } };
+          const datos: Record<string, any> = {};
+          if (args.edad != null) datos.edad = args.edad;
+          if (args.hijos != null) datos.hijos = args.hijos;
+          if (args.aportes_aprox != null) datos.aportes_aprox = args.aportes_aprox;
+          if (args.notas) datos.notas = args.notas;
+          await this.deps.setCalificacion(ctx.accountId, ctx.phone, String(args.area), {
+            resultado: String(args.resultado), datos, calificado_at: new Date().toISOString(),
+          });
+          return { ok: true, data: { registrado: true } };
         }
         default:
           return { ok: false, error: `tool desconocida: ${name}` };

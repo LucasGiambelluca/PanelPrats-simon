@@ -12,6 +12,7 @@ const avFreeSlots = vi.fn();
 const avHasCapacity = vi.fn();
 const avOfficeHasProfessionals = vi.fn();
 const avPickProfessional = vi.fn();
+const setCalificacion = vi.fn();
 
 import { ToolRegistry } from '../ToolRegistry';
 
@@ -21,6 +22,7 @@ function makeRegistry() {
     knowledge: { search: kbSearch } as any,
     availability: { listOffices: avListOffices, getOffice: avGetOffice, freeSlots: avFreeSlots, hasCapacity: avHasCapacity, officeHasProfessionals: avOfficeHasProfessionals, pickProfessional: avPickProfessional } as any,
     handoff,
+    setCalificacion,
   });
 }
 
@@ -38,7 +40,7 @@ describe('ToolRegistry', () => {
     expect(names).toEqual([
       'book_appointment', 'cancel_appointment', 'check_availability',
       'handoff_to_human', 'list_offices', 'pick_option', 'reschedule_appointment',
-      'search_knowledge', 'start_booking', 'suggest_office', 'validate_phone',
+      'search_knowledge', 'set_qualification', 'start_booking', 'suggest_office', 'validate_phone',
     ]);
   });
 
@@ -51,6 +53,18 @@ describe('ToolRegistry', () => {
       { accountId: 'acc1', phone: '549111' });
     expect(res.ok).toBe(true);
     expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: 'acc1', phone: '549111', nombre: 'María' }));
+  });
+
+  it('set_qualification persiste el resultado por área con los datos y el sello', async () => {
+    const reg = makeRegistry();
+    const res = await reg.execute('set_qualification',
+      { area: 'jubilacion_mujer', resultado: 'gratis', edad: 61, hijos: 2, aportes_aprox: 22 },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(setCalificacion).toHaveBeenCalledWith('acc1', '549111', 'jubilacion_mujer',
+      expect.objectContaining({ resultado: 'gratis', datos: { edad: 61, hijos: 2, aportes_aprox: 22 } }));
+    const entry = setCalificacion.mock.calls[0][3];
+    expect(typeof entry.calificado_at).toBe('string');
   });
 
   it('book_appointment mapea SLOT_TAKEN a un error legible', async () => {
