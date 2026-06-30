@@ -1,6 +1,7 @@
 import { supabase } from '../../../config/supabase';
 import { AppointmentService } from '../../../services/AppointmentService';
 import type { ContactFicha } from './types';
+import type { AreaKey } from '../context/AreaDetector';
 
 // Merge incremental: agrega/actualiza solo con valores no-nulos (nunca borra).
 export function mergeProfile(prev: Record<string, any>, next: Record<string, any>): Record<string, any> {
@@ -29,16 +30,59 @@ export function buildFichaText(
   return parts.length ? `FICHA: ${parts.join('. ')}.` : 'FICHA: (contacto nuevo, sin datos previos).';
 }
 
+const AREA_LABEL: Record<string, string> = {
+  jubilacion_hombre: 'Jubilación Hombre', jubilacion_mujer: 'Jubilación Mujer',
+  jubilacion: 'Jubilación', pension_viudez: 'Pensión por viudez',
+  laboral: 'Laboral / Despido', art: 'ART', transito: 'Accidente de tránsito',
+};
+const RESULTADO_LABEL: Record<string, string> = {
+  gratis: 'VIABLE consulta gratis', pago: 'análisis previsional pago ($29.000)', descartar: 'no viable',
+};
+
+/**
+ * Bloque "CALIFICACIÓN PREVIA" para la ficha. Renderiza SOLO las entradas vigentes
+ * (now - calificado_at <= ttlDays). Si el mensaje trae área, prioriza esa; si no,
+ * todas las frescas. Función pura (testeable sin DB).
+ */
+export function buildCalificacionFicha(
+  calificacion: Record<string, any> | null | undefined,
+  area: AreaKey | null,
+  ttlDays: number,
+  now: number,
+): string {
+  if (!calificacion || typeof calificacion !== 'object') return '';
+  const ttlMs = ttlDays * 86400000;
+  const keys = area && calificacion[area] ? [area] : Object.keys(calificacion);
+  const lines: string[] = [];
+  for (const k of keys) {
+    const e = calificacion[k];
+    if (!e?.calificado_at || !e?.resultado) continue;
+    const ageMs = now - new Date(e.calificado_at).getTime();
+    if (!Number.isFinite(ageMs) || ageMs > ttlMs) continue; // vencida o fecha inválida → recalificar
+    const dias = Math.max(0, Math.floor(ageMs / 86400000));
+    const d = e.datos ?? {};
+    const datos = [
+      d.edad != null ? `${d.edad} años` : null,
+      d.hijos != null ? `${d.hijos} hijos` : null,
+      d.aportes_aprox != null ? `~${d.aportes_aprox} años aportes` : null,
+    ].filter(Boolean).join(', ');
+    lines.push(`${AREA_LABEL[k] ?? k}: ${RESULTADO_LABEL[e.resultado] ?? e.resultado}${datos ? ` (${datos})` : ''}, calificó hace ${dias} día${dias === 1 ? '' : 's'}`);
+  }
+  if (!lines.length) return '';
+  return `CALIFICACIÓN PREVIA — no re-preguntes lo ya sabido; ofrecé agendar (o el análisis pago) según el resultado:\n${lines.map((l) => `- ${l}`).join('\n')}`;
+}
+
 export class ContactMemory {
   /** Carga la memoria del contacto + próxima cita; arma la ficha lista para el prompt. */
   async load(accountId: string, phone: string): Promise<ContactFicha> {
     const { data } = await supabase
-      .from('contact_memory').select('profile, preferences, long_term_summary')
+      .from('contact_memory').select('profile, preferences, long_term_summary, calificacion')
       .eq('account_id', accountId).eq('phone', phone).maybeSingle();
 
     const profile = (data?.profile ?? {}) as Record<string, any>;
     const preferences = (data?.preferences ?? {}) as Record<string, any>;
     const summary = (data?.long_term_summary ?? null) as string | null;
+    const calificacion = ((data as any)?.calificacion ?? null) as Record<string, any> | null;
 
     let proximaCita: string | null = null;
     try {
@@ -55,7 +99,7 @@ export class ContactMemory {
       }
     } catch { /* sin agenda disponible: ficha sin próxima cita */ }
 
-    return { profile, preferences, summary, fichaText: buildFichaText(profile, preferences, summary, proximaCita) };
+    return { profile, preferences, summary, calificacion, fichaText: buildFichaText(profile, preferences, summary, proximaCita) };
   }
 
   /**
@@ -127,6 +171,26 @@ export class ContactMemory {
       }, { onConflict: 'account_id,phone' });
     } catch (e: any) {
       console.warn(`[ContactMemory] saveLoopGuardState error for ${phone}:`, e?.message || e);
+    }
+  }
+
+  /** Mergea la calificación de UN área en el mapa contact_memory.calificacion. Best-effort. */
+  async setCalificacion(
+    accountId: string, phone: string, area: string,
+    entry: { resultado: string; datos: Record<string, any>; calificado_at: string },
+  ): Promise<void> {
+    try {
+      const { data } = await supabase
+        .from('contact_memory').select('calificacion')
+        .eq('account_id', accountId).eq('phone', phone).maybeSingle();
+      const prev = ((data as any)?.calificacion ?? {}) as Record<string, any>;
+      const next = { ...prev, [area]: entry };
+      await supabase.from('contact_memory').upsert({
+        account_id: accountId, phone, calificacion: next,
+        last_interaction_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,phone' });
+    } catch (e: any) {
+      console.warn(`[ContactMemory] setCalificacion error for ${phone}:`, e?.message || e);
     }
   }
 

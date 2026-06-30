@@ -21,6 +21,7 @@ export interface ContactFicha {
   preferences: Record<string, any>;
   summary: string | null;
   fichaText: string; // línea(s) lista(s) para el prompt
+  calificacion?: Record<string, any> | null;
 }
 
 // Config de cuenta relevante para el agente.
