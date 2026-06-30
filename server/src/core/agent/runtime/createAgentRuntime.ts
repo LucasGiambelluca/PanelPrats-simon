@@ -172,7 +172,8 @@ export function getAgentRuntime(): AgentRuntime {
   // determinístico antes del tool-loop. El LLM solo clasifica (IntentClassifier) y
   // redacta (redactarMensaje). El control de flujo es 100% código.
   const conversationController = new ConversationController({
-    classify: (text, cctx) => classifyIntent({ complete: (o) => AIService.complete(o) }, { text, ctx: cctx }),
+    // gpt-4o para clasificar (más preciso en frases cortas ambiguas que el mini).
+    classify: (text, cctx) => classifyIntent({ complete: (o) => AIService.complete(o) }, { text, ctx: cctx, model: 'gpt-4o' }),
     history: (a, p) => recentHistory(a, p),
     loadState: (a, p) => memory.getDialogueState(a, p),
     saveState: (a, p, s) => memory.saveDialogueState(a, p, s),
