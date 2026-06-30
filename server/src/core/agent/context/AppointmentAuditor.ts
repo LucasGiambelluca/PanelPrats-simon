@@ -63,3 +63,97 @@ export function phoneFromTranscript(transcript: string): string | null {
   }
   return null;
 }
+
+const AUDIT_PROMPT = `Sos un auditor de calidad de un estudio jurídico previsional. Compará los datos de una CITA contra la CONVERSACIÓN real con el cliente.
+Para cada campo (nombre, motivo, fecha, oficina) devolvé si COINCIDE con lo que se dijo en el chat.
+Reglas DURAS:
+- NUNCA inventes. Si el chat NO menciona un dato, devolvé coincide=true y valor_chat=null (no se puede contradecir lo que no se dijo).
+- Sugerí un valor SOLO si hay evidencia explícita y clara en el chat.
+- confianza 0..1: qué tan seguro estás de la discrepancia.
+- motivo válido: jubilacion, puam, pension_v, reajuste, rti, laboral, pension_discapacidad, asesoramiento_pago, otro.
+Respondé SOLO JSON: {"campos":[{"campo":"nombre|motivo|fecha|oficina","valor_cita":string|null,"valor_chat":string|null,"coincide":boolean,"confianza":number,"sugerencia":string|null,"nota":string}]}`;
+
+function buildUserMessage(input: AuditInput): string {
+  const a = input.appointment;
+  return [
+    'CITA:',
+    `- nombre: ${a.nombre ?? '(vacío)'}`,
+    `- motivo: ${a.motivo ?? '(vacío)'}`,
+    `- fecha: ${a.start_time ?? '(vacío)'}`,
+    `- oficina: ${a.oficina ?? '(vacío)'}`,
+    '',
+    'CONVERSACIÓN:',
+    input.transcript,
+  ].join('\n');
+}
+
+function normalizeField(raw: any): AuditField | null {
+  const campo = raw?.campo;
+  if (!['nombre', 'motivo', 'fecha', 'oficina'].includes(campo)) return null;
+  return {
+    campo,
+    valor_cita: raw?.valor_cita ?? null,
+    valor_chat: raw?.valor_chat ?? null,
+    coincide: raw?.coincide !== false,
+    confianza: typeof raw?.confianza === 'number' ? Math.max(0, Math.min(1, raw.confianza)) : 0,
+    sugerencia: raw?.sugerencia ?? null,
+    nota: typeof raw?.nota === 'string' ? raw.nota : undefined,
+  };
+}
+
+export class AppointmentAuditor {
+  constructor(private deps: { complete: (o: any) => Promise<string> }) {}
+
+  async audit(input: AuditInput): Promise<AuditResult> {
+    if (!input.transcript || !input.transcript.trim()) {
+      return { sin_chat: true, revisar: false, campos: [] };
+    }
+
+    let campos: AuditField[] = [];
+    try {
+      const raw = await this.deps.complete({
+        systemPrompt: AUDIT_PROMPT,
+        userMessage: buildUserMessage(input),
+        jsonMode: true, temperature: 0, maxTokens: 600, model: 'gpt-4o',
+      });
+      const parsed = JSON.parse(raw);
+      campos = (Array.isArray(parsed?.campos) ? parsed.campos : [])
+        .map((f: any) => normalizeField(f))
+        .filter((f: AuditField | null): f is AuditField => !!f);
+    } catch (e: any) {
+      return { sin_chat: false, revisar: false, campos: [], error: String(e?.message ?? e) };
+    }
+
+    const tel = this.groundingTelefono(input);
+    if (tel) campos = [tel, ...campos.filter((c) => c.campo !== 'telefono')];
+
+    const area = areaToMotivo(detectArea(input.transcript));
+    if (area && input.appointment.motivo && area !== input.appointment.motivo) {
+      const existing = campos.find((c) => c.campo === 'motivo');
+      if (!existing || existing.coincide) {
+        campos = [
+          { campo: 'motivo', valor_cita: input.appointment.motivo, valor_chat: area, coincide: false, confianza: 0.7, sugerencia: area, nota: 'Área detectada en el chat distinta del motivo cargado.' },
+          ...campos.filter((c) => c.campo !== 'motivo'),
+        ];
+      }
+    }
+
+    const revisar = campos.some((c) => !c.coincide && c.confianza >= AUDIT_UMBRAL);
+    return { sin_chat: false, revisar, campos };
+  }
+
+  private groundingTelefono(input: AuditInput): AuditField | null {
+    const chatPhone = phoneFromTranscript(input.transcript);
+    const apptTel = input.appointment.telefono;
+    const apptNorm = apptTel ? (validarTelefonoAR(apptTel).normalizado ?? apptTel) : null;
+    const esIdDeRed = input.channel !== 'whatsapp' && !!apptTel && apptTel === input.contactPhone;
+    if (chatPhone && (esIdDeRed || (apptNorm && chatPhone !== apptNorm))) {
+      return {
+        campo: 'telefono', valor_cita: apptTel, valor_chat: chatPhone,
+        coincide: false, confianza: esIdDeRed ? 0.95 : 0.8, sugerencia: chatPhone,
+        nota: esIdDeRed ? 'La cita tiene el id de la red social, no un teléfono.' : 'El número del chat no coincide con el de la cita.',
+      };
+    }
+    return null;
+  }
+}
