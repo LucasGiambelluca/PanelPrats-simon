@@ -41,6 +41,20 @@ describe('agendaRouter RBAC', () => {
     expect(res.body.appointments).toEqual([]);
   });
 
+  it('ver_todas_agendas: empleada con flag ve la agenda de oficina → 200', async () => {
+    const res = makeRes();
+    await handler('get', '/offices/:id')({ user: { role: 'empleada', id: 'p1', verTodasAgendas: true }, params: { id: 'o1' }, query: { from: '2026-06-22T00:00:00Z', to: '2026-06-23T00:00:00Z' } } as any, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profesionales).toEqual([]);
+  });
+
+  it('ver_todas_agendas: empleada con flag ve agenda de un profesional ajeno → 200', async () => {
+    const res = makeRes();
+    await handler('get', '/professionals/:id')({ user: { role: 'empleada', id: 'p1', verTodasAgendas: true }, params: { id: 'p2' }, query: { account_id: 'acc1', from: '2026-06-22T00:00:00Z', to: '2026-06-23T00:00:00Z' } } as any, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.appointments).toEqual([]);
+  });
+
   it('assign: profesional ocupado → 409', async () => {
     apptUpdate.mockRejectedValueOnce(new Error('PROFESSIONAL_BUSY'));
     const res = makeRes();

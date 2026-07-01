@@ -330,7 +330,7 @@ export const configApi = {
 import type { Profile, Role } from '../types';
 
 export const meApi = {
-  get: () => api<{ id: string; role: Role; name: string | null }>('/api/me'),
+  get: () => api<{ id: string; role: Role; name: string | null; ver_todas_agendas?: boolean }>('/api/me'),
 };
 
 export const teamApi = {

@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { supabase } from '../../config/supabase';
 
 export type Role = 'admin' | 'empleada';
-export interface AuthUser { id: string; role: Role; name: string | null; }
+export interface AuthUser { id: string; role: Role; name: string | null; verTodasAgendas: boolean; }
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -25,19 +25,26 @@ export async function authContext(req: Request, res: Response, next: NextFunctio
   // Bypass de desarrollo: solo si DEV_AUTH_BYPASS=1 está explícitamente seteado.
   if (token === 'dev-token') {
     if (!devAuthEnabled()) return res.status(401).json({ error: 'No autenticado' });
-    req.user = { id: MOCK_ADMIN_ID, role: 'admin', name: 'Administrador (dev)' };
+    req.user = { id: MOCK_ADMIN_ID, role: 'admin', name: 'Administrador (dev)', verTodasAgendas: true };
     return next();
   }
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) return res.status(401).json({ error: 'Token inválido' });
 
+  // select('*') (no columnas fijas): resiliente si la migración 0033 (ver_todas_agendas)
+  // todavía no se aplicó — un select con columna ausente erroraría y dejaría sin auth a todos.
   const { data: prof } = await supabase
-    .from('profiles').select('role, name, active').eq('id', data.user.id).maybeSingle();
+    .from('profiles').select('*').eq('id', data.user.id).maybeSingle();
   // active debe ser explícitamente true; null/undefined NO autentica (evita escalación silenciosa).
   if (!prof || prof.active !== true) return res.status(401).json({ error: 'Sin perfil o inactivo' });
 
-  req.user = { id: data.user.id, role: prof.role as Role, name: prof.name ?? null };
+  req.user = {
+    id: data.user.id,
+    role: prof.role as Role,
+    name: prof.name ?? null,
+    verTodasAgendas: (prof as any).ver_todas_agendas === true,
+  };
   next();
 }
 

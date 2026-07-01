@@ -34,7 +34,15 @@ describe('authContext', () => {
     state.user = { id: 'u1' }; state.profile = { role: 'empleada', name: 'Ana', active: true };
     const req = makeReq('Bearer realtoken'); const res = makeRes(); let nexted = false;
     await authContext(req, res, () => { nexted = true; });
-    expect(nexted).toBe(true); expect(req.user).toEqual({ id: 'u1', role: 'empleada', name: 'Ana' });
+    expect(nexted).toBe(true);
+    expect(req.user).toEqual({ id: 'u1', role: 'empleada', name: 'Ana', verTodasAgendas: false });
+  });
+
+  it('profile con ver_todas_agendas=true => req.user.verTodasAgendas true', async () => {
+    state.user = { id: 'u1' }; state.profile = { role: 'empleada', name: 'Ana', active: true, ver_todas_agendas: true };
+    const req = makeReq('Bearer realtoken'); const res = makeRes(); let nexted = false;
+    await authContext(req, res, () => { nexted = true; });
+    expect(nexted).toBe(true); expect(req.user.verTodasAgendas).toBe(true);
   });
 
   it('profile inactivo => 401', async () => {

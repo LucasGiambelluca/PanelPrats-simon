@@ -163,7 +163,10 @@ export default function Agenda() {
     const phone = app.phone || app.telefono;
     navigate(`/inbox?account=${encodeURIComponent(app.account_id)}&phone=${encodeURIComponent(phone)}`);
   };
-  const { user, role } = useAuth();
+  const { user, role, verTodasAgendas } = useAuth();
+  // Ve la agenda de TODOS los profesionales: admin, o empleada con la capacidad
+  // ver_todas_agendas. Solo lectura — reasignar sigue siendo admin-only.
+  const puedeVerTodasAgendas = role === 'admin' || verTodasAgendas;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
   const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
@@ -287,20 +290,20 @@ export default function Agenda() {
     return () => clearInterval(interval);
   }, [activeAccountId, allLines]);
 
-  // Load professionals (admin) o bloquear a la agenda propia (empleada)
+  // Carga todas las agendas (admin o empleada con ver_todas_agendas) o bloquea a la propia.
   useEffect(() => {
-    if (role === 'admin') {
+    if (puedeVerTodasAgendas) {
       professionalsApi.list()
         .then((profs) => {
           setProfessionals(profs);
-          // Admin: arranca con todas las agendas + "sin asignar" visibles.
+          // Arranca con todas las agendas + "sin asignar" visibles.
           setSelectedProfs(new Set([...profs.map((p) => p.id), UNASSIGNED]));
         })
         .catch(() => setSelectedProfs(null));
     } else if (user) {
-      setSelectedProfs(new Set([user.id])); // empleada: solo su agenda
+      setSelectedProfs(new Set([user.id])); // empleada sin capacidad: solo su agenda
     }
-  }, [role, user]);
+  }, [puedeVerTodasAgendas, user]);
 
   // Synchronize mini calendar selected month when main calendar date changes
   useEffect(() => {
@@ -867,7 +870,7 @@ export default function Agenda() {
         </div>
 
         {/* AGENDAS (multi-select de profesionales, estilo Google Calendar) */}
-        {role === 'admin' && professionals.length > 0 && (
+        {puedeVerTodasAgendas && professionals.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <h3 className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${

@@ -21,9 +21,10 @@ const inRange = (a: any, from: number, to: number) =>
 export function agendaRouter(): Router {
   const r = Router();
 
-  // Agenda de una oficina (admin): columnas = profes + citas en rango, separando legacy.
+  // Agenda de una oficina (admin, o empleada con ver_todas_agendas): columnas = profes
+  // + citas en rango, separando legacy. Solo lectura — reasignar sigue admin-only.
   r.get('/offices/:id', async (req, res) => {
-    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Sin permiso' });
+    if (req.user?.role !== 'admin' && !req.user?.verTodasAgendas) return res.status(403).json({ error: 'Sin permiso' });
     const rg = rango(req, res); if (!rg) return;
 
     const { data: office, error: oErr } = await supabase.from('account_offices')
@@ -45,9 +46,9 @@ export function agendaRouter(): Router {
     res.json({ profesionales, appointments, unassigned });
   });
 
-  // Agenda de un profesional (admin cualquiera; empleada solo la propia).
+  // Agenda de un profesional (admin o ver_todas_agendas: cualquiera; empleada: solo la propia).
   r.get('/professionals/:id', async (req, res) => {
-    if (req.user?.role !== 'admin' && req.user?.id !== req.params.id) {
+    if (req.user?.role !== 'admin' && !req.user?.verTodasAgendas && req.user?.id !== req.params.id) {
       return res.status(403).json({ error: 'Sin permiso' });
     }
     const accountId = req.query.account_id as string;

@@ -33,6 +33,8 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: Role | null;
+  // Capacidad "ver todas las agendas" (empleada con el flag, o admin). Solo lectura.
+  verTodasAgendas: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ data: { user: User | null; session: Session | null }; error: any }>;
   signOut: () => Promise<void>;
@@ -42,6 +44,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   role: null,
+  verTodasAgendas: false,
   loading: true,
   signIn: async () => ({ data: { user: null, session: null }, error: null }),
   signOut: async () => {},
@@ -53,6 +56,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  const [verTodasAgendas, setVerTodasAgendas] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,15 +66,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(MOCK_SESSION);
       setUser(MOCK_USER);
       setRole('admin');
+      setVerTodasAgendas(true); // admin dev ve todas
       setLoading(false);
       return;
     }
 
     const resolveRole = async (s: Session | null) => {
-      if (!s) { setRole(null); return; }
+      if (!s) { setRole(null); setVerTodasAgendas(false); return; }
       // Si /api/me falla de forma transitoria (p.ej. en TOKEN_REFRESHED), NO nuleamos
       // el rol ya resuelto: evitar que la nav desaparezca por un error de red puntual.
-      try { const me = await meApi.get(); setRole(me.role); } catch { /* mantener rol previo */ }
+      try {
+        const me = await meApi.get();
+        setRole(me.role);
+        setVerTodasAgendas(me.role === 'admin' || me.ver_todas_agendas === true);
+      } catch { /* mantener rol previo */ }
     };
 
     // Get initial session
@@ -116,6 +125,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     session,
     user,
     role,
+    verTodasAgendas,
     loading,
     signIn,
     signOut,
