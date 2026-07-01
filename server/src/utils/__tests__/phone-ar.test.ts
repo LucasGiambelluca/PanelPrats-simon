@@ -22,14 +22,30 @@ describe('validarTelefonoAR', () => {
     expect(r.normalizado).toBe('542214567890');
   });
 
-  it('código de área inexistente → inválido (area_desconocida)', () => {
-    const r = validarTelefonoAR('9991234567');
+  it('primer dígito fuera de 1/2/3 → inválido (area_desconocida)', () => {
+    const r = validarTelefonoAR('4567890123'); // 10 díg pero arranca en 4
     expect(r.valido).toBe(false);
     expect(r.motivo).toBe('area_desconocida');
   });
 
   it('largo inválido → largo_invalido', () => {
     expect(validarTelefonoAR('12345').motivo).toBe('largo_invalido');
+  });
+
+  it('REGRESIÓN: números reales del interior que la lista blanca rechazaba → válidos', () => {
+    // Casos sacados de conversaciones de prod donde el agendado moría por teléfono.
+    const casos: Array<[string, string]> = [
+      ['3446406753', '543446406753'],   // Gualeguaychú (área 3446)
+      ['2932449224', '542932449224'],   // Punta Alta (área 2932)
+      ['3757222829', '543757222829'],   // Eldorado, Misiones (área 3757)
+      ['2984782478', '542984782478'],   // Río Negro (área 2984)
+      ['03446 15406753', '543446406753'], // mismo Gualeguaychú con 0 y 15 viejo
+    ];
+    for (const [entrada, esperado] of casos) {
+      const r = validarTelefonoAR(entrada);
+      expect(r.valido, entrada).toBe(true);
+      expect(r.normalizado, entrada).toBe(esperado);
+    }
   });
 
   it('sin dígitos → vacio', () => {
