@@ -17,7 +17,7 @@ function makeDeps(over: Partial<BookingDeps> = {}): BookingDeps {
         ? { oficina_sugerida: 'Quilmes', necesita_aclaracion: false }
         : /cordoba|plata/.test(t)
         ? { oficina_sugerida: null, necesita_aclaracion: false } // fuera de cobertura
-        : { oficina_sugerida: null, necesita_aclaracion: true, pregunta_aclaracion: '¿De qué zona sos?' };
+        : { oficina_sugerida: null, necesita_aclaracion: true, pregunta_aclaracion: '¿En qué zona o localidad vive?' };
     }),
     videoOfficeName: vi.fn(async () => 'Videollamada'),
     defaultOffice: vi.fn(async () => 'Capital'),
@@ -41,7 +41,7 @@ describe('BookingFlow — camino feliz presencial con zona', () => {
     expect(r.active).toBe(true);
   });
 
-  it('flujo completo: elige "el primero", da nombre, confirma → agenda', async () => {
+  it('flujo completo: elige "el primero", da nombre → agenda DIRECTO (sin confirmar)', async () => {
     const deps = makeDeps();
     let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
 
@@ -50,25 +50,86 @@ describe('BookingFlow — camino feliz presencial con zona', () => {
     expect(step.state.chosenStart).toBe(SLOTS[0].start);
     state = step.state;
 
+    // Con el nombre ya agenda: NO hay turno de confirmación intermedio.
     step = await advanceBooking(state, 'mi nombre es Juan', deps);
-    expect(step.state.stage).toBe('confirm');
     expect(step.state.nombre).toBe('Juan');
-    expect(step.messages.join(' ')).toMatch(/Juan/);
-    state = step.state;
-
-    step = await advanceBooking(state, 'sí, confirmo', deps);
     expect(deps.book).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Juan', start: SLOTS[0].start, oficina: 'Quilmes', profileId: 'p1' }));
     expect(step.state.stage).toBe('done');
     expect(step.active).toBe(false);
-    expect(step.messages.join(' ')).toMatch(/Moreno 609/);   // dirección al confirmar
+    expect(step.messages.join(' ')).toMatch(/Juan/);
+    expect(step.messages.join(' ')).toMatch(/Moreno 609/);   // dirección al agendar
+    expect(step.messages.join(' ')).not.toMatch(/confirmo\?/i);
   });
 
-  it('WhatsApp (needsPhone=false): NO pide teléfono, va directo a confirmar', async () => {
+  it('WhatsApp (needsPhone=false): NO pide teléfono, agenda directo', async () => {
     const deps = makeDeps();
     let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
     let step = await advanceBooking(state, 'el primero', deps);   // → ask_name
-    step = await advanceBooking(step.state, 'Juan Pérez', deps);  // nombre → confirm (sin teléfono)
-    expect(step.state.stage).toBe('confirm');
+    step = await advanceBooking(step.state, 'Juan Pérez', deps);  // nombre → agenda directo
+    expect(step.state.stage).toBe('done');
+    expect(deps.book).toHaveBeenCalledOnce();
+  });
+});
+
+describe('apego al libreto', () => {
+  it('slot elegido + nombre → agenda DIRECTO, sin "¿Confirmo? (sí/no)"', async () => {
+    const deps = makeDeps();
+    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús', nombre: 'Juan' }, deps);
+    const r = await advanceBooking(state, 'el primero', deps);
+    expect(deps.book).toHaveBeenCalledOnce();
+    expect(r.state.stage).toBe('done');
+    expect(r.active).toBe(false);
+    expect(r.messages[0]).not.toMatch(/confirmo\?/i);
+    expect(r.messages[0]).toMatch(/queda agendad/i);
+  });
+
+  it('ningún mensaje del flujo contiene emojis ni voseo básico', async () => {
+    const deps = makeDeps();
+    const flows: string[] = [];
+    let s = await startBooking({}, deps); flows.push(...s.messages);
+    let a = await advanceBooking(s.state, 'presencial', deps); flows.push(...a.messages);
+    a = await advanceBooking(a.state, 'no sé la zona', deps); flows.push(...a.messages);
+    for (const m of flows) {
+      expect(m, m).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u);
+      expect(m, m).not.toMatch(/\b(decime|pasámelo|pasamelo|confirmame|preferís|preferis|sos|querés|queres|elegí|tenés|tenes)\b/i);
+    }
+  });
+
+  it('no repite la misma plantilla: 2 fallos seguidos → mensajes distintos', async () => {
+    const deps = makeDeps();
+    const s = await startBooking({ modalidad: 'video' }, deps);
+    const r1 = await advanceBooking(s.state, 'zzz no entiendo', deps);
+    const r2 = await advanceBooking(r1.state, 'qqq tampoco', deps);
+    expect(r1.messages[0]).not.toBe(r2.messages[0]);
+  });
+
+  it('nombre placeholder ("Cliente") NO se acepta como nombre', async () => {
+    const deps = makeDeps();
+    const r = await startBooking({ nombre: 'Cliente', modalidad: 'video' }, deps);
+    expect(r.state.nombre).toBeUndefined();
+  });
+
+  it('teléfono pasado en start_booking se hereda', async () => {
+    const deps = makeDeps();
+    const r = await startBooking({ modalidad: 'video', nombre: 'Ana', telefono: '541134567890', needsPhone: true }, deps);
+    expect(r.state.telefono).toBe('541134567890');
+  });
+
+  it('ask_phone en FB/IG con "este mismo" pide un número real', async () => {
+    const deps = makeDeps();
+    const state = { stage: 'ask_phone' as const, modalidad: 'video' as const, oficina: 'Videollamada', nombre: 'Ana', needsPhone: true, chosenStart: SLOTS[0].start, meta: { [SLOTS[0].start]: { end: SLOTS[0].end, oficina: 'Videollamada' } } };
+    const r = await advanceBooking(state, 'este mismo', deps);
+    expect(r.state.stage).toBe('ask_phone');
+    expect(r.messages[0]).toMatch(/número/i);
+  });
+
+  it('presencial sin horarios → AVISA que pasa a videollamada (no cambia en silencio)', async () => {
+    const freeSlots = vi.fn()
+      .mockResolvedValueOnce([])                 // presencial: vacío
+      .mockResolvedValue(SLOTS);                 // luego video
+    const deps = makeDeps({ freeSlots });
+    const r = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    expect(r.messages[0]).toMatch(/videollamada/i);
   });
 });
 
@@ -89,14 +150,11 @@ describe('BookingFlow — FB/IG piden teléfono real (needsPhone)', () => {
     step = await advanceBooking(step.state, 'no sé', deps);
     expect(step.state.stage).toBe('ask_phone');
 
-    // Número válido → guarda normalizado y pasa a confirmar.
+    // Número válido → agenda DIRECTO con el teléfono normalizado (sin confirmar).
     step = await advanceBooking(step.state, '11 2345-6789', deps);
-    expect(step.state.stage).toBe('confirm');
-    expect(step.state.telefono).toBe('541123456789');
-
-    step = await advanceBooking(step.state, 'sí', deps);
     expect(deps.book).toHaveBeenCalledWith(expect.objectContaining({ telefono: '541123456789' }));
     expect(step.state.stage).toBe('done');
+    expect(step.state.telefono).toBe('541123456789');
   });
 });
 
@@ -148,14 +206,17 @@ describe('BookingFlow — robustez', () => {
     expect(deps.book).not.toHaveBeenCalled();
   });
 
-  it('en confirm, "no" vuelve a ofrecer los horarios', async () => {
+  it('legacy confirm (estados viejos en Redis): "no" re-ofrece sin agendar; "sí" agenda', async () => {
     const deps = makeDeps();
-    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
-    state = (await advanceBooking(state, 'el segundo', deps)).state;
-    state = (await advanceBooking(state, 'Maria', deps)).state;
-    const step = await advanceBooking(state, 'no, mejor otro', deps);
-    expect(step.state.stage).toBe('await_slot');
+    const offered = SLOTS.map((s, i) => ({ index: i + 1, label: s.start, value: s.start }));
+    const meta = Object.fromEntries(SLOTS.map((s) => [s.start, { end: s.end, oficina: 'Quilmes', profileId: s.profileId }]));
+    const base = { stage: 'confirm' as const, modalidad: 'presencial' as const, oficina: 'Quilmes', nombre: 'Maria', chosenStart: SLOTS[1].start, offered, meta };
+    const no = await advanceBooking(base, 'no, mejor otro', deps);
+    expect(no.state.stage).toBe('await_slot');
     expect(deps.book).not.toHaveBeenCalled();
+    const yes = await advanceBooking(base, 'sí, dale', deps);
+    expect(deps.book).toHaveBeenCalledOnce();
+    expect(yes.state.stage).toBe('done');
   });
 
   it('sin horarios disponibles → no rompe, ofrece alternativa', async () => {

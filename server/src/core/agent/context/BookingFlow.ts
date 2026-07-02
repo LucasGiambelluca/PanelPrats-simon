@@ -26,6 +26,7 @@ export interface BookingState {
   telefono?: string;                                          // teléfono real dado en el chat (FB/IG: el id de la red NO es teléfono)
   needsPhone?: boolean;                                       // canal sin número real (FB/IG) → pedirlo explícito
   desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
+  askRetries?: number;                                        // intentos fallidos de parseo en await_slot → rota la plantilla (anti-repetición)
 }
 
 export interface BookingSlot { start: string; end: string; profileId?: string | null; oficina?: string }
@@ -142,6 +143,11 @@ function cleanName(text: string): string {
   return s.slice(0, 60);
 }
 
+// El LLM a veces pasa un nombre-relleno ("Cliente") en vez del real. No se acepta:
+// se guardaron 15 citas con nombre "Cliente" en producción por esto.
+const NAME_PLACEHOLDERS = new Set(['cliente', 'usuario', 'senor', 'senora', 'sr', 'sra', 'sin nombre', 'na', 'n a', 'test', 'desconocido']);
+function isPlaceholderName(s: string): boolean { return NAME_PLACEHOLDERS.has(norm(s)); }
+
 const SLOT_LABEL = (s: BookingSlot): string => fmt(s.start);
 
 // Etiqueta de cara al CLIENTE: nunca exponemos el nombre interno de la agenda/
@@ -185,8 +191,8 @@ function showSlotsMessage(state: BookingState, offered: OfferedOption[], lead?: 
   const frags = items.map((i) => (multiDay ? `el ${i.dia} ${i.turno} a las ${i.hora}` : `${i.turno} a las ${i.hora}`));
   const lista = frags.length === 1 ? frags[0] : `${frags.slice(0, -1).join(', ')} o ${frags[frags.length - 1]}`;
   const diaPrefix = !multiDay ? `Para el ${[...dias][0]}: ` : '';
-  if (lead) return `${lead} ${diaPrefix}${lista}. ¿Cuál te queda más cómodo? Decime el horario. 🙂`;
-  return `${diaPrefix}tengo disponible ${lugarLabel(state)} ${lista}. Confirmame cuál te queda más cómodo (decime el horario). 🙂`;
+  if (lead) return `${lead} ${diaPrefix}${lista}. ¿Cuál le queda más cómodo? Puede decirme el horario o el día.`;
+  return `${diaPrefix}tengo disponible ${lugarLabel(state)} ${lista}. ¿Cuál le queda más cómodo? Puede decirme el horario o el día.`;
 }
 
 // Fuera de cobertura (otra provincia / lejos de toda sede): el libreto del estudio dice
@@ -206,11 +212,11 @@ async function outOfCoverage(state: BookingState, deps: BookingDeps): Promise<Bo
   if (sede) {
     const step = await loadSlots({ ...state, modalidad: 'presencial', oficina: sede }, deps);
     if (step.messages.length && step.state.stage === 'await_slot') {
-      step.messages[0] = `En esa zona no tenemos sede; te ofrezco una de nuestras oficinas. ${step.messages[0]}`;
+      step.messages[0] = `En esa zona no tenemos sede; le ofrezco una de nuestras oficinas. ${step.messages[0]}`;
     }
     return step;
   }
-  return { state: { ...state, stage: 'ask_modality' }, messages: ['Esa zona nos queda lejos de nuestras oficinas. ¿Lo hacemos por videollamada?'], active: true };
+  return { state: { ...state, stage: 'ask_modality' }, messages: ['Esa zona nos queda lejos de nuestras oficinas. ¿La hacemos por videollamada?'], active: true };
 }
 
 // Carga slots de UNA oficina y arma el paso await_slot. Si no hay, ofrece alternativa.
@@ -235,18 +241,22 @@ async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?:
   if (!slots.length) {
     // Pidió un día/turno puntual sin disponibilidad: avisar sin romper.
     if (opts.desde || opts.turno) {
-      return { state, messages: [`No tengo horarios para ese día/horario ${lugarLabel(state)}. ¿Querés que te muestre los más próximos?`], active: true };
+      return { state, messages: [`No tengo horarios para ese día/horario ${lugarLabel(state)}. ¿Quiere que le muestre los más próximos?`], active: true };
     }
-    // Sin horarios: ofrecer videollamada como salida (si no estábamos ya en video).
+    // Sin horarios presenciales: caer a videollamada, PERO avisando (nunca en silencio).
     if (state.modalidad !== 'video') {
       const video = await deps.videoOfficeName();
       if (video) {
-        return loadSlots({ ...state, modalidad: 'video', oficina: video }, deps);
+        const step = await loadSlots({ ...state, modalidad: 'video', oficina: video }, deps);
+        if (step.messages.length && step.state.stage === 'await_slot') {
+          step.messages[0] = `Por el momento no tengo horarios presenciales en esa sede. Si le sirve, le paso opciones por videollamada: ${step.messages[0]}`;
+        }
+        return step;
       }
     }
     return {
       state: { ...state, stage: 'ask_modality' },
-      messages: [`Por ahora no tengo horarios libres ${lugarLabel(state)}. ¿Querés que probemos de otra forma?`],
+      messages: [`Por ahora no tengo horarios libres ${lugarLabel(state)}. ¿Quiere que lo veamos de otra forma?`],
       active: true,
     };
   }
@@ -266,58 +276,73 @@ async function afterModality(state: BookingState, deps: BookingDeps): Promise<Bo
   if (state.modalidad === 'video') {
     const video = await deps.videoOfficeName();
     if (!video) {
-      return { state: { ...state, stage: 'ask_modality' }, messages: ['No tengo la videollamada disponible ahora. ¿Preferís presencial?'], active: true };
+      return { state: { ...state, stage: 'ask_modality' }, messages: ['No tengo la videollamada disponible ahora. ¿Prefiere presencial?'], active: true };
     }
     return loadSlots({ ...state, oficina: video }, deps);
   }
   // presencial
   if (!state.zona) {
-    return { state: { ...state, stage: 'ask_zone' }, messages: ['¿De qué zona sos? Así te sugiero la oficina más cercana. 🙂'], active: true };
+    return { state: { ...state, stage: 'ask_zone' }, messages: ['¿En qué localidad o zona vive?'], active: true };
   }
   const sug = await deps.suggestOffice(state.zona);
   if (sug.oficina_sugerida) {
     return loadSlots({ ...state, oficina: sug.oficina_sugerida }, deps);
   }
   if (sug.necesita_aclaracion) {
-    return { state: { ...state, stage: 'ask_zone' }, messages: [sug.pregunta_aclaracion || '¿En qué zona o localidad estás?'], active: true };
+    return { state: { ...state, stage: 'ask_zone' }, messages: [sug.pregunta_aclaracion || '¿En qué zona o localidad vive?'], active: true };
   }
   // fuera de cobertura → presencial en una sede igual (presencial es la opción principal)
   return outOfCoverage(state, deps);
 }
 
-function confirmMessage(state: BookingState): string {
-  const fecha = state.chosenStart ? fmt(state.chosenStart) : 'el horario elegido';
-  return `Perfecto${state.nombre ? ', ' + state.nombre : ''}. Te agendo el ${fecha} ${lugarLabel(state)}. ¿Confirmo? (sí / no)`;
+// Agenda DIRECTO (sin "¿confirmo? sí/no"): el libreto del estudio prohíbe pedir
+// confirmación explícita; se da la cita por confirmada con naturalidad.
+async function bookNow(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
+  const start = state.chosenStart!;
+  const m = state.meta?.[start];
+  try {
+    const res = await deps.book({ nombre: state.nombre!, start, end: m?.end ?? start, oficina: m?.oficina ?? state.oficina!, profileId: m?.profileId ?? null, telefono: state.telefono });
+    const extra = res.video_link ? `\nEnlace: ${res.video_link}` : res.direccion ? `\nDirección: ${res.direccion}` : '';
+    return {
+      state: { ...state, stage: 'done' },
+      messages: [`Perfecto${state.nombre ? ', ' + state.nombre : ''}. Queda agendado para el ${fmt(start)} ${lugarLabel(state)}.${extra}\nCualquier cosa que necesite, estoy a disposición.`],
+      active: false,
+    };
+  } catch {
+    // El slot se ocupó entre medio (TOCTOU): volver a ofrecer.
+    const reload = await loadSlots({ ...state, chosenStart: undefined }, deps);
+    return { state: reload.state, messages: ['Ese horario se acaba de ocupar recién. ' + reload.messages[0]], active: true };
+  }
 }
 
 // Tras resolver el nombre: si el canal NO trae número real (FB/IG → needsPhone),
-// pedir el teléfono antes de confirmar; si ya lo tenemos (WhatsApp), confirmar directo.
-function afterName(state: BookingState): BookingStep {
+// pedir el teléfono; si ya lo tenemos (WhatsApp), agendar DIRECTO.
+function afterName(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
   if (state.needsPhone && !state.telefono) {
-    return {
-      state: { ...state, stage: 'ask_phone' },
-      messages: ['¿A qué número de WhatsApp te contactamos? Pasámelo con código de área (ej: 11 1234-5678). 🙂'],
+    return Promise.resolve({
+      state: { ...state, stage: 'ask_phone' as const },
+      messages: ['¿A qué número de teléfono lo contactamos? Con código de área, por favor.'],
       active: true,
-    };
+    });
   }
-  const next = { ...state, stage: 'confirm' as const };
-  return { state: next, messages: [confirmMessage(next)], active: true };
+  return bookNow(state, deps);
 }
 
 /** Inicia el flujo (lo llama el LLM vía tool start_booking). */
 export async function startBooking(
-  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; needsPhone?: boolean },
+  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; telefono?: string; needsPhone?: boolean },
   deps: BookingDeps,
 ): Promise<BookingStep> {
   const state: BookingState = {
     stage: 'ask_modality',
     modalidad: args.modalidad,
     zona: args.zona ?? null,
-    nombre: args.nombre ? cleanName(args.nombre) : undefined,
+    nombre: args.nombre && !isPlaceholderName(args.nombre) ? cleanName(args.nombre) : undefined,
+    telefono: args.telefono?.trim() || undefined,
     needsPhone: !!args.needsPhone,
   };
   if (!state.modalidad) {
-    return { state, messages: ['¡Dale! ¿Preferís la consulta presencial o por videollamada?'], active: true };
+    return { state, messages: ['¿Prefiere la consulta presencial o por videollamada?'], active: true };
   }
   return afterModality(state, deps);
 }
@@ -327,7 +352,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
   switch (state.stage) {
     case 'ask_modality': {
       const m = detectModalidad(text);
-      if (!m) return { state, messages: ['¿Lo hacemos presencial o por videollamada?'], active: true };
+      if (!m) return { state, messages: ['¿La prefiere presencial o por videollamada?'], active: true };
       return afterModality({ ...state, modalidad: m }, deps);
     }
 
@@ -341,67 +366,62 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
     }
 
     case 'await_slot': {
-      const req = parseSlotRequest(text);
-      // Pidió un DÍA explícito distinto ("el martes", "mañana") → re-buscamos ese día,
-      // sin elegir del día actual.
-      if (req.desde) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { desde: req.desde, turno: req.turno });
-      }
+      // Elegir una opción YA ofrecida gana sobre todo (Task 2: resolveOption robusto).
       const picked = resolveOption({ userText: text, offered: state.offered ?? [] });
       if (picked.matchedValue && picked.confianza >= 0.55) {
-        const withSlot = { ...state, chosenStart: picked.matchedValue };
-        if (withSlot.nombre) return afterName(withSlot);
-        return { state: { ...withSlot, stage: 'ask_name' as const }, messages: ['Genial. ¿A nombre de quién lo agendo?'], active: true };
+        const withSlot = { ...state, chosenStart: picked.matchedValue, askRetries: 0 };
+        if (withSlot.nombre) return afterName(withSlot, deps);
+        return { state: { ...withSlot, stage: 'ask_name' as const }, messages: ['Perfecto. ¿A nombre de quién agendo la consulta?'], active: true };
       }
-      // No eligió. ¿Cambió de modalidad?
+      const req = parseSlotRequest(text);
+      // Pidió un DÍA explícito distinto ("el martes", "mañana") → re-buscamos ese día.
+      if (req.desde) {
+        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { desde: req.desde, turno: req.turno });
+      }
+      // ¿Cambió de modalidad?
       const m = detectModalidad(text);
-      if (m && m !== state.modalidad) return afterModality({ ...state, modalidad: m, oficina: undefined, offered: undefined, meta: undefined }, deps);
+      if (m && m !== state.modalidad) return afterModality({ ...state, modalidad: m, oficina: undefined, offered: undefined, meta: undefined, askRetries: 0 }, deps);
       // ¿Pidió otro turno/horario ("de tarde", "más temprano", "otro")? → re-buscar,
       // manteniendo el día que ya venía mirando (state.desde) si lo hay.
       if (req.isRequest) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined });
+        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined });
       }
-      return { state, messages: ['Decime qué horario preferís (ej: "a las 10" o "el del mediodía"), o pedime otro día. 🙂'], active: true };
+      // No entendió: rotar la plantilla (en producción 22 convos loopearon con el
+      // mismo "Decime qué horario preferís" repetido).
+      const retries = (state.askRetries ?? 0) + 1;
+      const fallbacks = [
+        'Disculpe, no le entendí el horario. Puede decirme la hora o el día de la opción que le quede mejor.',
+        'Le repito las opciones: ' + showSlotsMessage(state, state.offered ?? []),
+        'Si ninguno de esos horarios le sirve, dígame qué día le queda cómodo y le busco otros.',
+      ];
+      return { state: { ...state, askRetries: retries }, messages: [fallbacks[Math.min(retries - 1, 2)]], active: true };
     }
 
     case 'ask_name': {
       const nombre = cleanName(text);
-      if (!nombre || nombre.length < 2) return { state, messages: ['¿Me decís tu nombre y apellido para agendarlo?'], active: true };
-      return afterName({ ...state, nombre });
+      if (!nombre || nombre.length < 2 || isPlaceholderName(nombre)) return { state, messages: ['¿Me dice su nombre para agendarlo?'], active: true };
+      return afterName({ ...state, nombre }, deps);
     }
 
     case 'ask_phone': {
+      // FB/IG: "este mismo"/"desde este" NO es un teléfono (es la red). Pedir número real.
+      if (state.needsPhone && /\b(este|el mismo|este mismo|desde este)\b/.test(norm(text))) {
+        return { state, messages: ['Le escribo por esta red, así que necesito un número de teléfono para contactarlo. ¿Me lo pasa con código de área?'], active: true };
+      }
       const v = validarTelefonoAR(text);
       if (!v.valido || !v.normalizado) {
-        return { state, messages: ['Ese número no me cierra. Pasámelo con código de área (ej: 11 1234-5678), así te podemos contactar. 🙂'], active: true };
+        return { state, messages: ['Me parece que ese número está incompleto. ¿Me lo puede pasar de nuevo, con código de área?'], active: true };
       }
-      const next = { ...state, telefono: v.normalizado, stage: 'confirm' as const };
-      return { state: next, messages: [confirmMessage(next)], active: true };
+      return bookNow({ ...state, telefono: v.normalizado }, deps);
     }
 
+    // Legado: estados que ya estaban en 'confirm' en Redis (el flujo nuevo agenda directo).
     case 'confirm': {
-      if (isAffirmative(text)) {
-        const start = state.chosenStart!;
-        const m = state.meta?.[start];
-        try {
-          const res = await deps.book({ nombre: state.nombre!, start, end: m?.end ?? start, oficina: m?.oficina ?? state.oficina!, profileId: m?.profileId ?? null, telefono: state.telefono });
-          const fecha = fmt(start);
-          const extra = res.video_link ? `\nEnlace: ${res.video_link}` : res.direccion ? `\nDirección: ${res.direccion}` : '';
-          return {
-            state: { ...state, stage: 'done' },
-            messages: [`¡Listo${state.nombre ? ', ' + state.nombre : ''}! Te agendé el ${fecha} ${lugarLabel(state)}.${extra}\nUn abogado se va a contactar con vos. Cualquier cosa escribime. 🙌`],
-            active: false,
-          };
-        } catch {
-          // El slot se ocupó entre medio (TOCTOU): volver a ofrecer.
-          const reload = await loadSlots({ ...state, chosenStart: undefined }, deps);
-          return { state: reload.state, messages: ['Uy, ese horario se acaba de ocupar. ' + reload.messages[0]], active: true };
-        }
-      }
+      if (isAffirmative(text)) return bookNow(state, deps);
       if (isNegative(text)) {
-        return { state: { ...state, stage: 'await_slot', chosenStart: undefined }, messages: ['Dale, elegí otro: ' + showSlotsMessage(state, state.offered ?? [])], active: true };
+        return { state: { ...state, stage: 'await_slot', chosenStart: undefined }, messages: ['Como no, elija otro: ' + showSlotsMessage(state, state.offered ?? [])], active: true };
       }
-      return { state, messages: ['¿Te lo confirmo? Respondé sí o no. 🙂'], active: true };
+      return { state, messages: ['¿Le confirmo ese horario? Respondame sí o no, por favor.'], active: true };
     }
 
     default:
