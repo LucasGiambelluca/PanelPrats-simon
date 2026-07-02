@@ -50,6 +50,9 @@ export interface RuntimeDeps {
     saveState: (accountId: string, phone: string, state: LoopGuardState) => Promise<void>;
     onBlock?: (accountId: string, phone: string, reason: 'rate' | 'echo') => Promise<void>;
   };
+  // Gate duro: si hay un área de calificación en juego y NO hay calificación vigente,
+  // start_booking se rechaza como tool error (el modelo sigue calificando).
+  canStartBooking?: (accountId: string, phone: string) => Promise<{ ok: boolean; reason?: string }>;
   // Reloj inyectable (test). Default: Date.now.
   now?: () => number;
 }
@@ -178,16 +181,28 @@ export class AgentRuntime {
         return finish(reply);
       }
 
-      // El modelo dispara el agendado: a partir de acá conduce el flujo determinístico.
+      // El modelo dispara el agendado: chequear el gate de calificación primero.
       const startCall = res.toolCalls.find((c) => c.name === 'start_booking');
+      let bookingBlockedReason: string | null = null;
       if (this.deps.booking && startCall) {
-        const r = await this.deps.booking.start(accountId, phone, { ...(startCall.args ?? {}), needsPhone }, ctx.conversation ?? text);
-        if (r.messages.length) return finishWith(r.messages);
+        const gate = this.deps.canStartBooking
+          ? await this.deps.canStartBooking(accountId, phone).catch(() => ({ ok: true as const }))
+          : { ok: true as const };
+        if (gate.ok) {
+          const r = await this.deps.booking.start(accountId, phone, { ...(startCall.args ?? {}), needsPhone }, ctx.conversation ?? text);
+          if (r.messages.length) return finishWith(r.messages);
+        } else {
+          bookingBlockedReason = gate.reason ?? 'Completá la calificación del área con set_qualification antes de agendar.';
+        }
       }
 
       messages.push({ role: 'assistant', content: '', tool_calls: res.toolCalls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } })) });
       for (const call of res.toolCalls) {
-        if (call.name === 'start_booking') { messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify({ ok: true, data: { started: true } }) }); continue; }
+        if (call.name === 'start_booking') {
+          const payload = bookingBlockedReason ? { ok: false, error: bookingBlockedReason } : { ok: true, data: { started: true } };
+          messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify(payload) });
+          continue;
+        }
         const result = await this.deps.tools.execute(call.name, call.args, ctx);
         messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify(result) });
       }

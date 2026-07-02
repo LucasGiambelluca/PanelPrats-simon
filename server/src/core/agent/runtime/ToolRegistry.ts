@@ -5,6 +5,7 @@ import type { AvailabilityService } from '../../../services/AvailabilityService'
 import type { OfferedOption } from '../context/OptionResolver';
 import { resolveOption } from '../context/OptionResolver';
 import { validarTelefonoAR } from '../../../utils/phone-ar';
+import { validateQualification } from '../context/QualificationRules';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 function fmtSlot(iso: string): string {
@@ -45,9 +46,9 @@ const SCHEMAS = [
   { type: 'function', function: { name: 'handoff_to_human', description: 'Deriva la conversación a una persona del estudio.', parameters: { type: 'object', properties: { motivo: { type: 'string' }, resumen_caso: { type: 'string' } }, required: ['motivo', 'resumen_caso'] } } },
   { type: 'function', function: { name: 'suggest_office', description: 'Dada la zona/localidad que dice el cliente (ej "soy de Lanús"), sugiere la oficina más cercana. Si es vago o fuera de cobertura, lo indica. Usala antes de proponer presencial.', parameters: { type: 'object', properties: { location_text: { type: 'string' } }, required: ['location_text'] } } },
   { type: 'function', function: { name: 'pick_option', description: 'Interpreta una respuesta del cliente que se refiere a una opción ya ofrecida ("el tercero", "el de videollamada", "a la tarde"). Devuelve el valor elegido o null si es ambiguo.', parameters: { type: 'object', properties: { user_text: { type: 'string' } }, required: ['user_text'] } } },
-  { type: 'function', function: { name: 'start_booking', description: 'Iniciá el agendado de un turno cuando el cliente quiere una cita/consulta. A partir de ahí un flujo guiado propone horarios, toma la elección y confirma SOLO; vos NO sigas los pasos ni llames book_appointment manualmente. Pasá lo que ya sepas (modalidad, zona, nombre).', parameters: { type: 'object', properties: { modalidad: { type: 'string', enum: ['presencial', 'video'] }, zona: { type: 'string' }, nombre: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'start_booking', description: 'Iniciá el agendado de un turno cuando el cliente quiere una cita/consulta. A partir de ahí un flujo guiado propone horarios, toma la elección y confirma SOLO; vos NO sigas los pasos ni llames book_appointment manualmente. Pasá lo que ya sepas (modalidad, zona, nombre, telefono).', parameters: { type: 'object', properties: { modalidad: { type: 'string', enum: ['presencial', 'video'] }, zona: { type: 'string' }, nombre: { type: 'string' }, telefono: { type: 'string', description: 'Teléfono ya validado con validate_phone, si el cliente lo dio en la conversación.' } } } } },
   { type: 'function', function: { name: 'validate_phone', description: 'Validá un número de teléfono que el cliente te DICE (no el de WhatsApp): chequea que tenga forma de número argentino con código de área real. Usala cuando el cliente te da un número de contacto. Si NO es válido, pedíle que lo confirme.', parameters: { type: 'object', properties: { numero: { type: 'string' } }, required: ['numero'] } } },
-  { type: 'function', function: { name: 'set_qualification', description: 'Registrá el resultado de la calificación del área (jubilación, pensión, laboral, ART, tránsito) cuando terminaste las preguntas del PROCEDIMIENTO, ANTES de ofrecer agendar.', parameters: { type: 'object', properties: { area: { type: 'string', enum: ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito'] }, resultado: { type: 'string', enum: ['gratis', 'pago', 'descartar'] }, edad: { type: 'number' }, hijos: { type: 'number' }, aportes_aprox: { type: 'number' }, notas: { type: 'string' } }, required: ['area', 'resultado'] } } },
+  { type: 'function', function: { name: 'set_qualification', description: 'Registrá el resultado de la calificación del área (jubilación, pensión, laboral, ART, tránsito) cuando terminaste las preguntas del PROCEDIMIENTO, ANTES de ofrecer agendar.', parameters: { type: 'object', properties: { area: { type: 'string', enum: ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito'] }, resultado: { type: 'string', enum: ['gratis', 'pago', 'descartar'] }, edad: { type: 'number' }, hijos: { type: 'number' }, aportes_aprox: { type: 'number' }, insalubres: { type: 'boolean', description: 'Solo jubilación hombre <63: ¿tiene aportes por tareas insalubres?' }, nacionalidad: { type: 'string', enum: ['argentino', 'extranjero'] }, anio_ingreso: { type: 'number', description: 'Extranjero: año de ingreso al país según DNI.' }, notas: { type: 'string' } }, required: ['area', 'resultado'] } } },
 ];
 
 export class ToolRegistry {
@@ -167,7 +168,12 @@ export class ToolRegistry {
           if (args.edad != null) datos.edad = args.edad;
           if (args.hijos != null) datos.hijos = args.hijos;
           if (args.aportes_aprox != null) datos.aportes_aprox = args.aportes_aprox;
+          if (args.insalubres != null) datos.insalubres = args.insalubres;
+          if (args.nacionalidad) datos.nacionalidad = args.nacionalidad;
+          if (args.anio_ingreso != null) datos.anio_ingreso = args.anio_ingreso;
           if (args.notas) datos.notas = args.notas;
+          const check = validateQualification(String(args.area), String(args.resultado), datos);
+          if (!check.ok) return { ok: false, error: check.error };
           await this.deps.setCalificacion(ctx.accountId, ctx.phone, String(args.area), {
             resultado: String(args.resultado), datos, calificado_at: new Date().toISOString(),
           });

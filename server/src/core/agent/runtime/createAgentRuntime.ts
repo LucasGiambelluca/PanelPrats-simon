@@ -20,6 +20,7 @@ import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
 import { createDialogueState } from '../context/DialogueState';
+import { hasCalificacionVigente, QUALIFICATION_AREAS } from '../context/QualificationRules';
 
 // Redacta UN mensaje (pregunta de slot / redirección off-topic) con la persona REAL
 // del estudio + el OBJETIVO inyectado por el controller. El LLM SOLO redacta; el flujo
@@ -218,6 +219,20 @@ export function getAgentRuntime(): AgentRuntime {
         if (!r.active && r.messages.length) await markBookingClosed(a, p);
         return r;
       },
+    },
+    canStartBooking: async (a, p) => {
+      try {
+        const st = await memory.getDialogueState(a, p);
+        const area = st?.area ?? null;
+        if (!area || !QUALIFICATION_AREAS.has(area)) return { ok: true };
+        const { calificacion } = await memory.load(a, p);
+        const acct = await loadAccount(a).catch(() => null);
+        const ok = hasCalificacionVigente(calificacion, area, acct?.calificacionTtlDays ?? 30, Date.now());
+        return ok ? { ok: true } : {
+          ok: false,
+          reason: 'Todavía no registraste la calificación de esta área. Hacé las preguntas del PROCEDIMIENTO (edad, insalubres/aportes, nacionalidad según corresponda), llamá set_qualification y recién después start_booking.',
+        };
+      } catch { return { ok: true }; } // best-effort: nunca romper el agendado por un error de lectura
     },
     bookingIntent: detectBookingIntent,
     areaDetector: detectArea,

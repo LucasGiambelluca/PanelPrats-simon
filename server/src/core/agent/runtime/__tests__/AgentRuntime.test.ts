@@ -90,6 +90,23 @@ describe('AgentRuntime.handle', () => {
     expect(deps.tools.execute).not.toHaveBeenCalled();          // no ejecutó tools genéricas
   });
 
+  it('start_booking bloqueado sin calificación vigente: no arranca booking y el modelo recibe el error', async () => {
+    const deps = makeDeps([
+      { toolCalls: [{ id: '1', name: 'start_booking', args: {} }] },
+      { content: 'Antes le hago unas preguntas.' },
+    ]);
+    const start = vi.fn();
+    (deps as any).booking = { isActive: vi.fn().mockResolvedValue(false), advance: vi.fn(), start };
+    (deps as any).canStartBooking = vi.fn().mockResolvedValue({ ok: false, reason: 'falta calificar' });
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', 'p1', 'quiero turno por jubilación', {});
+    expect(start).not.toHaveBeenCalled();
+    expect(out).toEqual(['Antes le hago unas preguntas.']);
+    const secondCall = (deps.ai.completeWithTools.mock.calls as any[])[1][0];
+    const toolMsg = secondCall.messages.find((m: any) => m.role === 'tool' && m.name === 'start_booking');
+    expect(toolMsg.content).toMatch(/falta calificar/);
+  });
+
   it('corta y deriva si supera el máximo de iteraciones', async () => {
     const loopResp = { toolCalls: [{ id: 'c', name: 'search_knowledge', args: {} }] };
     const deps = makeDeps(Array(20).fill(loopResp));

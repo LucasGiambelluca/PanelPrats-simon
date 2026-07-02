@@ -67,6 +67,20 @@ describe('ToolRegistry', () => {
     expect(typeof entry.calificado_at).toBe('string');
   });
 
+  it('set_qualification rechaza gratis incompleto (hombre 62 sin insalubres)', async () => {
+    const reg = makeRegistry();
+    const r = await reg.execute('set_qualification', { area: 'jubilacion_hombre', resultado: 'gratis', edad: 62, nacionalidad: 'argentino' }, { accountId: 'a1', phone: 'p1' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/insalubre/i);
+    expect(setCalificacion).not.toHaveBeenCalled();
+  });
+  it('set_qualification acepta gratis completo y registra', async () => {
+    const reg = makeRegistry();
+    const r = await reg.execute('set_qualification', { area: 'jubilacion_hombre', resultado: 'gratis', edad: 62, insalubres: true, nacionalidad: 'argentino' }, { accountId: 'a1', phone: 'p1' });
+    expect(r.ok).toBe(true);
+    expect(setCalificacion).toHaveBeenCalled();
+  });
+
   it('set_qualification conserva hijos:0 (cero hijos es dato válido, no se descarta)', async () => {
     const reg = makeRegistry();
     await reg.execute('set_qualification',
