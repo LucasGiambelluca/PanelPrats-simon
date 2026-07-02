@@ -149,6 +149,23 @@ describe('AgentRuntime.handle', () => {
     expect(out).toEqual(['¿Presencial o por videollamada?']);
   });
 
+  it('gate deterministico bloqueado (mid-jubilación, texto sin área): NO arranca booking, cae al LLM', async () => {
+    const deps = makeDeps([{ content: 'Antes de agendar, ¿me confirmás si tuvo tareas insalubres?' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn().mockResolvedValue({ messages: ['NO debería arrancar'], active: true }),
+    };
+    (deps as any).bookingIntent = vi.fn(() => ({ start: true }));
+    (deps as any).areaDetector = vi.fn(() => null);              // el texto no nombra un área
+    (deps as any).canStartBooking = vi.fn().mockResolvedValue({ ok: false, reason: 'falta calificar' });
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'dale saquemos el turno', {});
+    expect((deps as any).booking.start).not.toHaveBeenCalled();  // gate frena el arranque ungated
+    expect(deps.ai.completeWithTools).toHaveBeenCalled();         // cayó al tool-loop
+    expect(out).toEqual(['Antes de agendar, ¿me confirmás si tuvo tareas insalubres?']);
+  });
+
   it('inyecta la CALIFICACIÓN PREVIA vigente en la ficha del persona', async () => {
     const deps = makeDeps([{ content: 'Listo' }]);
     (deps as any).memory = {

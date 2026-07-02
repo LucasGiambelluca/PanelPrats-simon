@@ -129,7 +129,8 @@ export class AgentRuntime {
     // (La fase 'agendado' está DELEGADA a BookingFlow; el controller no interfiere a medio agendar.)
     if (this.deps.booking && (await this.deps.booking.isActive(accountId, phone).catch(() => false))) {
       const r = await this.deps.booking.advance(accountId, phone, text, ctx.conversation ?? text);
-      if (r.messages.length) return finishWith(r.messages);
+      // Un turno con agendado activo NUNCA debe llegar al LLM (aunque advance no responda).
+      return finishWith(r.messages);
     } else {
       // Capa de interpretación (controller manda): interpreta intención + slot-filling
       // determinístico ANTES del tool-loop. Resuelve opt-out / cierre / frustración /
@@ -146,8 +147,16 @@ export class AgentRuntime {
         if (intent.start) {
           const area = this.deps.areaDetector?.(text) ?? null;
           if (!area) {
-            const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad, needsPhone }, ctx.conversation ?? text);
-            if (r.messages.length) return finishWith(r.messages);
+            // El texto no nombra un área, pero puede haber un área EN CURSO (DialogueState):
+            // mid-jubilación + "dale saquemos el turno" NO debe arrancar un turno ungated.
+            const gate = this.deps.canStartBooking
+              ? await this.deps.canStartBooking(accountId, phone).catch(() => ({ ok: true as const }))
+              : { ok: true as const };
+            if (gate.ok) {
+              const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad, needsPhone }, ctx.conversation ?? text);
+              if (r.messages.length) return finishWith(r.messages);
+            }
+            // gate bloqueado → cae al tool-loop; el LLM sigue calificando
           }
         }
       }
