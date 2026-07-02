@@ -47,4 +47,13 @@ describe('buildPersona', () => {
     expect(prompt.toUpperCase()).toContain('PROCEDIMIENTOS');
     expect(prompt).toContain('preguntá hace cuánto');
   });
+
+  it('prohíbe emojis, exige saludo inicial sin emoji, prohíbe "entiendo" y tiene regla de cierre', () => {
+    const p = buildPersona({ accountId: 'acc1', agentName: 'Estela', estudioNombre: 'Prats & Simón' } as any, 'FICHA: -');
+    expect(p).not.toMatch(/CON un emoji/);
+    expect(p).toMatch(/sin emojis/i);
+    expect(p).toMatch(/saludá breve/i);
+    expect(p).toMatch(/No uses la palabra "entiendo"/);
+    expect(p).toContain('CIERRE');
+  });
 });
