@@ -11,7 +11,7 @@ import {
 import type { AreaKey } from '../context/AreaDetector';
 
 const MAX_ITERATIONS = 5;
-const FALLBACK = 'Disculpá, esto mejor lo ve una persona del estudio. Ya te derivo. 🙌';
+const FALLBACK = 'Disculpá, esto mejor lo ve una persona del estudio. Ya te derivo.';
 
 // Dependencias inyectadas (facilita el test y respeta el aislamiento).
 export interface RuntimeDeps {

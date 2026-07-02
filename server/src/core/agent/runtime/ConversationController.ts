@@ -14,6 +14,22 @@ import {
   markAsked,
   stuckSlot,
 } from '../context/DialogueState';
+import { norm } from '../context/normalize';
+
+// Despedida/acuse PURO: todos los tokens pertenecen al vocabulario de cierre.
+// Emojis y signos los elimina norm(). Texto vacío tras norm (solo emojis) cuenta como ack.
+const ACK_WORDS = new Set([
+  'gracias', 'muchas', 'mil', 'ok', 'okey', 'oka', 'dale', 'listo', 'genial', 'perfecto',
+  'barbaro', 'buenisimo', 'excelente', 'igualmente', 'igual', 'de', 'nada', 'no', 'hasta',
+  'luego', 'chau', 'adios', 'buenas', 'buenos', 'dia', 'dias', 'tardes', 'noches', 'nos',
+  'vemos', 'saludos', 'que', 'este', 'bien', 'muy', 'amable', 'si', 'bueno', 'besos', 'abrazo',
+]);
+export function isBareAck(text: string): boolean {
+  const t = norm(text);
+  if (!t) return (text || '').trim().length > 0; // solo emojis/signos → ack
+  const words = t.split(' ');
+  return words.length <= 6 && words.every((w) => ACK_WORDS.has(w));
+}
 
 // ─── Contrato de dependencias (todas inyectadas / mockeables) ─────────────────
 
@@ -77,10 +93,21 @@ export class ConversationController {
     const loaded = await loadState(accountId, phone);
     const state: DialogueState = loaded ?? createDialogueState();
 
+    // ── 0. Conversación CERRADA ────────────────────────────────────────────────
+    // Despedida/acuse sobre una conversación ya cerrada → SILENCIO (ni se clasifica:
+    // cero llamadas IA). Contenido real → se reabre y sigue el flujo normal.
+    let state2: DialogueState = state;
+    if (state.cerrada) {
+      if (isBareAck(text)) {
+        return { kind: 'resolved', messages: [], state };
+      }
+      state2 = { ...state, cerrada: false, cierre_motivo: null, fase: 'consulta', redirecciones_offtopic: 0 };
+    }
+
     // ── Detectar área + clasificar intención (con historial como contexto) ─────
-    const area = detectArea(text) ?? state.area;
+    const area = detectArea(text) ?? state2.area;
     const hist = loadHistory ? await loadHistory(accountId, phone).catch(() => []) : [];
-    const intent = await classify(text, { dialogueState: state, area, history: hist });
+    const intent = await classify(text, { dialogueState: state2, area, history: hist });
 
     // ── Helper: persistir SIEMPRE y devolver resolved ──────────────────────────
     const finish = async (
@@ -95,14 +122,14 @@ export class ConversationController {
     if (intent.intent === 'opt_out') {
       await setOptOut(accountId, phone);
       const s: DialogueState = {
-        ...state,
+        ...state2,
         cerrada: true,
         cierre_motivo: 'opt_out',
         fase: 'cerrada',
       };
       await closeConversation(accountId, phone, 'opt_out');
       return finish(s, [
-        'Listo, no le vamos a escribir más. Si en algún momento nos necesita, acá estamos. 🙏',
+        'Listo, no le vamos a escribir más. Si en algún momento nos necesita, acá estamos.',
       ]);
     }
 
@@ -113,14 +140,14 @@ export class ConversationController {
         resumen_caso: `Cliente frustrado (nivel ${intent.nivel_frustracion}). Último: "${text.slice(0, 200)}"`,
       });
       const s: DialogueState = {
-        ...state,
+        ...state2,
         cerrada: true,
         cierre_motivo: 'frustracion_handoff',
         fase: 'cerrada',
       };
       await closeConversation(accountId, phone, 'frustracion_handoff');
       return finish(s, [
-        'Lo paso con una persona del estudio para que lo ayude mejor. Aguarde un momento. 🙌',
+        'Lo paso con una persona del estudio para que lo ayude mejor. Aguarde un momento.',
       ]);
     }
 
@@ -130,30 +157,30 @@ export class ConversationController {
     // exigimos despedida EXPLÍCITA (label del modelo) o que ya haya habido enganche
     // (fase avanzada, algún slot, o redirecciones previas).
     const tuvoEnganche =
-      state.fase !== 'consulta' ||
-      Object.keys(state.slots).length > 0 ||
-      state.redirecciones_offtopic > 0;
+      state2.fase !== 'consulta' ||
+      Object.keys(state2.slots).length > 0 ||
+      state2.redirecciones_offtopic > 0;
     const quiereCerrar = intent.intent === 'despedida' || (intent.es_cierre && tuvoEnganche);
     // NO cerrar a mitad de proceso: en calificación/agendado un "ok gracias" suele ser
     // acuse, no chau. Se trata como continuación (cae al slot-filling / tool-loop).
-    const enProceso = state.fase === 'calificacion' || state.fase === 'agendado';
+    const enProceso = state2.fase === 'calificacion' || state2.fase === 'agendado';
     if (quiereCerrar && !enProceso) {
       // Solo cerrar si no hay nada crítico a medio llenar
-      if (nextPendingSlot(state) === null) {
+      if (nextPendingSlot(state2) === null) {
         const s: DialogueState = {
-          ...state,
+          ...state2,
           cerrada: true,
           cierre_motivo: 'despedida',
           fase: 'cerrada',
         };
         await closeConversation(accountId, phone, 'despedida');
-        return finish(s, ['¡Gracias! Cualquier cosa, nos escribe. Que esté bien. 🙌']);
+        return finish(s, ['Gracias a usted. Cualquier cosa que necesite, nos escribe. Que esté bien.']);
       }
       // Hay slots pendientes → NO cerrar; continuar abajo (el código sigue preguntando)
     }
 
     // ── Transición de fase + sembrado de slots ─────────────────────────────────
-    let s: DialogueState = { ...state };
+    let s: DialogueState = { ...state2 };
 
     if (area && s.area !== area) {
       s = { ...s, area };
@@ -177,7 +204,7 @@ export class ConversationController {
         s = { ...s, cerrada: true, cierre_motivo: 'despedida', fase: 'cerrada' };
         await closeConversation(accountId, phone, 'despedida');
         return finish(s, [
-          'Por acá solo podemos ayudarlo con temas del estudio (jubilaciones, pensiones, laboral). ¡Que esté bien! 🙌',
+          'Por acá solo podemos ayudarlo con temas del estudio (jubilaciones, pensiones, laboral). Que esté bien.',
         ]);
       }
 
@@ -201,7 +228,7 @@ export class ConversationController {
       s = { ...s, cerrada: true, cierre_motivo: 'frustracion_handoff', fase: 'cerrada' };
       await closeConversation(accountId, phone, 'frustracion_handoff');
       return finish(s, [
-        'Para no hacerlo repetir, lo paso con una persona del estudio. Aguarde un momento. 🙌',
+        'Para no hacerlo repetir, lo paso con una persona del estudio. Aguarde un momento.',
       ]);
     }
 

@@ -1,6 +1,6 @@
 // ─── ConversationController — tests unitarios (TDD, Fase 4a) ─────────────────
 import { describe, it, expect, vi } from 'vitest';
-import { ConversationController, type ControllerDeps } from '../ConversationController';
+import { ConversationController, isBareAck, type ControllerDeps } from '../ConversationController';
 import { createDialogueState } from '../../context/DialogueState';
 import type { IntentResult } from '../../context/IntentClassifier';
 
@@ -291,6 +291,57 @@ describe('ConversationController — consulta/FAQ', () => {
 
     expect(outcome.kind).toBe('advance');
     expect(deps.redactar).not.toHaveBeenCalled();
+    expect(deps.closeConversation).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Cierre de conversación = silencio ───────────────────────────────────────
+
+function makeClosedDeps(overrides: any = {}) {
+  const state = { ...createDialogueState(), cerrada: true, cierre_motivo: 'completada' as const, fase: 'cerrada' as const };
+  return {
+    classify: vi.fn().mockResolvedValue({ intent: 'otro', quiere_continuar: true, nivel_frustracion: 0, es_cierre: false, slots_detectados: {}, confianza: 0.9 }),
+    loadState: vi.fn().mockResolvedValue(state),
+    saveState: vi.fn().mockResolvedValue(undefined),
+    setOptOut: vi.fn(), closeConversation: vi.fn(), handoff: vi.fn(),
+    redactar: vi.fn().mockResolvedValue('¿Me dice su edad?'),
+    detectArea: () => null,
+    now: () => '2026-07-02T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('cierre de conversación', () => {
+  it('isBareAck reconoce despedidas puras', () => {
+    for (const t of ['gracias', 'Muchas gracias!!', 'ok', 'Dale', 'listo', 'Buenas noches', 'igualmente', '🙏', 'ok gracias']) {
+      expect(isBareAck(t), t).toBe(true);
+    }
+    for (const t of ['gracias, ¿me mandan el link?', '¿de dónde son?', 'quiero cambiar el turno', 'no puedo ese día']) {
+      expect(isBareAck(t), t).toBe(false);
+    }
+  });
+
+  it('conversación cerrada + despedida pura → silencio total, sin clasificar', async () => {
+    const deps = makeClosedDeps();
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'Muchas gracias');
+    expect(out.kind).toBe('resolved');
+    expect((out as any).messages).toEqual([]);
+    expect(deps.classify).not.toHaveBeenCalled(); // ni un token gastado
+  });
+
+  it('conversación cerrada + contenido real → reabre y sigue el flujo normal', async () => {
+    const deps = makeClosedDeps();
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', '¿A esa hora no puedo, tienen más tarde?');
+    expect(deps.classify).toHaveBeenCalled();
+    const saved = deps.saveState.mock.calls.at(-1)?.[2];
+    expect(saved.cerrada).toBe(false);
+  });
+
+  it('segunda despedida tras el cierre por despedida → silencio (no repite el template)', async () => {
+    const state = { ...createDialogueState(), cerrada: true, cierre_motivo: 'despedida' as const, fase: 'cerrada' as const };
+    const deps = makeClosedDeps({ loadState: vi.fn().mockResolvedValue(state) });
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'Gracias');
+    expect((out as any).messages).toEqual([]);
     expect(deps.closeConversation).not.toHaveBeenCalled();
   });
 });

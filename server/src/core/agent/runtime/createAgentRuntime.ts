@@ -19,6 +19,7 @@ import { detectBookingIntent } from '../context/BookingFlow';
 import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
+import { createDialogueState } from '../context/DialogueState';
 
 // Redacta UN mensaje (pregunta de slot / redirección off-topic) con la persona REAL
 // del estudio + el OBJETIVO inyectado por el controller. El LLM SOLO redacta; el flujo
@@ -127,6 +128,15 @@ export function getAgentRuntime(): AgentRuntime {
   if (singleton) return singleton;
   const knowledge = new KnowledgeBase();
   const memory = new ContactMemory();
+
+  // Booking completado → la conversación queda CERRADA: el próximo "gracias/ok"
+  // no dispara ni una llamada IA (silencio del ConversationController).
+  const markBookingClosed = async (a: string, p: string): Promise<void> => {
+    try {
+      const s = (await memory.getDialogueState(a, p)) ?? createDialogueState();
+      await memory.saveDialogueState(a, p, { ...s, cerrada: true, cierre_motivo: 'completada', fase: 'cerrada' });
+    } catch { /* best-effort */ }
+  };
   const availability = new AvailabilityService();
   const zone = new ZoneResolver();
   const offered = new OfferedOptionsStore();
@@ -198,8 +208,16 @@ export function getAgentRuntime(): AgentRuntime {
     buildContinuity: buildContinuityBlock,
     booking: {
       isActive: (a, p) => booking.isActive(a, p),
-      advance: (a, p, t, c) => booking.advance(a, p, t, c),
-      start: (a, p, args, c) => booking.start(a, p, args, c),
+      advance: async (a, p, t, c) => {
+        const r = await booking.advance(a, p, t, c);
+        if (!r.active && r.messages.length) await markBookingClosed(a, p);
+        return r;
+      },
+      start: async (a, p, args, c) => {
+        const r = await booking.start(a, p, args, c);
+        if (!r.active && r.messages.length) await markBookingClosed(a, p);
+        return r;
+      },
     },
     bookingIntent: detectBookingIntent,
     areaDetector: detectArea,
