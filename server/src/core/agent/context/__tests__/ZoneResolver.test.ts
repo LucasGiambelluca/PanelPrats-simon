@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchZone, DEFAULT_GAZETTEER } from '../ZoneResolver';
+import { matchZone, DEFAULT_GAZETTEER, resolveOfficeName } from '../ZoneResolver';
 
 describe('ZoneResolver — gazetteer determinístico (AMBA)', () => {
   it('"soy de Lanús" sugiere Quilmes (zona sur)', () => {
@@ -60,5 +60,41 @@ describe('ZoneResolver — sin señal', () => {
     const r = matchZone('hola buenas necesito un turno', DEFAULT_GAZETTEER);
     expect(r.oficina_sugerida).toBeNull();
     expect(r.necesita_aclaracion).toBe(true);
+  });
+});
+
+describe('resolveOfficeName — zona lógica → agenda real', () => {
+  // Las agendas presenciales se llaman por profesional; el router devuelve la zona.
+  const offices = [
+    { nombre: 'DANIELA CANISSA', modalidad: 'video' },
+    { nombre: 'DAIANA CABA', modalidad: 'ambas' },
+    { nombre: 'MAURA HAEDO', modalidad: 'ambas' },
+    { nombre: 'SERENA QUILMES', modalidad: 'ambas' },
+  ];
+
+  it('Quilmes → SERENA QUILMES', () => {
+    expect(resolveOfficeName('Quilmes', offices)).toBe('SERENA QUILMES');
+  });
+  it('CABA → DAIANA CABA', () => {
+    expect(resolveOfficeName('CABA', offices)).toBe('DAIANA CABA');
+  });
+  it('Haedo → MAURA HAEDO', () => {
+    expect(resolveOfficeName('Haedo', offices)).toBe('MAURA HAEDO');
+  });
+  it('nunca resuelve a una agenda solo-video', () => {
+    const soloVideo = [{ nombre: 'CANISSA CABA', modalidad: 'video' }];
+    expect(resolveOfficeName('CABA', soloVideo)).toBeNull();
+  });
+  it('zona sin agenda presencial → null (el flujo ofrece video)', () => {
+    expect(resolveOfficeName('Rosario', offices)).toBeNull();
+  });
+  it('si el nombre ya coincide exacto, lo usa tal cual', () => {
+    const exact = [{ nombre: 'Quilmes', modalidad: 'presencial' }];
+    expect(resolveOfficeName('Quilmes', exact)).toBe('Quilmes');
+  });
+  it('token exacto, no substring parcial (evita falsos positivos)', () => {
+    // "caba" no debe pegar dentro de "cabana" (nombre inventado)
+    const tricky = [{ nombre: 'CABANA SUR', modalidad: 'ambas' }];
+    expect(resolveOfficeName('CABA', tricky)).toBeNull();
   });
 });

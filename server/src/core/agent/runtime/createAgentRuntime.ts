@@ -10,7 +10,7 @@ import { AvailabilityService } from '../../../services/AvailabilityService';
 import { supabase } from '../../../config/supabase';
 import { redisPersistence } from '../../../infrastructure/persistence/RedisPersistenceService';
 import { ConversationContextLoader, buildContinuityBlock, type OpenAppointment } from '../context/ConversationContextLoader';
-import { ZoneResolver } from '../context/ZoneResolver';
+import { ZoneResolver, resolveOfficeName } from '../context/ZoneResolver';
 import { OfferedOptionsStore } from '../context/OfferedOptionsStore';
 import { buildReceptionFicha } from '../context/ReceptionFichaBuilder';
 import { BookingService } from '../context/BookingService';
@@ -142,10 +142,24 @@ export function getAgentRuntime(): AgentRuntime {
   const zone = new ZoneResolver();
   const offered = new OfferedOptionsStore();
 
+  // Geo-routing con RESOLUCIÓN de nombre: el ZoneResolver devuelve la zona lógica
+  // (CABA/Quilmes/Haedo), pero las agendas presenciales se llaman por profesional
+  // ("SERENA QUILMES", etc.). Sin traducir, freeSlots(zona) no encuentra la agenda y
+  // el presencial cae SIEMPRE a videollamada. resolveOfficeName cierra ese hueco.
+  const suggestOfficeResolved = async (a: string, t: string) => {
+    const z = await zone.suggest(a, t);
+    if (!z.oficina_sugerida) return z;
+    const offs = await availability.listOffices(a);
+    const real = resolveOfficeName(String(z.oficina_sugerida), offs);
+    return real
+      ? { ...z, oficina_sugerida: real, necesita_aclaracion: false }
+      : { ...z, oficina_sugerida: null }; // zona sin agenda presencial → el flujo ofrece video
+  };
+
   const tools = new ToolRegistry({
     appointments: AppointmentService, knowledge, availability, handoff,
-    // Capacidad 3: geo-routing.
-    suggestOffice: (accountId, texto) => zone.suggest(accountId, texto),
+    // Capacidad 3: geo-routing (resuelto a la agenda real).
+    suggestOffice: (accountId, texto) => suggestOfficeResolved(accountId, texto),
     // Capacidad 4: opciones ofrecidas.
     offered: { set: (a, p, opts) => offered.set(a, p, opts), get: (a, p) => offered.get(a, p) },
     // Capacidad 2: ficha IA al agendar. Usa gpt-4o (structured extraction de calidad).
@@ -167,7 +181,7 @@ export function getAgentRuntime(): AgentRuntime {
   // profesional, ficha IA) → cero duplicación de la lógica de reserva.
   const booking = new BookingService({
     store: new BookingStateStore(),
-    suggestOffice: (a, t) => zone.suggest(a, t),
+    suggestOffice: (a, t) => suggestOfficeResolved(a, t),
     listOffices: (a) => availability.listOffices(a).then((offs) => offs.map((o) => ({ nombre: o.nombre, modalidad: o.modalidad }))),
     freeSlots: (a, oficina, opts) => availability.freeSlots(a, oficina, { max: opts?.max ?? 3, ...(opts?.desde ? { now: opts.desde } : {}) }),
     book: async (a, phone, conversation, _zona, b) => {

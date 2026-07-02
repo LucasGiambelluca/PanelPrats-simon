@@ -70,6 +70,32 @@ export const DEFAULT_GAZETTEER: GazetteerEntry[] = Object.entries(RAW).flatMap(
   ([oficina, aliases]) => aliases.map((a) => ({ alias_norm: norm(a), oficina: oficina as Oficina })),
 );
 
+/**
+ * Traduce la ZONA lógica del geo-router (CABA/Quilmes/Haedo) al NOMBRE REAL de la
+ * agenda presencial en la base. Las agendas se nombran por profesional ("SERENA
+ * QUILMES", "DAIANA CABA", "MAURA HAEDO"), así que el literal de zona NO coincide con
+ * ningún `account_offices.nombre` → `getOffice` devuelve null → `freeSlots` vacío →
+ * el presencial cae SIEMPRE a videollamada. Este puente lo evita.
+ *
+ * Match por TOKEN (no substring) contra agendas que aceptan presencial (modalidad
+ * 'presencial' | 'ambas'). Devuelve el nombre real, o null si no hay agenda
+ * presencial para esa zona (ahí el flujo ofrece videollamada, con aviso).
+ */
+export function resolveOfficeName(
+  zoneKey: string,
+  offices: Array<{ nombre: string; modalidad: string }>,
+): string | null {
+  const key = norm(zoneKey);
+  if (!key) return null;
+  const presenciales = offices.filter((o) => o.modalidad !== 'video');
+  // 1) Coincidencia exacta de nombre (por si alguna agenda se llama igual que la zona).
+  const exact = presenciales.find((o) => norm(o.nombre) === key);
+  if (exact) return exact.nombre;
+  // 2) Agenda presencial cuyo nombre CONTIENE la zona como token entero.
+  const hit = presenciales.find((o) => norm(o.nombre).split(' ').includes(key));
+  return hit?.nombre ?? null;
+}
+
 function includesPhrase(haystack: string, needle: string): boolean {
   // match por límite de palabra para no pegar "lanus" dentro de otra cosa.
   return new RegExp(`(^|\\s)${needle.replace(/\s+/g, '\\s+')}(\\s|$)`).test(haystack);
