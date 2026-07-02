@@ -109,6 +109,12 @@ describe('apego al libreto', () => {
     expect(r.state.nombre).toBeUndefined();
   });
 
+  it('nombre placeholder con puntuación ("Sr.") tampoco se acepta', async () => {
+    const deps = makeDeps();
+    const r = await startBooking({ nombre: 'Sr.', modalidad: 'video' }, deps);
+    expect(r.state.nombre).toBeUndefined();
+  });
+
   it('teléfono pasado en start_booking se hereda', async () => {
     const deps = makeDeps();
     const r = await startBooking({ modalidad: 'video', nombre: 'Ana', telefono: '541134567890', needsPhone: true }, deps);

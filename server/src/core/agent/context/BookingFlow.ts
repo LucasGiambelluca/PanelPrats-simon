@@ -333,11 +333,14 @@ export async function startBooking(
   args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; telefono?: string; needsPhone?: boolean },
   deps: BookingDeps,
 ): Promise<BookingStep> {
+  // Limpiar PRIMERO y validar el resultado: "Sr."/"Sra." normalizan a "sr"/"sra"
+  // recién tras cleanName (norm() no borra el punto), así no se cuelan como nombre.
+  const nombreLimpio = args.nombre ? cleanName(args.nombre) : '';
   const state: BookingState = {
     stage: 'ask_modality',
     modalidad: args.modalidad,
     zona: args.zona ?? null,
-    nombre: args.nombre && !isPlaceholderName(args.nombre) ? cleanName(args.nombre) : undefined,
+    nombre: nombreLimpio && !isPlaceholderName(nombreLimpio) ? nombreLimpio : undefined,
     telefono: args.telefono?.trim() || undefined,
     needsPhone: !!args.needsPhone,
   };
