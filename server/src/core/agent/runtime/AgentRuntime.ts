@@ -98,11 +98,15 @@ export class AgentRuntime {
       .join('\n');
 
     const finishWith = (replies: string[]): string[] => {
-      const turns = messages
-        .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
-        .map((m) => ({ role: m.role, content: m.content }));
-      for (const r of replies) turns.push({ role: 'assistant', content: r });
-      this.deps.updateMemory?.(accountId, phone, turns)?.catch(() => { /* best-effort */ });
+      // Turno silencioso (conversación cerrada / LoopGuard silence-cooldown): no hay
+      // respuesta nueva → nada que memorizar → NO gastar una llamada IA en updateMemory.
+      if (replies.length > 0) {
+        const turns = messages
+          .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+          .map((m) => ({ role: m.role, content: m.content }));
+        for (const r of replies) turns.push({ role: 'assistant', content: r });
+        this.deps.updateMemory?.(accountId, phone, turns)?.catch(() => { /* best-effort */ });
+      }
       lg?.saveState(accountId, phone, lgState).catch(() => { /* best-effort */ });
       return replies;
     };

@@ -321,6 +321,13 @@ describe('cierre de conversación', () => {
     }
   });
 
+  it('isBareAck NUNCA silencia preguntas (ni con vocabulario de cierre)', () => {
+    expect(isBareAck('¿Qué día?')).toBe(false);
+    expect(isBareAck('que dia era')).toBe(false);
+    expect(isBareAck('???')).toBe(false);
+    expect(isBareAck('Buenas noches')).toBe(true); // sigue siendo ack
+  });
+
   it('conversación cerrada + despedida pura → silencio total, sin clasificar', async () => {
     const deps = makeClosedDeps();
     const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'Muchas gracias');
@@ -343,5 +350,14 @@ describe('cierre de conversación', () => {
     const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'Gracias');
     expect((out as any).messages).toEqual([]);
     expect(deps.closeConversation).not.toHaveBeenCalled();
+  });
+
+  it('cerrada por frustracion_handoff + contenido real → NO reabre (humano a cargo)', async () => {
+    const state = { ...createDialogueState(), cerrada: true, cierre_motivo: 'frustracion_handoff' as const, fase: 'cerrada' as const };
+    const deps = makeClosedDeps({ loadState: vi.fn().mockResolvedValue(state) });
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', '¿Cuándo me van a llamar? Necesito una respuesta');
+    expect(out.kind).toBe('resolved');
+    expect((out as any).messages).toEqual([]);
+    expect(deps.classify).not.toHaveBeenCalled(); // el bot no se reengancha sobre un handoff
   });
 });

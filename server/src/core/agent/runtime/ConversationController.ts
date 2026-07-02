@@ -21,10 +21,11 @@ import { norm } from '../context/normalize';
 const ACK_WORDS = new Set([
   'gracias', 'muchas', 'mil', 'ok', 'okey', 'oka', 'dale', 'listo', 'genial', 'perfecto',
   'barbaro', 'buenisimo', 'excelente', 'igualmente', 'igual', 'de', 'nada', 'no', 'hasta',
-  'luego', 'chau', 'adios', 'buenas', 'buenos', 'dia', 'dias', 'tardes', 'noches', 'nos',
-  'vemos', 'saludos', 'que', 'este', 'bien', 'muy', 'amable', 'si', 'bueno', 'besos', 'abrazo',
+  'luego', 'chau', 'adios', 'buenas', 'buenos', 'tardes', 'noches', 'nos',
+  'vemos', 'saludos', 'este', 'bien', 'muy', 'amable', 'si', 'bueno', 'besos', 'abrazo',
 ]);
 export function isBareAck(text: string): boolean {
+  if (/[?¿]/.test(text)) return false; // una pregunta nunca es acuse
   const t = norm(text);
   if (!t) return (text || '').trim().length > 0; // solo emojis/signos → ack
   const words = t.split(' ');
@@ -98,6 +99,12 @@ export class ConversationController {
     // cero llamadas IA). Contenido real → se reabre y sigue el flujo normal.
     let state2: DialogueState = state;
     if (state.cerrada) {
+      // Handoff: una persona del estudio es dueña de esa conversación — el bot NO se
+      // reengancha ni siquiera con contenido real. (Backstop: el estado HANDOVER
+      // upstream ya debería silenciar al bot antes de llegar acá.)
+      if (state.cierre_motivo === 'frustracion_handoff') {
+        return { kind: 'resolved', messages: [], state };
+      }
       if (isBareAck(text)) {
         return { kind: 'resolved', messages: [], state };
       }

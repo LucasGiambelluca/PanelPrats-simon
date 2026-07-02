@@ -162,6 +162,18 @@ describe('AgentRuntime.handle', () => {
     expect(deps.ai.completeWithTools).not.toHaveBeenCalled();   // turno resuelto antes del tool-loop
   });
 
+  it('turno silencioso (resolved sin mensajes) NO gasta LLM en updateMemory', async () => {
+    const deps = makeDeps([{ content: 'NO debería llamarse el LLM' }]);
+    (deps as any).conversation = {
+      handleTurn: vi.fn().mockResolvedValue({ kind: 'resolved', messages: [] }),
+    };
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'gracias', {});
+    expect(out).toEqual([]);
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();
+    expect(deps.updateMemory).not.toHaveBeenCalled(); // silencio = cero llamadas IA
+  });
+
   it('controller "advance" delega: corre el tool-loop normalmente', async () => {
     const deps = makeDeps([{ content: 'Sí, gestionamos moratoria.' }]);
     (deps as any).conversation = {
