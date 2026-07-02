@@ -18,12 +18,14 @@ export function validateQualification(area: string, resultado: string, datos: Re
     return { ok: false, error: 'Falta la edad: preguntala antes de registrar la calificación.' };
   }
 
-  if (area === 'jubilacion' && resultado === 'gratis') {
+  if (area === 'jubilacion') {
     return { ok: false, error: 'Determiná primero el género (por el nombre o preguntando) y registrá jubilacion_hombre o jubilacion_mujer.' };
   }
 
-  if (area === 'jubilacion_hombre' && resultado === 'gratis') {
-    if (edad < 63 && datos.insalubres !== true) {
+  if (area === 'jubilacion_hombre') {
+    // El piso de edad para insalubres lo evalúa el abogado; acá solo exigimos que la pregunta se haya hecho.
+    const insalubres = datos.insalubres === true || datos.insalubres === 'true';
+    if (edad < 63 && !insalubres) {
       return { ok: false, error: 'Hombre menor de 63: antes de calificar gratis preguntá si tiene aportes por tareas insalubres y pasá insalubres:true/false. Si no tiene, el resultado es "pago".' };
     }
     if (datos.nacionalidad !== 'argentino' && datos.nacionalidad !== 'extranjero') {
@@ -34,7 +36,7 @@ export function validateQualification(area: string, resultado: string, datos: Re
     }
   }
 
-  if (area === 'jubilacion_mujer' && resultado === 'gratis') {
+  if (area === 'jubilacion_mujer') {
     const porEdad = edad >= 64 || (edad >= 58 && edad <= 59);
     if (!porEdad) {
       if (edad >= 60 && edad <= 63) {
@@ -68,6 +70,7 @@ export function hasCalificacionVigente(
     const e = cal[k];
     if (!e?.calificado_at) return false;
     const t = new Date(e.calificado_at).getTime();
+    // now-t >= 0 descarta timestamps futuros (dato corrupto/clock skew), no es un off-by-one.
     return Number.isFinite(t) && now - t >= 0 && now - t <= ttlDays * 86_400_000;
   });
 }

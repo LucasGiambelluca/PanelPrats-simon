@@ -48,6 +48,24 @@ describe('validateQualification — libreto jubilación', () => {
     expect(validateQualification('laboral', 'gratis', {}).ok).toBe(true);
     expect(validateQualification('transito', 'descartar', {}).ok).toBe(true);
   });
+  it('mujer boundaries de aportes 19/20/21 (60-63)', () => {
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 61, aportes_aprox: 19 }).ok).toBe(false);
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 61, aportes_aprox: 20 }).ok).toBe(true);  // libreto ambiguo en 20 → hoy califica
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 61, aportes_aprox: 21 }).ok).toBe(true);
+  });
+  it('mujer boundaries de edad 58/60/63/64', () => {
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 58 }).ok).toBe(true);
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 60 }).ok).toBe(false); // 60 sin aportes
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 63, aportes_aprox: 25 }).ok).toBe(true);
+    expect(validateQualification('jubilacion_mujer', 'gratis', { edad: 64 }).ok).toBe(true);
+  });
+  it('hombre boundary edad 63 (califica por edad, aún necesita nacionalidad)', () => {
+    expect(validateQualification('jubilacion_hombre', 'gratis', { edad: 63 }).ok).toBe(false); // falta nacionalidad
+    expect(validateQualification('jubilacion_hombre', 'gratis', { edad: 63, nacionalidad: 'argentino' }).ok).toBe(true);
+  });
+  it('insalubres como string "true" también vale', () => {
+    expect(validateQualification('jubilacion_hombre', 'gratis', { edad: 55, insalubres: 'true', nacionalidad: 'argentino' }).ok).toBe(true);
+  });
 });
 
 describe('hasCalificacionVigente', () => {
