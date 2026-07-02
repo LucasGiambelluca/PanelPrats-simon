@@ -165,4 +165,8 @@ describe('formatos de hora del libreto', () => {
   it('día con varias opciones y sin hora → null (que el caller repregunte)', () => {
     expect(pick('el lunes').matchedValue).toBeNull();
   });
+
+  it('día NO ofrecido + hora coincidente → null (nunca cae en otro día)', () => {
+    expect(pick('el sabado a las 16:30').matchedValue).toBeNull();
+  });
 });

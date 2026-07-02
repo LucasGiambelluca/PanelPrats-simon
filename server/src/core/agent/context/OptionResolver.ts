@@ -144,8 +144,8 @@ export function resolveOption(input: { userText: string; offered: OfferedOption[
   let cand = offered.map((o) => ({ o, t: labelTime(o.label) })).filter((x) => x.t) as Array<{ o: OfferedOption; t: { h: number; m: number } }>;
   if (dayReq) {
     const sameDay = cand.filter((x) => labelHasDay(x.o.label, dayReq));
-    if (!sameDay.length && !tReq) return NONE;          // nombró un día que no está ofrecido
-    if (sameDay.length) cand = sameDay;
+    if (!sameDay.length) return NONE;                   // nombró un día que no está ofrecido → nunca cae en otro día
+    cand = sameDay;
     if (!tReq && cand.length === 1) return { matchedValue: cand[0].o.value, confianza: 0.85 };
     if (!tReq) return NONE;                              // día con varias opciones y sin hora → repreguntar
   }
