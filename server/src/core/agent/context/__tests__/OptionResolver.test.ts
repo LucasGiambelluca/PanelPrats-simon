@@ -130,3 +130,39 @@ describe('OptionResolver — hora en lenguaje natural', () => {
     expect(resolveOption({ userText: 'el de las 16:00 está perfecto', offered: slots }).matchedValue).toBe('v1600');
   });
 });
+
+describe('formatos de hora del libreto', () => {
+  const offered = [
+    { index: 1, label: 'vie 03/07 16:30', value: '2026-07-03T19:30:00.000Z' },
+    { index: 2, label: 'lun 06/07 11:00', value: '2026-07-06T14:00:00.000Z' },
+    { index: 3, label: 'lun 06/07 13:20', value: '2026-07-06T16:20:00.000Z' },
+  ];
+  const pick = (t: string) => resolveOption({ userText: t, offered });
+
+  it.each(['16.30', '16 30', '1630', 'alas 16.30', 'a las 16:30', '03-07 alas 16.30'])(
+    'matchea "%s" → slot de 16:30', (t) => {
+      expect(pick(t).matchedValue).toBe('2026-07-03T19:30:00.000Z');
+    });
+
+  it('hora explícita SIN match exacto → null (nunca adivinar otro slot)', () => {
+    expect(pick('a las 15:00').matchedValue).toBeNull();
+    expect(pick('14.45').matchedValue).toBeNull();
+  });
+
+  it('año no se confunde con hora', () => {
+    expect(pick('llegué en 2008').matchedValue).toBeNull();
+  });
+
+  it('día nombrado con una sola opción ese día → la elige', () => {
+    expect(pick('el viernes').matchedValue).toBe('2026-07-03T19:30:00.000Z');
+    expect(pick('viernes 3').matchedValue).toBe('2026-07-03T19:30:00.000Z');
+  });
+
+  it('día + hora → matchea dentro del día', () => {
+    expect(pick('el lunes a las 13').matchedValue).toBe('2026-07-06T16:20:00.000Z');
+  });
+
+  it('día con varias opciones y sin hora → null (que el caller repregunte)', () => {
+    expect(pick('el lunes').matchedValue).toBeNull();
+  });
+});

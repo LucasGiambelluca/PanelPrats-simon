@@ -59,11 +59,42 @@ function labelTime(rawLabel: string): { h: number; m: number } | null {
   return m ? { h: Number(m[1]), m: Number(m[2]) } : null;
 }
 
+// Canoniza horas escritas de cualquier forma → "HH:MM" ("16.30", "16 30", "1630", "alas 16").
+// El libreto exige aceptar todas. Los años (19xx/20xx) NO se tocan.
+function canonTimes(raw: string): string {
+  return (raw || '')
+    .toLowerCase()
+    .replace(/\balas\b/g, 'a las')
+    .replace(/\b([01]?\d|2[0-3])[.\s]([0-5]\d)\b/g, '$1:$2')
+    .replace(/\b(\d{4})\b/g, (m) => {
+      if (/^(19|20)\d\d$/.test(m)) return m;          // año, no hora
+      const h = Number(m.slice(0, 2)), mm = m.slice(2);
+      return h <= 23 && Number(mm) <= 59 ? `${h}:${mm}` : m;
+    });
+}
+
+// Día pedido: "viernes" → "vie"; "03-07"/"03/07" → "03/07". null si no nombró día.
+const DOW_ABBR: Record<string, string> = {
+  domingo: 'dom', lunes: 'lun', martes: 'mar', miercoles: 'mie', jueves: 'jue', viernes: 'vie', sabado: 'sab',
+};
+function requestedDay(rawText: string): string | null {
+  const t = norm(rawText);
+  for (const [name, abbr] of Object.entries(DOW_ABBR)) {
+    if (new RegExp(`\\b${name}\\b`).test(t)) return abbr;
+  }
+  const m = (rawText || '').match(/\b(\d{1,2})[\/-](\d{1,2})\b/);
+  if (m) return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}`;
+  return null;
+}
+function labelHasDay(label: string, day: string): boolean {
+  return norm(label).includes(norm(day.replace('/', ' '))) || (label || '').toLowerCase().includes(day);
+}
+
 // Hora pedida por el cliente en lenguaje natural: "a las 10", "a las 10:30",
 // "el de las 12:30", "16 hs", "mediodía". Se corre sobre el texto CRUDO (la norm
 // borra el ':'). Devuelve la hora pedida o 'mediodia'.
 function requestedTime(rawText: string): { h: number; m?: number } | 'mediodia' | null {
-  const t = (rawText || '').toLowerCase();
+  const t = canonTimes(rawText);
   if (/\bmediod[ií]a\b/.test(t)) return 'mediodia';
   let m = t.match(/\b(?:a\s+las|las|de\s+las)\s+([01]?\d|2[0-3])(?:[:.]([0-5]\d))?/);
   if (m) return { h: Number(m[1]), m: m[2] !== undefined ? Number(m[2]) : undefined };
@@ -107,25 +138,30 @@ export function resolveOption(input: { userText: string; offered: OfferedOption[
   if (/\b(penultim\w*)\b/.test(text) && n >= 2) return { matchedValue: byIndex(n - 1).value, confianza: 0.9 };
   if (/\b(ultim\w*)\b/.test(text)) return { matchedValue: byIndex(n).value, confianza: 0.9 };
 
-  // 2b) HORA en lenguaje natural: "a las 10", "el del mediodía", "16:00".
-  // Va ANTES del ordinal para que "a las 10" no se interprete como "la opción 10".
+  // 2b) DÍA y/o HORA en lenguaje natural. Va ANTES del ordinal.
   const tReq = requestedTime(input.userText);
-  if (tReq) {
-    const cand = offered.map((o) => ({ o, t: labelTime(o.label) })).filter((x) => x.t) as Array<{ o: OfferedOption; t: { h: number; m: number } }>;
-    if (cand.length) {
-      if (tReq === 'mediodia') {
-        const mid = cand.filter((x) => x.t.h === 12 || x.t.h === 13).sort((a, b) => Math.abs(a.t.h * 60 + a.t.m - 750) - Math.abs(b.t.h * 60 + b.t.m - 750));
-        if (mid.length) return { matchedValue: mid[0].o.value, confianza: 0.85 };
-      } else {
-        const exact = cand.filter((x) => x.t.h === tReq.h && (tReq.m === undefined || x.t.m === tReq.m));
-        if (exact.length) return { matchedValue: exact[0].o.value, confianza: 0.9 };
-        const sameHour = tReq.m === undefined ? cand.filter((x) => x.t.h === tReq.h) : [];
-        if (sameHour.length) return { matchedValue: sameHour[0].o.value, confianza: 0.85 };
-        // Sin match exacto: el más cercano si está razonablemente cerca (≤90 min).
-        const target = tReq.h * 60 + (tReq.m ?? 0);
-        const closest = cand.slice().sort((a, b) => Math.abs(a.t.h * 60 + a.t.m - target) - Math.abs(b.t.h * 60 + b.t.m - target))[0];
-        if (Math.abs(closest.t.h * 60 + closest.t.m - target) <= 90) return { matchedValue: closest.o.value, confianza: 0.6 };
+  const dayReq = requestedDay(input.userText);
+  let cand = offered.map((o) => ({ o, t: labelTime(o.label) })).filter((x) => x.t) as Array<{ o: OfferedOption; t: { h: number; m: number } }>;
+  if (dayReq) {
+    const sameDay = cand.filter((x) => labelHasDay(x.o.label, dayReq));
+    if (!sameDay.length && !tReq) return NONE;          // nombró un día que no está ofrecido
+    if (sameDay.length) cand = sameDay;
+    if (!tReq && cand.length === 1) return { matchedValue: cand[0].o.value, confianza: 0.85 };
+    if (!tReq) return NONE;                              // día con varias opciones y sin hora → repreguntar
+  }
+  if (tReq && cand.length) {
+    if (tReq === 'mediodia') {
+      const mid = cand.filter((x) => x.t.h === 12 || x.t.h === 13).sort((a, b) => Math.abs(a.t.h * 60 + a.t.m - 750) - Math.abs(b.t.h * 60 + b.t.m - 750));
+      if (mid.length) return { matchedValue: mid[0].o.value, confianza: 0.85 };
+    } else {
+      if (tReq.m !== undefined) {
+        // Hora EXPLÍCITA con minutos: match exacto o nada. Nunca adivinar otro slot.
+        const exact = cand.filter((x) => x.t.h === tReq.h && x.t.m === tReq.m);
+        return exact.length ? { matchedValue: exact[0].o.value, confianza: 0.95 } : NONE;
       }
+      const sameHour = cand.filter((x) => x.t.h === tReq.h);
+      if (sameHour.length) return { matchedValue: sameHour[0].o.value, confianza: 0.85 };
+      return NONE; // pidió una hora que no está → que el caller re-busque, no adivinar
     }
   }
 
