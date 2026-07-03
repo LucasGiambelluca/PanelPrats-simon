@@ -95,7 +95,19 @@ export function pendientesRouter(): Router {
         return q;
       });
 
-      let filas = armarPendientes(conversations, contactsByConvId, appointments);
+      // 3.5) Estado "llamado" (todas las filas, paginadas) → mapa por (account_id|telefono).
+      const llamadosRows = await fetchAll<{ account_id: string; telefono: string; llamado_at: string; llamado_por: string | null }>((from, to) => {
+        let q = supabase.from('contactos_llamados').select('account_id, telefono, llamado_at, llamado_por')
+          .order('account_id', { ascending: true })
+          .order('telefono', { ascending: true })
+          .range(from, to);
+        if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
+        return q;
+      });
+      const llamadosByKey = new Map<string, { llamado_at: string; llamado_por: string | null }>();
+      for (const l of llamadosRows) llamadosByKey.set(`${l.account_id}|${l.telefono}`, { llamado_at: l.llamado_at, llamado_por: l.llamado_por });
+
+      let filas = armarPendientes(conversations, contactsByConvId, appointments, llamadosByKey);
 
       // 4) Filtro de rango temporal (sobre fecha del último contacto).
       const days = RANGE_DAYS[range];
