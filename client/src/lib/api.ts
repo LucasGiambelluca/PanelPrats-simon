@@ -211,6 +211,17 @@ export interface Appointment {
   seguimiento?: string | null;
   resultado?: AppointmentResultado | null;
   atendido_por?: string | null; // empleada/recepcionista (profiles.id)
+
+  // Cobro de consulta (Fix 4/5). 'pago' => cobrar monto_a_cobrar antes/durante la consulta.
+  tipo_consulta?: 'gratis' | 'pago' | null;
+  monto_a_cobrar?: number | null;
+  // Datos de calificación estructurados (Fix 4).
+  edad?: number | null;
+  zona?: string | null;
+  nacionalidad?: string | null;
+  insalubres?: boolean | null;
+  aportes_aprox?: number | null;
+  area?: string | null;
 }
 
 export type AppointmentMotivo =

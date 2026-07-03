@@ -32,6 +32,9 @@ function formatDistanceToNow(dateInput: Date | string): string {
   return `hace ${diffDays} días`;
 }
 
+// Formatea un monto en pesos argentinos: 29000 => "$29.000".
+const fmtMonto = (n: number) => '$' + n.toLocaleString('es-AR');
+
 const months = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -1258,6 +1261,9 @@ export default function Agenda() {
                             >
                               <span className="font-mono text-[8px] opacity-75">{hr}</span>
                               <span className="truncate flex-1">{app.nombre}</span>
+                              {app.tipo_consulta === 'pago' && (
+                                <span title={`Consulta paga — cobrar ${fmtMonto(app.monto_a_cobrar ?? 29000)}`} className="text-amber-600 text-[8px] font-black flex-shrink-0">💲</span>
+                              )}
                               {(app as any).audit_json?.revisar && (
                                 <span title="Datos a revisar" className="text-amber-200 text-[8px] font-bold flex-shrink-0">⚠</span>
                               )}
@@ -1366,6 +1372,9 @@ export default function Agenda() {
                                   theme === 'light' ? 'text-slate-800 font-extrabold' : 'text-white'
                                 }`}>{app.nombre}</span>
                                 <div className="flex items-center gap-1 flex-shrink-0">
+                                  {app.tipo_consulta === 'pago' && (
+                                    <span title={`Consulta paga — cobrar ${fmtMonto(app.monto_a_cobrar ?? 29000)}`} className="text-amber-600 text-[9px] font-black leading-none">💲</span>
+                                  )}
                                   {(app as any).audit_json?.revisar && (
                                     <span title="Datos a revisar contra el chat" className="text-amber-600 text-[8px] font-semibold leading-none">⚠</span>
                                   )}
@@ -1708,6 +1717,59 @@ export default function Agenda() {
                 Cerrar
               </button>
             </div>
+
+            {/* Badge de cobro — PROMINENTE: la empleada debe saber que la consulta es paga antes de llamar. */}
+            {selectedApp?.tipo_consulta === 'pago' && (
+              <div className={`flex-shrink-0 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-sm ${
+                theme === 'light'
+                  ? 'bg-amber-100 text-amber-900 border-amber-300'
+                  : 'bg-amber-500/15 text-amber-200 border-amber-500/40'
+              }`}>
+                <span className="text-base leading-none">⚠</span>
+                <span>CONSULTA PAGA — COBRAR {fmtMonto(selectedApp.monto_a_cobrar ?? 29000)}</span>
+              </div>
+            )}
+            {selectedApp?.tipo_consulta === 'gratis' && (
+              <div className={`flex-shrink-0 mb-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold w-fit ${
+                theme === 'light'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              }`}>
+                <CheckCircle size={12} />
+                <span>Consulta gratuita</span>
+              </div>
+            )}
+
+            {/* Datos de calificación (read-only) — contexto para la empleada. */}
+            {selectedApp && (() => {
+              const datos: { label: string; value: string }[] = [];
+              if (selectedApp.area) datos.push({ label: 'Área', value: selectedApp.area });
+              if (selectedApp.edad != null) datos.push({ label: 'Edad', value: String(selectedApp.edad) });
+              if (selectedApp.zona) datos.push({ label: 'Zona', value: selectedApp.zona });
+              if (selectedApp.nacionalidad) datos.push({ label: 'Nacionalidad', value: selectedApp.nacionalidad });
+              if (selectedApp.insalubres != null) datos.push({ label: 'Insalubres', value: selectedApp.insalubres ? 'Sí' : 'No' });
+              if (selectedApp.aportes_aprox != null) datos.push({ label: 'Aportes aprox.', value: String(selectedApp.aportes_aprox) });
+              if (!datos.length) return null;
+              return (
+                <div className={`flex-shrink-0 mb-4 rounded-xl border px-3 py-2.5 ${
+                  theme === 'light' ? 'bg-brand-panel border-brand-hairline' : 'bg-brand-dark/40 border-white/10'
+                }`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
+                  }`}>Datos de calificación</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {datos.map((d) => (
+                      <span key={d.label} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium ${
+                        theme === 'light' ? 'bg-brand-ivory text-brand-ink border border-brand-hairline' : 'bg-white/5 text-white/90 border border-white/10'
+                      }`}>
+                        <span className={theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-textMuted'}>{d.label}:</span>
+                        <span className="font-semibold">{d.value}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Modal Form */}
             <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 -mr-3 pr-3 scrollbar-thin">
