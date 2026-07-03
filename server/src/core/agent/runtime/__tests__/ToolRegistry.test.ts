@@ -279,6 +279,64 @@ describe('ToolRegistry book_appointment auto-asigna profesional', () => {
   });
 });
 
+describe('ToolRegistry book_appointment copia la calificación (Fix 4)', () => {
+  const office = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1', video_link: null };
+  const baseDeps = (created: any[], getCalificacion?: any): any => ({
+    appointments: { create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); } },
+    availability: {
+      getOffice: () => Promise.resolve(office),
+      officeHasProfessionals: () => Promise.resolve(false),
+      hasCapacity: () => Promise.resolve(true),
+    },
+    knowledge: {}, handoff: () => Promise.resolve(),
+    ...(getCalificacion ? { getCalificacion } : {}),
+  });
+  const ctx = { accountId: 'acc1', phone: '549111' } as any;
+  const args = { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' };
+
+  it('resultado "pago" → tipo_consulta/monto + edad/nacionalidad/insalubres/area de la calificación', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockResolvedValue({
+      jubilacion_hombre: { resultado: 'pago', datos: { edad: 62, nacionalidad: 'argentino', insalubres: false, aportes_aprox: 25 } },
+    });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({
+      area: 'jubilacion_hombre', edad: 62, nacionalidad: 'argentino', insalubres: false,
+      aportes_aprox: 25, tipo_consulta: 'pago', monto_a_cobrar: 29000,
+    });
+  });
+
+  it('resultado "gratis" → tipo_consulta gratis y monto 0', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockResolvedValue({
+      jubilacion_mujer: { resultado: 'gratis', datos: { edad: 64 } },
+    });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: 'jubilacion_mujer', edad: 64, tipo_consulta: 'gratis', monto_a_cobrar: 0 });
+  });
+
+  it('sin getCalificacion no rompe: campos null/0', async () => {
+    const created: any[] = [];
+    const reg = new ToolRegistry(baseDeps(created));
+    const r = await reg.execute('book_appointment', args, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: null, edad: null, nacionalidad: null, insalubres: null, tipo_consulta: null, monto_a_cobrar: 0 });
+  });
+
+  it('getCalificacion que tira error no rompe el agendado (best-effort)', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockRejectedValue(new Error('db down'));
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: null, tipo_consulta: null, monto_a_cobrar: 0 });
+  });
+});
+
 describe('ToolRegistry — tools nuevas (Capacidades 3 y 4)', () => {
   const ctx = { accountId: 'acc1', phone: '549111' } as any;
 

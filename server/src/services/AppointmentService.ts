@@ -35,6 +35,17 @@ export interface Appointment {
   // Auditoría de la cita (migración 0032). Discrepancias detectadas vs el chat.
   audit_json?: Record<string, any> | null;
   audit_at?: string | null;
+
+  // Intake estructurado al agendar (migración 0034). Se copia de la calificación
+  // vigente del contacto (dato ya validado); tipo_consulta/monto para saber si cobrar.
+  edad?: number | null;
+  zona?: string | null;
+  nacionalidad?: string | null;   // 'argentino' | 'extranjero'
+  insalubres?: boolean | null;
+  aportes_aprox?: number | null;
+  area?: string | null;           // jubilacion_hombre/mujer/... (área de calificación)
+  tipo_consulta?: string | null;  // 'gratis' | 'pago'
+  monto_a_cobrar?: number | null;
 }
 
 export type AppointmentMotivo =
@@ -240,6 +251,14 @@ export const AppointmentService = {
           atendido_por: appointment.atendido_por ?? null,
           resumen_ia: appointment.resumen_ia ?? null,
           perfil_json: appointment.perfil_json ?? null,
+          edad: appointment.edad ?? null,
+          zona: appointment.zona ?? null,
+          nacionalidad: appointment.nacionalidad ?? null,
+          insalubres: appointment.insalubres ?? null,
+          aportes_aprox: appointment.aportes_aprox ?? null,
+          area: appointment.area ?? null,
+          tipo_consulta: appointment.tipo_consulta ?? null,
+          monto_a_cobrar: appointment.monto_a_cobrar ?? 0,
         })
         .select('*')
         .single();

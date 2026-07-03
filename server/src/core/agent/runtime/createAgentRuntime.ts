@@ -167,6 +167,8 @@ export function getAgentRuntime(): AgentRuntime {
       buildReceptionFicha({ complete: (o) => AIService.complete(o) }, { conversation, ctx, model: 'gpt-4o' })
         .then((f) => ({ resumen_ia: f.resumen_ia, perfil: f })),
     setCalificacion: (a, p, area, entry) => memory.setCalificacion(a, p, area, entry),
+    // Fix 4: al agendar, copiar la calificación vigente (validada) a la cita.
+    getCalificacion: async (a, p) => { try { const m = await memory.load(a, p); return m.calificacion ?? null; } catch { return null; } },
   });
 
   // Capacidad 1: loader de continuidad.

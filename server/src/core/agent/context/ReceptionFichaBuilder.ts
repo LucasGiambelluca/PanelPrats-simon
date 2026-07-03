@@ -24,6 +24,8 @@ export interface ReceptionFicha {
   modalidad: 'presencial' | 'video';
   motivo: AppointmentMotivo | null;
   anios_aporte: number | null;
+  nacionalidad: string | null;   // 'argentino' | 'extranjero' — respaldo si falta la calificación
+  insalubres: boolean | null;    // aportes por tareas insalubres — respaldo si falta la calificación
   situacion_previsional: string | null;
   resumen_ia: string;
 }
@@ -38,7 +40,7 @@ const MOTIVOS: AppointmentMotivo[] = [
 const EXTRACT_PROMPT = [
   'Sos recepcionista de un estudio previsional y laboral. Leé TODA la conversación y armá',
   'una ficha para que la abogada/profesional entienda el caso en 10 segundos. Respondé SOLO JSON:',
-  '{"nombre":..,"dni":..,"edad":..,"motivo":..,"anios_aporte":..,"situacion_previsional":..,"resumen_ia":".."}',
+  '{"nombre":..,"dni":..,"edad":..,"motivo":..,"anios_aporte":..,"nacionalidad":..,"insalubres":..,"zona":..,"situacion_previsional":..,"resumen_ia":".."}',
   '',
   'REGLAS:',
   '- NO inventes datos personales. Si NO se dijo, poné null (nombre, dni, edad, anios_aporte).',
@@ -47,6 +49,9 @@ const EXTRACT_PROMPT = [
   '  despido/me echaron/indemnización/ART/accidente laboral→"laboral"; reajuste de haberes→"reajuste";',
   '  pensión por discapacidad→"pension_discapacidad"; PUAM→"puam"; reconocimiento de servicios→"rti".',
   '- "edad" y "anios_aporte" enteros o null.',
+  '- "nacionalidad": "argentino" | "extranjero" | null (null si no se habló).',
+  '- "insalubres": true si dijo que tiene aportes por tareas insalubres/trabajo pesado, false si dijo que no, null si no se habló.',
+  '- "zona": localidad/barrio si se mencionó, o null.',
   '- "situacion_previsional": frase corta del estado (ej "le faltan 2 años de aportes") o null.',
   '- "resumen_ia": SIEMPRE 2-3 frases en español rioplatense con lo que SÍ se sabe (quién es, qué',
   '  necesita, modalidad/zona si surge, qué falta). Aunque haya pocos datos, escribilo con lo disponible;',
@@ -74,6 +79,8 @@ export function sanitizeFicha(raw: any, ctx: FichaContext): ReceptionFicha {
     modalidad: ctx.modalidad,               // server-side, no del modelo
     motivo,
     anios_aporte: toIntInRange(o.anios_aporte, 0, 70),
+    nacionalidad: o.nacionalidad === 'argentino' || o.nacionalidad === 'extranjero' ? o.nacionalidad : null,
+    insalubres: o.insalubres === true || o.insalubres === 'true' ? true : (o.insalubres === false || o.insalubres === 'false' ? false : null),
     situacion_previsional: typeof o.situacion_previsional === 'string' && o.situacion_previsional.trim()
       ? o.situacion_previsional.trim() : null,
     resumen_ia: typeof o.resumen_ia === 'string' ? o.resumen_ia.trim() : '',

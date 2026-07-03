@@ -8,6 +8,8 @@ import { validarTelefonoAR } from '../../../utils/phone-ar';
 import { validateQualification } from '../context/QualificationRules';
 
 const TZ = 'America/Argentina/Buenos_Aires';
+// Monto de la consulta paga (análisis previsional). Fijo por ahora; configurable a futuro.
+const MONTO_CONSULTA_PAGA = 29000;
 function fmtSlot(iso: string): string {
   try {
     return new Date(iso).toLocaleString('es-AR', {
@@ -33,6 +35,9 @@ export interface ToolDeps {
   buildFicha?: (conversation: string, ctx: { telefono: string; modalidad: 'presencial' | 'video'; zona?: string | null }) => Promise<{ resumen_ia: string; perfil: Record<string, any> }>;
   // Registro de la calificación del área (memoria estructurada por área).
   setCalificacion?: (accountId: string, phone: string, area: string, entry: { resultado: string; datos: Record<string, any>; calificado_at: string }) => Promise<void>;
+  // Lectura de la calificación vigente del contacto (Fix 4): se copia a columnas
+  // estructuradas de la cita al agendar (dato ya validado, no se re-extrae por IA).
+  getCalificacion?: (accountId: string, phone: string) => Promise<Record<string, any> | null>;
 }
 
 // Esquema de tools en formato OpenAI function-calling.
@@ -104,12 +109,49 @@ export class ToolRegistry {
               perfil_json = ficha.perfil ?? null;
             } catch { /* sin ficha: la cita se crea igual */ }
           }
+          // Copiar la calificación vigente (dato ya validado) a columnas estructuradas de la cita,
+          // para que la recepcionista tenga edad/nacionalidad/insalubres/aportes y sepa si cobrar.
+          let intake: any = {};
+          if (this.deps.getCalificacion) {
+            try {
+              const cal = await this.deps.getCalificacion(ctx.accountId, ctx.phone);
+              if (cal) {
+                // elegir la entrada de jubilación (o la primera con resultado)
+                const areaKey = ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito']
+                  .find((k) => cal[k]?.resultado) ?? Object.keys(cal).find((k) => cal[k]?.resultado);
+                const entry = areaKey ? cal[areaKey] : null;
+                if (entry) {
+                  const d = entry.datos || {};
+                  intake = {
+                    area: areaKey,
+                    edad: d.edad ?? null,
+                    nacionalidad: d.nacionalidad ?? null,
+                    insalubres: (d.insalubres === true || d.insalubres === 'true') ? true : (d.insalubres === false ? false : null),
+                    aportes_aprox: d.aportes_aprox ?? null,
+                    tipo_consulta: entry.resultado === 'pago' ? 'pago' : (entry.resultado === 'gratis' ? 'gratis' : null),
+                    monto_a_cobrar: entry.resultado === 'pago' ? MONTO_CONSULTA_PAGA : 0,
+                  };
+                }
+              }
+            } catch { /* best-effort: la cita se crea igual */ }
+          }
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
             assigned_profile_id: assigned,
             resumen_ia, perfil_json,
+            // Calificación (validada) manda sobre la ficha IA para edad/nacionalidad/insalubres/aportes;
+            // la ficha (perfil) aporta dni/zona (y edad si la calificación no la tiene).
+            edad: intake.edad ?? perfil_json?.edad ?? null,
+            dni: perfil_json?.dni ?? null,
+            zona: perfil_json?.zona ?? ctx.zona ?? null,
+            nacionalidad: intake.nacionalidad ?? perfil_json?.nacionalidad ?? null,
+            insalubres: intake.insalubres ?? (typeof perfil_json?.insalubres === 'boolean' ? perfil_json.insalubres : null),
+            aportes_aprox: intake.aportes_aprox ?? perfil_json?.anios_aporte ?? null,
+            area: intake.area ?? null,
+            tipo_consulta: intake.tipo_consulta ?? null,
+            monto_a_cobrar: intake.monto_a_cobrar ?? 0,
           } as any);
           return { ok: true, data: { appointment_id: appt.id, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
         }

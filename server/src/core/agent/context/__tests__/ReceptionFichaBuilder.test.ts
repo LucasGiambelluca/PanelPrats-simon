@@ -38,6 +38,21 @@ describe('ReceptionFichaBuilder.sanitizeFicha — nunca inventa', () => {
     expect(sanitizeFicha({ anios_aporte: '30' }, ctx).anios_aporte).toBe(30);
     expect(sanitizeFicha({ anios_aporte: 99 }, ctx).anios_aporte).toBeNull(); // >70 no es plausible
   });
+
+  it('nacionalidad: solo argentino/extranjero, sino null (respaldo)', () => {
+    expect(sanitizeFicha({ nacionalidad: 'extranjero' }, ctx).nacionalidad).toBe('extranjero');
+    expect(sanitizeFicha({ nacionalidad: 'argentino' }, ctx).nacionalidad).toBe('argentino');
+    expect(sanitizeFicha({ nacionalidad: 'peruano' }, ctx).nacionalidad).toBeNull();
+    expect(sanitizeFicha({}, ctx).nacionalidad).toBeNull();
+  });
+
+  it('insalubres: true/false explícito o null (respaldo)', () => {
+    expect(sanitizeFicha({ insalubres: true }, ctx).insalubres).toBe(true);
+    expect(sanitizeFicha({ insalubres: 'true' }, ctx).insalubres).toBe(true);
+    expect(sanitizeFicha({ insalubres: false }, ctx).insalubres).toBe(false);
+    expect(sanitizeFicha({ insalubres: 'quizás' }, ctx).insalubres).toBeNull();
+    expect(sanitizeFicha({}, ctx).insalubres).toBeNull();
+  });
 });
 
 describe('ReceptionFichaBuilder.buildReceptionFicha — con IA inyectada', () => {
