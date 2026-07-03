@@ -122,5 +122,28 @@ export function pendientesRouter(): Router {
     }
   });
 
+  // Togglea el estado "llamado" de un contacto (por account_id + teléfono real).
+  r.post('/marcar', async (req, res) => {
+    try {
+      const { account_id, telefono, llamado } = req.body ?? {};
+      if (!account_id || !telefono) return res.status(400).json({ error: 'account_id y telefono son obligatorios' });
+
+      if (llamado === false) {
+        const { error } = await supabase.from('contactos_llamados')
+          .delete().eq('account_id', account_id).eq('telefono', telefono);
+        if (error) throw new Error(error.message);
+        return res.json({ ok: true, llamado: false });
+      }
+
+      const llamado_por = req.user?.name ?? req.user?.id ?? null;
+      const { error } = await supabase.from('contactos_llamados')
+        .upsert({ account_id, telefono, llamado_at: new Date().toISOString(), llamado_por }, { onConflict: 'account_id,telefono' });
+      if (error) throw new Error(error.message);
+      res.json({ ok: true, llamado: true, llamado_por });
+    } catch (e: any) {
+      res.status(400).json({ error: e?.message ?? 'error' });
+    }
+  });
+
   return r;
 }
