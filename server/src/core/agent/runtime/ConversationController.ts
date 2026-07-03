@@ -15,6 +15,7 @@ import {
   stuckSlot,
 } from '../context/DialogueState';
 import { norm } from '../context/normalize';
+import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective } from '../context/AskLoopGuard';
 
 // Despedida/acuse PURO: todos los tokens pertenecen al vocabulario de cierre.
 // Emojis y signos los elimina norm(). Texto vacío tras norm (solo emojis) cuenta como ack.
@@ -64,7 +65,7 @@ export type ControllerOutcome =
   /** Turno resuelto determinísticamente — NO correr el tool-loop */
   | { kind: 'resolved'; messages: string[]; state: DialogueState }
   /** Delegar al tool-loop (set_qualification / start_booking / FAQ) */
-  | { kind: 'advance'; state: DialogueState };
+  | { kind: 'advance'; state: DialogueState; directive?: string };
 
 // ─── Clase principal ──────────────────────────────────────────────────────────
 
@@ -251,7 +252,17 @@ export class ConversationController {
     }
 
     // ── 8. Nada pendiente → delegar al tool-loop ───────────────────────────────
+    // Anti-loop de calificación: si el bot repite el mismo dato sin respuesta,
+    // escalar una directiva para el tool-loop (reformular → último → avanzar).
+    const lastBot = [...hist].reverse().find((m) => m.role === 'assistant');
+    const askedPrev = lastBot ? detectAskedTopic(lastBot.content) : null;
+    const answered = askedPrev
+      ? (askedPrev in (intent.slots_detectados || {}) || clientAnswered(askedPrev, text))
+      : true;
+    const streak = nextStreak(s.ask_streak ?? null, askedPrev, answered);
+    s = { ...s, ask_streak: streak };
+    const directive = streak && streak.count >= 2 ? escalationDirective(streak.topic, streak.count) : null;
     await saveState(accountId, phone, s);
-    return { kind: 'advance', state: s };
+    return { kind: 'advance', state: s, directive: directive ?? undefined };
   }
 }

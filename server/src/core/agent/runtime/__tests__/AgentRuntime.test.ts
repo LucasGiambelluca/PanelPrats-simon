@@ -255,6 +255,17 @@ describe('AgentRuntime.handle', () => {
     expect(out).toEqual(['Sí, gestionamos moratoria.']);
   });
 
+  it('inyecta la directiva del controller al system prompt del tool-loop', async () => {
+    const deps = makeDeps([{ content: 'Reformulo la pregunta.' }]);
+    const seen: any[] = [];
+    deps.ai.completeWithTools = vi.fn(async (o: any) => { seen.push(o.systemPrompt); return { content: 'ok' }; }) as any;
+    (deps as any).conversation = { handleTurn: vi.fn().mockResolvedValue({ kind: 'advance', directive: 'NO vuelvas a preguntar los años de aportes.' }) };
+    const rt = new AgentRuntime(deps as any);
+    await rt.handle('acc1', 'p1', 'La Ferrere', {});
+    expect(seen[0]).toMatch(/DIRECTIVA DEL SISTEMA/);
+    expect(seen[0]).toMatch(/años de aportes/);
+  });
+
   it('con agendado ACTIVO, BookingFlow conduce y el controller NO se invoca', async () => {
     const deps = makeDeps([{ content: 'no debería' }]);
     (deps as any).booking = {

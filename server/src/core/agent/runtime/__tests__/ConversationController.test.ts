@@ -361,3 +361,40 @@ describe('cierre de conversación', () => {
     expect(deps.classify).not.toHaveBeenCalled(); // el bot no se reengancha sobre un handoff
   });
 });
+
+// ─── Anti-loop de calificación: streak de tema + directiva en advance ─────────
+
+function makeAdvanceDeps(over: any = {}) {
+  const state = { ...createDialogueState(), fase: 'calificacion' as const, area: 'jubilacion_mujer',
+    slots: { edad: { valor: 61, estado: 'lleno' as const, pedido_count: 0 } },
+    ask_streak: { topic: 'aportes' as const, count: 2 } };
+  return {
+    classify: vi.fn().mockResolvedValue({ intent: 'otro', quiere_continuar: true, nivel_frustracion: 0, es_cierre: false, slots_detectados: {}, confianza: 0.9 }),
+    history: vi.fn().mockResolvedValue([{ role: 'assistant', content: '¿Cuántos años de aportes tiene?' }, { role: 'user', content: 'La Ferrere' }]),
+    loadState: vi.fn().mockResolvedValue(state),
+    saveState: vi.fn().mockResolvedValue(undefined),
+    setOptOut: vi.fn(), closeConversation: vi.fn(), handoff: vi.fn(),
+    redactar: vi.fn().mockResolvedValue('...'),
+    detectArea: () => 'jubilacion_mujer',
+    now: () => '2026-07-03T12:00:00.000Z',
+    ...over,
+  };
+}
+
+describe('ask_streak → directiva en advance', () => {
+  it('bot preguntó aportes, cliente no respondió (streak 2→3) → advance con directive', async () => {
+    const deps = makeAdvanceDeps();
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'La Ferrere');
+    expect(out.kind).toBe('advance');
+    expect((out as any).directive).toMatch(/aportes/);
+    const saved = deps.saveState.mock.calls.at(-1)?.[2];
+    expect(saved.ask_streak).toEqual({ topic: 'aportes', count: 3 });
+  });
+  it('cliente responde el dato → streak reset, sin directive', async () => {
+    const deps = makeAdvanceDeps({ classify: vi.fn().mockResolvedValue({ intent: 'responder_dato', quiere_continuar: true, nivel_frustracion: 0, es_cierre: false, slots_detectados: { aportes: 25 }, confianza: 0.9 }) });
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'tengo 25 años de aportes');
+    expect((out as any).directive).toBeFalsy();
+    const saved = deps.saveState.mock.calls.at(-1)?.[2];
+    expect(saved.ask_streak).toBeNull();
+  });
+});

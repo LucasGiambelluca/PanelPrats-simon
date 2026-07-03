@@ -46,7 +46,7 @@ export interface RuntimeDeps {
   // 'advance' → delega al tool-loop (set_qualification / start_booking / FAQ).
   conversation?: {
     handleTurn: (accountId: string, phone: string, text: string) =>
-      Promise<{ kind: 'resolved'; messages: string[] } | { kind: 'advance' }>;
+      Promise<{ kind: 'resolved'; messages: string[] } | { kind: 'advance'; directive?: string }>;
   };
   // LoopGuard: tope de llamadas IA por contacto (config en account.loopGuard).
   // Sin esto, el guard queda inactivo (comportamiento previo intacto).
@@ -86,7 +86,7 @@ export class AgentRuntime {
     const ttlDays = Number((account as any)?.calificacionTtlDays) || 30;
     const calBlock = buildCalificacionFicha(ficha.calificacion, msgArea, ttlDays, (this.deps.now ?? Date.now)());
     const fichaText = calBlock ? `${ficha.fichaText}\n${calBlock}` : ficha.fichaText;
-    const systemPrompt = this.deps.persona.build(account, fichaText, continuity);
+    let systemPrompt = this.deps.persona.build(account, fichaText, continuity);
     const tools = this.deps.tools.schemas();
     const messages: any[] = [...history, { role: 'user', content: text }];
 
@@ -144,6 +144,8 @@ export class AgentRuntime {
         const outcome = await this.deps.conversation.handleTurn(accountId, phone, text).catch(() => ({ kind: 'advance' as const }));
         if (outcome.kind === 'resolved') return finishWith(outcome.messages);
         // 'advance' → sigue al gate de booking pelado + tool-loop de abajo.
+        // Puede traer una directiva anti-loop para enjaular al LLM ESTE turno.
+        if ((outcome as any).directive) systemPrompt = `${systemPrompt}\n\nDIRECTIVA DEL SISTEMA (obligatoria): ${(outcome as any).directive}`;
       }
       // Reprogramación determinística: si el cliente pide reprogramar/cambiar su turno,
       // reusamos el motor de slots REALES (nunca una fecha inventada por el LLM: bug 2023).

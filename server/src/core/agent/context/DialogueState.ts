@@ -9,6 +9,8 @@
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
+import type { AskStreak } from './AskLoopGuard';
+
 export type SlotEstado = 'pendiente' | 'lleno' | 'no_aplica';
 
 export interface Slot {
@@ -28,6 +30,7 @@ export interface DialogueState {
   redirecciones_offtopic: number;   // tope antes de cerrar/derivar
   cerrada: boolean;
   cierre_motivo: CierreMotivo | null;
+  ask_streak?: AskStreak | null;  // anti-loop: tema repetido sin respuesta del cliente
 }
 
 // ─── Constantes internas ─────────────────────────────────────────────────────
@@ -49,6 +52,7 @@ export function createDialogueState(): DialogueState {
     redirecciones_offtopic: 0,
     cerrada: false,
     cierre_motivo: null,
+    ask_streak: null,
   };
 }
 
