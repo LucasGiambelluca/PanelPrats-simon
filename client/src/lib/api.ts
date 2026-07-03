@@ -464,3 +464,29 @@ export const agenteApi = {
 
 // Para mostrar URLs absolutas (ej webhook de Meta) mantenemos un base explícito.
 export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// ── Pendientes de llamar ────────────────────────────────────
+export interface FilaPendiente {
+  telefono: string;
+  nombre: string | null;
+  canal: 'whatsapp' | 'facebook' | 'instagram';
+  area: string | null;
+  calificacion: string | null;
+  ultimo_mensaje: string | null;
+  fecha: string | null;
+  estado: string;
+  tema: string | null;
+  conversation_id: string;
+  account_id: string;
+}
+export interface PendientesResponse { total: number; filas: FilaPendiente[]; }
+
+export const pendientesApi = {
+  list: (params: { accountId?: string; range?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.accountId) q.set('account_id', params.accountId);
+    if (params.range) q.set('range', params.range);
+    const qs = q.toString();
+    return api<PendientesResponse>(`/api/pendientes-llamar${qs ? `?${qs}` : ''}`);
+  },
+};
