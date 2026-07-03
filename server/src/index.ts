@@ -11,6 +11,7 @@ import { AccountManager } from './core/accounts/AccountManager';
 import { ReminderScheduler } from './services/ReminderScheduler';
 import { NudgeScheduler } from './services/NudgeScheduler';
 import { createNightReengageScheduler } from './services/NightReengageScheduler';
+import { AppointmentFollowupScheduler } from './services/AppointmentFollowupScheduler';
 import { WebhookQueue } from './services/WebhookQueue';
 import { setNotificationSender } from './services/NotifierService';
 import { createApp } from './api/app';
@@ -61,6 +62,8 @@ async function bootstrap() {
   const nudges = new NudgeScheduler(manager);
   // Re-enganche nocturno: retoma a la mañana lo que se cortó de noche.
   const reengage = createNightReengageScheduler(manager);
+  // Proactivos por template: recordatorio 24h antes + seguimiento post-reunión.
+  const followups = new AppointmentFollowupScheduler(manager);
 
   // Apagado limpio (A7): al recibir SIGTERM/SIGINT dejamos de aceptar requests,
   // frenamos los workers, cerramos los clientes de WhatsApp y la conexión Redis.
@@ -78,6 +81,7 @@ async function bootstrap() {
       reminders.stop();
       nudges.stop();
       reengage.stop();
+      followups.stop();
       webhookQueue.stop();
       await manager.stopAll();
       await closeRedis();
@@ -98,6 +102,7 @@ async function bootstrap() {
   reminders.start();
   nudges.start();
   reengage.start();
+  followups.start();
 }
 
 bootstrap().catch((e) => {
