@@ -170,3 +170,18 @@ describe('formatos de hora del libreto', () => {
     expect(pick('el sabado a las 16:30').matchedValue).toBeNull();
   });
 });
+
+describe('formatos de hora extra (fricción prod)', () => {
+  const offered = [
+    { index: 1, label: 'vie 10/07 14:10', value: '2026-07-10T17:10:00.000Z' },
+    { index: 2, label: 'vie 10/07 14:40', value: '2026-07-10T17:40:00.000Z' },
+    { index: 3, label: 'lun 06/07 15:30', value: '2026-07-06T18:30:00.000Z' },
+  ];
+  const pick = (t: string) => resolveOption({ userText: t, offered });
+  it('"14 y 40" → 14:40', () => { expect(pick('14 y 40').matchedValue).toBe('2026-07-10T17:40:00.000Z'); });
+  it('"a las 14 y media" → 14:30 (no ofrecido) → null', () => { expect(pick('a las 14 y media').matchedValue).toBeNull(); });
+  it('"Viernes 14 10" → vie 14:10', () => { expect(pick('Viernes 14 10').matchedValue).toBe('2026-07-10T17:10:00.000Z'); });
+  it('"el lunes 15 y 30" → lun 15:30', () => { expect(pick('el lunes 15 y 30').matchedValue).toBe('2026-07-06T18:30:00.000Z'); });
+  it('hora sin match exacto sigue devolviendo null', () => { expect(pick('a las 20').matchedValue).toBeNull(); });
+  it('no rompe: "tengo 3 hijos" no matchea horario', () => { expect(pick('tengo 3 hijos').matchedValue).toBeNull(); });
+});

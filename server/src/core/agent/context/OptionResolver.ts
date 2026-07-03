@@ -65,6 +65,14 @@ function canonTimes(raw: string): string {
   return (raw || '')
     .toLowerCase()
     .replace(/\balas\b/g, 'a las')
+    // "N y MM" / "N y media|cuarto" → HH:MM. VA ANTES del [.\s] para que "14 y 40"
+    // → "14:40" gane (sino "y 40" no matchearía y quedaría suelto).
+    .replace(/\b([01]?\d|2[0-3])\s+y\s+(media|cuarto|treinta|quince|[0-5]?\d)\b/g, (_m, h, mm) => {
+      const min = (mm === 'media' || mm === 'treinta') ? '30'
+        : (mm === 'cuarto' || mm === 'quince') ? '15'
+        : String(mm).padStart(2, '0');
+      return `${h}:${min}`;
+    })
     .replace(/\b([01]?\d|2[0-3])[.\s]([0-5]\d)\b/g, '$1:$2')
     .replace(/\b(\d{4})\b/g, (m) => {
       if (/^(19|20)\d\d$/.test(m)) return m;          // año, no hora
@@ -105,12 +113,20 @@ function requestedTime(rawText: string): { h: number; m?: number } | 'mediodia' 
   return null;
 }
 
+// Palabras que "anuncian" una posición: "el 3", "la opción 2", "número 1".
+const POS_CUE = new Set(['el', 'la', 'los', 'las', 'opcion', 'opciones', 'numero', 'nro', 'num', 'turno']);
+
 // Última posición referida (soporta correcciones: "el segundo no, el primero").
 function lastPosition(text: string, n: number): number | null {
   const words = text.split(' ');
   let pos: number | null = null;
   let outOfRange = false;
-  for (const w of words) {
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    // Un token de SOLO dígitos cuenta como posición únicamente si viene tras un
+    // determinante/keyword posicional ("el 3", "opción 2") o es todo el mensaje
+    // ("3"). Así "tengo 3 hijos" no se lee como "la opción 3".
+    if (/^\d+$/.test(w) && words.length > 1 && !(i > 0 && POS_CUE.has(words[i - 1]))) continue;
     const p = ordinalFromWord(w);
     if (p === null) continue;
     if (p >= 1 && p <= n) pos = p;       // dentro de rango
