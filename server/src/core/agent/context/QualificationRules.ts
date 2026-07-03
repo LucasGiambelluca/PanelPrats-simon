@@ -18,6 +18,11 @@ export function validateQualification(area: string, resultado: string, datos: Re
     return { ok: false, error: 'Falta la edad: preguntala antes de registrar la calificación.' };
   }
 
+  // "a confirmar": el anti-loop deja agendar gratis cuando el cliente no da un dato DECISOR
+  // (aportes, insalubres, nacionalidad, anio_ingreso). Afloja SOLO chequeos que fallan por
+  // FALTA de ese dato; nunca la edad ni un dato PRESENTE que descalifica (aportes<=19 sigue pago).
+  const aConf = new Set<string>(Array.isArray(datos.a_confirmar) ? datos.a_confirmar.map(String) : []);
+
   if (area === 'jubilacion') {
     return { ok: false, error: 'Determiná primero el género (por el nombre o preguntando) y registrá jubilacion_hombre o jubilacion_mujer.' };
   }
@@ -25,13 +30,13 @@ export function validateQualification(area: string, resultado: string, datos: Re
   if (area === 'jubilacion_hombre') {
     // El piso de edad para insalubres lo evalúa el abogado; acá solo exigimos que la pregunta se haya hecho.
     const insalubres = datos.insalubres === true || datos.insalubres === 'true';
-    if (edad < 63 && !insalubres) {
+    if (edad < 63 && !insalubres && !aConf.has('insalubres')) {
       return { ok: false, error: 'Hombre menor de 63: antes de calificar gratis preguntá si tiene aportes por tareas insalubres y pasá insalubres:true/false. Si no tiene, el resultado es "pago".' };
     }
-    if (datos.nacionalidad !== 'argentino' && datos.nacionalidad !== 'extranjero') {
+    if (datos.nacionalidad !== 'argentino' && datos.nacionalidad !== 'extranjero' && !aConf.has('nacionalidad')) {
       return { ok: false, error: 'Falta la nacionalidad: preguntá si es argentino o extranjero antes de calificar gratis.' };
     }
-    if (datos.nacionalidad === 'extranjero' && !(Number(datos.anio_ingreso) <= 2008)) {
+    if (datos.nacionalidad === 'extranjero' && !(Number(datos.anio_ingreso) <= 2008) && !aConf.has('anio_ingreso')) {
       return { ok: false, error: 'Extranjero: solo califica gratis con año de ingreso (según DNI) 2008 o anterior. Preguntá el año y pasalo en anio_ingreso; si es 2009 o posterior, el resultado es "pago".' };
     }
   }
@@ -40,7 +45,7 @@ export function validateQualification(area: string, resultado: string, datos: Re
     const porEdad = edad >= 64 || (edad >= 58 && edad <= 59);
     if (!porEdad) {
       if (edad >= 60 && edad <= 63) {
-        if (!Number.isFinite(Number(datos.aportes_aprox))) {
+        if (!Number.isFinite(Number(datos.aportes_aprox)) && !aConf.has('aportes')) {
           return { ok: false, error: 'Mujer de 60 a 63: preguntá cuántos hijos tiene y los años de aportes aproximados antes de calificar (pasá aportes_aprox).' };
         }
         if (Number(datos.aportes_aprox) <= 19) {

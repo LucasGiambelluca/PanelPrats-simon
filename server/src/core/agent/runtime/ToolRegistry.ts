@@ -54,7 +54,7 @@ const SCHEMAS = [
   { type: 'function', function: { name: 'pick_option', description: 'Interpreta una respuesta del cliente que se refiere a una opción ya ofrecida ("el tercero", "el de videollamada", "a la tarde"). Devuelve el valor elegido o null si es ambiguo.', parameters: { type: 'object', properties: { user_text: { type: 'string' } }, required: ['user_text'] } } },
   { type: 'function', function: { name: 'start_booking', description: 'Iniciá el agendado de un turno cuando el cliente quiere una cita/consulta. A partir de ahí un flujo guiado propone horarios, toma la elección y confirma SOLO; vos NO sigas los pasos ni llames book_appointment manualmente. Pasá lo que ya sepas (modalidad, zona, nombre, telefono).', parameters: { type: 'object', properties: { modalidad: { type: 'string', enum: ['presencial', 'video'] }, zona: { type: 'string' }, nombre: { type: 'string' }, telefono: { type: 'string', description: 'Teléfono ya validado con validate_phone, si el cliente lo dio en la conversación.' } } } } },
   { type: 'function', function: { name: 'validate_phone', description: 'Validá un número de teléfono que el cliente te DICE (no el de WhatsApp): chequea que tenga forma de número argentino con código de área real. Usala cuando el cliente te da un número de contacto. Si NO es válido, pedíle que lo confirme.', parameters: { type: 'object', properties: { numero: { type: 'string' } }, required: ['numero'] } } },
-  { type: 'function', function: { name: 'set_qualification', description: 'Registrá el resultado de la calificación del área (jubilación, pensión, laboral, ART, tránsito) cuando terminaste las preguntas del PROCEDIMIENTO, ANTES de ofrecer agendar.', parameters: { type: 'object', properties: { area: { type: 'string', enum: ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito'] }, resultado: { type: 'string', enum: ['gratis', 'pago', 'descartar'] }, edad: { type: 'number' }, hijos: { type: 'number' }, aportes_aprox: { type: 'number' }, insalubres: { type: 'boolean', description: 'Solo jubilación hombre <63: ¿tiene aportes por tareas insalubres?' }, nacionalidad: { type: 'string', enum: ['argentino', 'extranjero'] }, anio_ingreso: { type: 'number', description: 'Extranjero: año de ingreso al país según DNI.' }, notas: { type: 'string' } }, required: ['area', 'resultado'] } } },
+  { type: 'function', function: { name: 'set_qualification', description: 'Registrá el resultado de la calificación del área (jubilación, pensión, laboral, ART, tránsito) cuando terminaste las preguntas del PROCEDIMIENTO, ANTES de ofrecer agendar.', parameters: { type: 'object', properties: { area: { type: 'string', enum: ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito'] }, resultado: { type: 'string', enum: ['gratis', 'pago', 'descartar'] }, edad: { type: 'number' }, hijos: { type: 'number' }, aportes_aprox: { type: 'number' }, insalubres: { type: 'boolean', description: 'Solo jubilación hombre <63: ¿tiene aportes por tareas insalubres?' }, nacionalidad: { type: 'string', enum: ['argentino', 'extranjero'] }, anio_ingreso: { type: 'number', description: 'Extranjero: año de ingreso al país según DNI.' }, a_confirmar: { type: 'array', items: { type: 'string' }, description: 'Temas que faltan confirmar (ej ["aportes"]); permite agendar gratis "a confirmar" sin trabarse cuando el cliente no da el dato.' }, notas: { type: 'string' } }, required: ['area', 'resultado'] } } },
 ];
 
 export class ToolRegistry {
@@ -127,11 +127,17 @@ export class ToolRegistry {
                   nacionalidad: d.nacionalidad ?? null,
                   insalubres: (d.insalubres === true || d.insalubres === 'true') ? true : (d.insalubres === false ? false : null),
                   aportes_aprox: d.aportes_aprox ?? null,
+                  a_confirmar: (Array.isArray(d.a_confirmar) && d.a_confirmar.length) ? d.a_confirmar.map(String) : null,
                   tipo_consulta: r === 'pago' ? 'pago' : (r === 'gratis' ? 'gratis' : null),
                   monto_a_cobrar: r === 'pago' ? MONTO_CONSULTA_PAGA : 0,
                 };
               }
             } catch { /* best-effort: la cita se crea igual */ }
+          }
+          // Marca "a confirmar" en la ficha (jsonb, sin migración): si la calificación vigente
+          // trae temas pendientes, quedan en perfil_json.a_confirmar para que el abogado verifique.
+          if (Array.isArray(intake.a_confirmar) && intake.a_confirmar.length) {
+            perfil_json = { ...(perfil_json || {}), a_confirmar: intake.a_confirmar };
           }
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono,
@@ -218,6 +224,7 @@ export class ToolRegistry {
           if (args.insalubres != null) datos.insalubres = args.insalubres;
           if (args.nacionalidad) datos.nacionalidad = args.nacionalidad;
           if (args.anio_ingreso != null) datos.anio_ingreso = args.anio_ingreso;
+          if (Array.isArray(args.a_confirmar) && args.a_confirmar.length) datos.a_confirmar = args.a_confirmar.map(String);
           if (args.notas) datos.notas = args.notas;
           const check = validateQualification(String(args.area), String(args.resultado), datos);
           if (!check.ok) return { ok: false, error: check.error };

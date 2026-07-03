@@ -373,6 +373,25 @@ describe('ToolRegistry book_appointment copia la calificación del área actual 
     expect(r.ok).toBe(true);
     expect(created[0]).toMatchObject({ area: null, tipo_consulta: null, monto_a_cobrar: 0 });
   });
+
+  it('book_appointment copia a_confirmar de la calificación a perfil_json', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockResolvedValue({ area: 'jubilacion_mujer', entry: { resultado: 'gratis', datos: { edad: 61, a_confirmar: ['aportes'] } } });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx('jubilacion_mujer'));
+    expect(r.ok).toBe(true);
+    expect(created[0].perfil_json).toMatchObject({ a_confirmar: ['aportes'] });
+    expect(created[0]).toMatchObject({ area: 'jubilacion_mujer', tipo_consulta: 'gratis', monto_a_cobrar: 0 });
+  });
+
+  it('book_appointment sin a_confirmar no ensucia perfil_json', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockResolvedValue({ area: 'jubilacion_mujer', entry: { resultado: 'gratis', datos: { edad: 64 } } });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx('jubilacion_mujer'));
+    expect(r.ok).toBe(true);
+    expect(created[0].perfil_json ?? null).toBeNull();
+  });
 });
 
 describe('ToolRegistry — tools nuevas (Capacidades 3 y 4)', () => {

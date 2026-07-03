@@ -68,6 +68,32 @@ describe('validateQualification — libreto jubilación', () => {
   });
 });
 
+describe('validateQualification — a_confirmar', () => {
+  const H = 'jubilacion_hombre', M = 'jubilacion_mujer';
+  it('hombre 60 sin insalubres pero a_confirmar:[insalubres] → acepta', () => {
+    expect(validateQualification(H, 'gratis', { edad: 60, nacionalidad: 'argentino', a_confirmar: ['insalubres'] }).ok).toBe(true);
+  });
+  it('hombre 64 sin nacionalidad pero a_confirmar:[nacionalidad] → acepta', () => {
+    expect(validateQualification(H, 'gratis', { edad: 64, a_confirmar: ['nacionalidad'] }).ok).toBe(true);
+  });
+  it('hombre extranjero sin anio pero a_confirmar:[anio_ingreso] → acepta', () => {
+    expect(validateQualification(H, 'gratis', { edad: 65, nacionalidad: 'extranjero', a_confirmar: ['anio_ingreso'] }).ok).toBe(true);
+  });
+  it('mujer 61 sin aportes pero a_confirmar:[aportes] → acepta', () => {
+    expect(validateQualification(M, 'gratis', { edad: 61, a_confirmar: ['aportes'] }).ok).toBe(true);
+  });
+  it('sin a_confirmar sigue rechazando (no afloja el criterio general)', () => {
+    expect(validateQualification(M, 'gratis', { edad: 61 }).ok).toBe(false);
+    expect(validateQualification(H, 'gratis', { edad: 60, nacionalidad: 'argentino' }).ok).toBe(false);
+  });
+  it('sin edad rechaza aunque haya a_confirmar (la edad es dura)', () => {
+    expect(validateQualification(H, 'gratis', { a_confirmar: ['insalubres', 'edad'] }).ok).toBe(false);
+  });
+  it('mujer 61 con aportes 12 (dato PRESENTE) sigue siendo pago aunque a_confirmar traiga otra cosa', () => {
+    expect(validateQualification(M, 'gratis', { edad: 61, aportes_aprox: 12, a_confirmar: ['insalubres'] }).ok).toBe(false);
+  });
+});
+
 describe('hasCalificacionVigente', () => {
   const now = Date.parse('2026-07-02T12:00:00Z');
   it('vigente dentro del TTL', () => {
