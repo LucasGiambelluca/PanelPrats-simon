@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
-import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users, Menu, X, LayoutDashboard, Building2, BarChart3, Brain, PhoneCall } from 'lucide-react';
+import { MessageSquare, Bot, LogOut, ChevronDown, Phone, Settings, Calendar, ShieldCheck, Users, Menu, X, LayoutDashboard, Building2, BarChart3, Brain, PhoneCall, FileText } from 'lucide-react';
 
 const allNav = [
   { to: '/dashboard', label: 'Inicio', icon: LayoutDashboard, roles: ['admin', 'empleada'] },
@@ -16,6 +16,7 @@ const allNav = [
   { to: '/team', label: 'Equipo', icon: Users, roles: ['admin'] },
   { to: '/offices', label: 'Oficinas', icon: Building2, roles: ['admin'] },
   { to: '/connections', label: 'Conexiones', icon: Settings, roles: ['admin'] },
+  { to: '/templates-whatsapp', label: 'Plantillas WA', icon: FileText, roles: ['admin'] },
 ] as const;
 
 export default function Layout() {

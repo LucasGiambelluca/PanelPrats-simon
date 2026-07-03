@@ -25,6 +25,7 @@ const Offices = lazy(() => import('./pages/Offices'));
 const Analiticas = lazy(() => import('./pages/Analiticas'));
 const Agente = lazy(() => import('./pages/Agente'));
 const PendientesLlamar = lazy(() => import('./pages/PendientesLlamar'));
+const TemplatesWhatsApp = lazy(() => import('./pages/TemplatesWhatsApp'));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-brand-ivory">
@@ -74,6 +75,7 @@ function App() {
                 <Route path="/team" element={<Team />} />
                 <Route path="/offices" element={<Offices />} />
                 <Route path="/analiticas" element={<Analiticas />} />
+                <Route path="/templates-whatsapp" element={<TemplatesWhatsApp />} />
               </Route>
             </Route>
           </Route>
