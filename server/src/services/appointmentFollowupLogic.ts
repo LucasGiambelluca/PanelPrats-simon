@@ -49,3 +49,30 @@ export function fechaAR(iso: string): string {
   const dm = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', timeZone: AR_TZ });
   return `${dia} ${dm}`;
 }
+
+export interface DocChaseCfg {
+  docChaseEnabled: boolean;
+  everyDays: number;
+  max: number;
+}
+export interface ChaseAppt {
+  status: string;
+  followup_sent?: boolean;
+  doc_chase_count?: number;
+  doc_chase_last_at?: string | null;
+}
+
+/**
+ * ¿Toca mandar un recordatorio de documentación pendiente?
+ * El chase arranca DESPUÉS del follow-up (que ya mandó el primer pedido de docs),
+ * respeta la cadencia (everyDays desde el último chase) y un máximo de intentos.
+ */
+export function docChaseDue(a: ChaseAppt, pendingCount: number, now: number, cfg: DocChaseCfg): boolean {
+  if (!cfg.docChaseEnabled) return false;
+  if (a.status === 'cancelada') return false;
+  if (!a.followup_sent) return false;
+  if (pendingCount <= 0) return false;
+  if ((a.doc_chase_count ?? 0) >= cfg.max) return false;
+  const lastMs = a.doc_chase_last_at ? new Date(a.doc_chase_last_at).getTime() : 0;
+  return (now - lastMs) >= cfg.everyDays * 24 * 60 * 60 * 1000;
+}
