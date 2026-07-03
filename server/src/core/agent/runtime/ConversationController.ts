@@ -15,7 +15,7 @@ import {
   stuckSlot,
 } from '../context/DialogueState';
 import { norm } from '../context/normalize';
-import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective } from '../context/AskLoopGuard';
+import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective, slotDetected } from '../context/AskLoopGuard';
 
 // Despedida/acuse PURO: todos los tokens pertenecen al vocabulario de cierre.
 // Emojis y signos los elimina norm(). Texto vacío tras norm (solo emojis) cuenta como ack.
@@ -257,7 +257,7 @@ export class ConversationController {
     const lastBot = [...hist].reverse().find((m) => m.role === 'assistant');
     const askedPrev = lastBot ? detectAskedTopic(lastBot.content) : null;
     const answered = askedPrev
-      ? (askedPrev in (intent.slots_detectados || {}) || clientAnswered(askedPrev, text))
+      ? (slotDetected(askedPrev, intent.slots_detectados || {}) || clientAnswered(askedPrev, text))
       : true;
     const streak = nextStreak(s.ask_streak ?? null, askedPrev, answered);
     s = { ...s, ask_streak: streak };

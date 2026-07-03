@@ -69,6 +69,23 @@ export function clientAnswered(topic: AskTopic, clientText: string): boolean {
   }
 }
 
+// Las claves que emite el IntentClassifier NO coinciden 1:1 con AskTopic (ej. usa
+// 'anios_aporte'/'hora'). Este mapa traduce topic → claves reales para no dar por
+// no-respondido un dato que el classifier SÍ extrajo (sesgaba a sobre-disparar el guard).
+const SLOT_ALIASES: Record<AskTopic, string[]> = {
+  aportes: ['aportes', 'anios_aporte', 'anos_aporte'],
+  horario: ['horario', 'hora', 'franja'],
+  telefono: ['telefono', 'celular'],
+  anio_ingreso: ['anio_ingreso', 'ano_ingreso'],
+  edad: ['edad'], nacionalidad: ['nacionalidad'], zona: ['zona'],
+  nombre: ['nombre'], insalubres: ['insalubres'], hijos: ['hijos'],
+};
+
+/** ¿El classifier extrajo el dato del tema (bajo cualquiera de sus claves reales)? */
+export function slotDetected(topic: AskTopic, slots: Record<string, unknown>): boolean {
+  return (SLOT_ALIASES[topic] ?? [topic]).some((k) => k in slots);
+}
+
 /** Mismo tema no respondido → count++; tema nuevo → 1; respondido o sin-pregunta → null. */
 export function nextStreak(prev: AskStreak | null, asked: AskTopic | null, answered: boolean): AskStreak | null {
   if (!asked || answered) return null;

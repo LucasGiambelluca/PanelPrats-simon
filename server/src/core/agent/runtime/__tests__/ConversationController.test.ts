@@ -391,8 +391,10 @@ describe('ask_streak → directiva en advance', () => {
     expect(saved.ask_streak).toEqual({ topic: 'aportes', count: 3 });
   });
   it('cliente responde el dato → streak reset, sin directive', async () => {
-    const deps = makeAdvanceDeps({ classify: vi.fn().mockResolvedValue({ intent: 'responder_dato', quiere_continuar: true, nivel_frustracion: 0, es_cierre: false, slots_detectados: { aportes: 25 }, confianza: 0.9 }) });
-    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'tengo 25 años de aportes');
+    // clave REAL del classifier ('anios_aporte', no 'aportes'); con texto sin número
+    // el reset solo puede venir del alias map, no de la heurística clientAnswered.
+    const deps = makeAdvanceDeps({ classify: vi.fn().mockResolvedValue({ intent: 'responder_dato', quiere_continuar: true, nivel_frustracion: 0, es_cierre: false, slots_detectados: { anios_aporte: 25 }, confianza: 0.9 }) });
+    const out = await new ConversationController(deps as any).handleTurn('a1', 'p1', 'toda la vida en blanco');
     expect((out as any).directive).toBeFalsy();
     const saved = deps.saveState.mock.calls.at(-1)?.[2];
     expect(saved.ask_streak).toBeNull();

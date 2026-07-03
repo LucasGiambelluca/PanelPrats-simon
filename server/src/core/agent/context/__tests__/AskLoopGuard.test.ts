@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective } from '../AskLoopGuard';
+import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective, slotDetected } from '../AskLoopGuard';
 
 describe('detectAskedTopic', () => {
   it('detecta cada tema por keyword', () => {
@@ -42,6 +42,18 @@ describe('clientAnswered', () => {
   it('argentino/extranjero responde nacionalidad', () => {
     expect(clientAnswered('nacionalidad', 'soy argentino')).toBe(true);
     expect(clientAnswered('nacionalidad', 'no sé')).toBe(false);
+  });
+});
+
+describe('slotDetected — alias de claves del classifier', () => {
+  it('mapea las claves reales del classifier al AskTopic', () => {
+    expect(slotDetected('aportes', { anios_aporte: 25 })).toBe(true);
+    expect(slotDetected('horario', { hora: '15:30' })).toBe(true);
+    expect(slotDetected('aportes', { aportes: 25 })).toBe(true); // alias canónico también
+  });
+  it('no matchea claves de otro tema', () => {
+    expect(slotDetected('aportes', { zona: 'x' })).toBe(false);
+    expect(slotDetected('horario', {})).toBe(false);
   });
 });
 

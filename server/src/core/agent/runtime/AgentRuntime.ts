@@ -141,11 +141,12 @@ export class AgentRuntime {
       // determinístico ANTES del tool-loop. Resuelve opt-out / cierre / frustración /
       // off-topic / preguntas de calificación sin tocar el LLM-con-tools.
       if (this.deps.conversation) {
-        const outcome = await this.deps.conversation.handleTurn(accountId, phone, text).catch(() => ({ kind: 'advance' as const }));
+        const outcome = await this.deps.conversation.handleTurn(accountId, phone, text)
+          .catch((): { kind: 'advance'; directive?: string } => ({ kind: 'advance' }));
         if (outcome.kind === 'resolved') return finishWith(outcome.messages);
         // 'advance' → sigue al gate de booking pelado + tool-loop de abajo.
         // Puede traer una directiva anti-loop para enjaular al LLM ESTE turno.
-        if ((outcome as any).directive) systemPrompt = `${systemPrompt}\n\nDIRECTIVA DEL SISTEMA (obligatoria): ${(outcome as any).directive}`;
+        if (outcome.directive) systemPrompt = `${systemPrompt}\n\nDIRECTIVA DEL SISTEMA (obligatoria): ${outcome.directive}`;
       }
       // Reprogramación determinística: si el cliente pide reprogramar/cambiar su turno,
       // reusamos el motor de slots REALES (nunca una fecha inventada por el LLM: bug 2023).
