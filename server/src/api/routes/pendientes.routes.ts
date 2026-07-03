@@ -69,6 +69,8 @@ export function pendientesRouter(): Router {
         let q = supabase
           .from('contact_memory')
           .select('account_id, phone, opt_out, dialogue_state, calificacion, current_thread, last_topic, last_interaction_at')
+          .order('account_id', { ascending: true })
+          .order('phone', { ascending: true })
           .range(from, to);
         if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
         return q;
@@ -83,7 +85,9 @@ export function pendientesRouter(): Router {
 
       // 3) appointments (phone + telefono) → set de teléfonos con cita.
       const appointments = await fetchAll<{ phone: string | null; telefono: string | null }>((from, to) => {
-        let q = supabase.from('appointments').select('phone, telefono').range(from, to);
+        let q = supabase.from('appointments').select('phone, telefono')
+          .order('id', { ascending: true })
+          .range(from, to);
         if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
         return q;
       });
@@ -93,8 +97,8 @@ export function pendientesRouter(): Router {
       // 4) Filtro de rango temporal (sobre fecha del último contacto).
       const days = RANGE_DAYS[range];
       if (days) {
-        const corte = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        filas = filas.filter((f) => (f.fecha ?? '') >= corte);
+        const corteMs = Date.now() - days * 24 * 60 * 60 * 1000;
+        filas = filas.filter((f) => f.fecha != null && Date.parse(f.fecha) >= corteMs);
       }
 
       res.json({ total: filas.length, filas });
