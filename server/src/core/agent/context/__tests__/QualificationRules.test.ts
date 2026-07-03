@@ -76,8 +76,14 @@ describe('validateQualification — a_confirmar', () => {
   it('hombre 64 sin nacionalidad pero a_confirmar:[nacionalidad] → acepta', () => {
     expect(validateQualification(H, 'gratis', { edad: 64, a_confirmar: ['nacionalidad'] }).ok).toBe(true);
   });
-  it('hombre extranjero sin anio pero a_confirmar:[anio_ingreso] → acepta', () => {
+  it('hombre extranjero sin anio pero a_confirmar:[anio_ingreso] → acepta (faltante escapa)', () => {
     expect(validateQualification(H, 'gratis', { edad: 65, nacionalidad: 'extranjero', a_confirmar: ['anio_ingreso'] }).ok).toBe(true);
+  });
+  it('hombre extranjero anio 2010 PRESENTE + a_confirmar:[anio_ingreso] → rechaza (presente descalifica, no escapa)', () => {
+    expect(validateQualification(H, 'gratis', { edad: 65, nacionalidad: 'extranjero', anio_ingreso: 2010, a_confirmar: ['anio_ingreso'] }).ok).toBe(false);
+  });
+  it('hombre extranjero anio 2007 PRESENTE (≤2008) → acepta', () => {
+    expect(validateQualification(H, 'gratis', { edad: 65, nacionalidad: 'extranjero', anio_ingreso: 2007 }).ok).toBe(true);
   });
   it('mujer 61 sin aportes pero a_confirmar:[aportes] → acepta', () => {
     expect(validateQualification(M, 'gratis', { edad: 61, a_confirmar: ['aportes'] }).ok).toBe(true);

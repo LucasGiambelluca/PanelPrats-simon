@@ -36,8 +36,16 @@ export function validateQualification(area: string, resultado: string, datos: Re
     if (datos.nacionalidad !== 'argentino' && datos.nacionalidad !== 'extranjero' && !aConf.has('nacionalidad')) {
       return { ok: false, error: 'Falta la nacionalidad: preguntá si es argentino o extranjero antes de calificar gratis.' };
     }
-    if (datos.nacionalidad === 'extranjero' && !(Number(datos.anio_ingreso) <= 2008) && !aConf.has('anio_ingreso')) {
-      return { ok: false, error: 'Extranjero: solo califica gratis con año de ingreso (según DNI) 2008 o anterior. Preguntá el año y pasalo en anio_ingreso; si es 2009 o posterior, el resultado es "pago".' };
+    // anio_ingreso es MIXTO: a_confirmar solo afloja el caso FALTANTE; un año PRESENTE 2009+
+    // descalifica siempre (como aportes<=19). El guard duro no puede aflojar una contradicción.
+    if (datos.nacionalidad === 'extranjero') {
+      const anio = Number(datos.anio_ingreso);
+      if (!Number.isFinite(anio) && !aConf.has('anio_ingreso')) {
+        return { ok: false, error: 'Extranjero: preguntá el año de ingreso (según DNI) y pasalo en anio_ingreso. Si es 2009 o posterior, el resultado es "pago".' };
+      }
+      if (Number.isFinite(anio) && anio > 2008) {
+        return { ok: false, error: 'Extranjero con año de ingreso 2009 o posterior NO califica gratis: registrá resultado "pago".' };
+      }
     }
   }
 
