@@ -15,7 +15,7 @@ import { OfferedOptionsStore } from '../context/OfferedOptionsStore';
 import { buildReceptionFicha } from '../context/ReceptionFichaBuilder';
 import { BookingService } from '../context/BookingService';
 import { BookingStateStore } from '../context/BookingStateStore';
-import { detectBookingIntent } from '../context/BookingFlow';
+import { detectBookingIntent, detectRescheduleIntent } from '../context/BookingFlow';
 import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
@@ -193,6 +193,15 @@ export function getAgentRuntime(): AgentRuntime {
       if (!r.ok) throw new Error(r.error || 'sin cupo');
       return { direccion: r.data?.direccion ?? null, video_link: r.data?.video_link ?? null, modalidad: r.data?.modalidad };
     },
+    // Reprogramación determinística: reusa reschedule_appointment (ownership + cupo +
+    // backstop anti fecha pasada). El start SIEMPRE es un slot REAL del motor de slots.
+    reschedule: async (a, phone, conversation, b) => {
+      const r = await tools.execute('reschedule_appointment',
+        { appointment_id: b.apptId, start_time: b.start, end_time: b.end, oficina: b.oficina },
+        { accountId: a, phone, conversation });
+      if (!r.ok) throw new Error(r.error || 'no se pudo reprogramar');
+      return { direccion: r.data?.direccion ?? null, video_link: r.data?.video_link ?? null, modalidad: r.data?.modalidad };
+    },
   });
 
   // Capa de interpretación (controller manda): interpreta intención + slot-filling
@@ -233,6 +242,19 @@ export function getAgentRuntime(): AgentRuntime {
         if (!r.active && r.messages.length) await markBookingClosed(a, p);
         return r;
       },
+      // Reprogramación: buscar la próxima cita del contacto y ofrecer slots REALES de su
+      // sede. La modalidad de la cita se deriva de la modalidad de su oficina (list_offices).
+      startReschedule: async (a, p, text, c) => {
+        const appt = await nextAppointment(a, p);
+        if (!appt) return { messages: [], active: false };
+        const offs = await availability.listOffices(a).catch(() => [] as Array<{ nombre: string; modalidad: string }>);
+        const off = offs.find((o) => o.nombre === appt.oficina);
+        const modalidad: 'presencial' | 'video' = off?.modalidad === 'video' ? 'video' : 'presencial';
+        // needsPhone=false: la cita ya existe con su teléfono; reprogramar no lo re-pregunta.
+        const r = await booking.startReschedule(a, p, { apptId: appt.id, modalidad, oficina: appt.oficina ?? undefined, needsPhone: false }, c ?? text, text);
+        if (!r.active && r.messages.length) await markBookingClosed(a, p);
+        return r;
+      },
     },
     canStartBooking: async (a, p) => {
       try {
@@ -249,6 +271,7 @@ export function getAgentRuntime(): AgentRuntime {
       } catch { return { ok: true }; } // best-effort: nunca romper el agendado por un error de lectura
     },
     bookingIntent: detectBookingIntent,
+    rescheduleIntent: detectRescheduleIntent,
     areaDetector: detectArea,
     conversation: { handleTurn: (a, p, t) => conversationController.handleTurn(a, p, t) },
     // LoopGuard: estado persistido en contact_memory (sobrevive reinicios del VPS);

@@ -133,6 +133,40 @@ describe('ToolRegistry', () => {
     expect(apptUpdate).toHaveBeenCalledWith('x', { status: 'cancelada' });
   });
 
+  it('reschedule_appointment RECHAZA fecha en el pasado (backstop anti-alucinación 2023)', async () => {
+    apptGetById.mockResolvedValue({ id: 'x', account_id: 'acc1', phone: '549111', oficina: 'CABA' });
+    const reg = makeRegistry();
+    const res = await reg.execute('reschedule_appointment',
+      { appointment_id: 'x', start_time: '2023-07-07T15:30:00.000Z', end_time: '2023-07-07T16:00:00.000Z' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/pasada|no es v[áa]lid/i);
+    expect(apptUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reschedule_appointment con fecha FUTURA y cupo actualiza la cita', async () => {
+    apptGetById.mockResolvedValue({ id: 'x', account_id: 'acc1', phone: '549111', oficina: 'CABA' });
+    avHasCapacity.mockResolvedValue(true);
+    apptUpdate.mockResolvedValue({ id: 'x' });
+    const start = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const end = new Date(Date.now() + 7 * 24 * 3600 * 1000 + 30 * 60 * 1000).toISOString();
+    const reg = makeRegistry();
+    const res = await reg.execute('reschedule_appointment',
+      { appointment_id: 'x', start_time: start, end_time: end }, { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(apptUpdate).toHaveBeenCalledWith('x', expect.objectContaining({ start_time: start, oficina: 'CABA' }));
+  });
+
+  it('reschedule_appointment RECHAZA una cita de otro contacto (anti-IDOR)', async () => {
+    apptGetById.mockResolvedValue({ id: 'x', account_id: 'acc1', phone: 'OTRO', oficina: 'CABA' });
+    const reg = makeRegistry();
+    const res = await reg.execute('reschedule_appointment',
+      { appointment_id: 'x', start_time: '2030-01-01T12:00:00.000Z', end_time: '2030-01-01T12:30:00.000Z' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(apptUpdate).not.toHaveBeenCalled();
+  });
+
   it('list_offices devuelve las oficinas de la cuenta', async () => {
     avListOffices.mockResolvedValue([{ nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1' }]);
     const reg = makeRegistry();

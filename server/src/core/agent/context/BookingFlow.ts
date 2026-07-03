@@ -30,6 +30,7 @@ export interface BookingState {
   desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
   minHour?: number;                                           // hora AR mínima pedida por el cliente ("después de las 15:30" → 15.5); persiste en re-búsquedas
   askRetries?: number;                                        // intentos fallidos de parseo en await_slot → rota la plantilla (anti-repetición)
+  rescheduleApptId?: string;                                  // si está seteado, al elegir slot se REPROGRAMA esta cita (no se agenda una nueva)
 }
 
 export interface BookingSlot { start: string; end: string; profileId?: string | null; oficina?: string }
@@ -45,6 +46,8 @@ export interface BookingDeps {
   // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
   freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
   book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
+  // Reprograma una cita EXISTENTE con un slot REAL (nunca una fecha inventada por el LLM).
+  reschedule?: (b: { apptId: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
 }
 
 export interface BookingStep { state: BookingState; messages: string[]; active: boolean }
@@ -75,6 +78,14 @@ export function detectBookingIntent(text: string): { start: boolean; modalidad?:
     || /\b(quiero|necesito|querria|queria|me\s+gustaria|podria|puedo|quisiera)\b.*\b(turno|cita|atend|atienda|consulta|consultar|asesor)/.test(t);
   if (!wants) return { start: false };
   return { start: true, modalidad: detectModalidad(text) ?? undefined };
+}
+
+// Detección DETERMINÍSTICA de intención de REPROGRAMAR una cita existente. Arranca
+// el flujo de reprogramación (slots reales de la sede de la cita) sin depender de que
+// el LLM llame reschedule_appointment con una fecha inventada.
+const RESCHEDULE_WORDS = /\b(reprogramar|reprograma|reagendar|reagenda|cambiar (el|mi|la) (turno|cita|horario|hora)|mover (el|mi|la) (turno|cita)|correr (el|mi) turno|otro (dia|horario) para (mi|el) turno|cambiar la fecha)\b/;
+export function detectRescheduleIntent(text: string): boolean {
+  return RESCHEDULE_WORDS.test(norm(text));
 }
 
 function detectModalidad(text: string): 'presencial' | 'video' | null {
@@ -404,12 +415,26 @@ async function offerModalityByZone(state: BookingState, deps: BookingDeps): Prom
 async function bookNow(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
   const start = state.chosenStart!;
   const m = state.meta?.[start];
+  const end = m?.end ?? start;
+  const oficina = m?.oficina ?? state.oficina!;
+  const profileId = m?.profileId ?? null;
+  const nombreSuffix = state.nombre ? ', ' + state.nombre : '';
   try {
-    const res = await deps.book({ nombre: state.nombre!, start, end: m?.end ?? start, oficina: m?.oficina ?? state.oficina!, profileId: m?.profileId ?? null, telefono: state.telefono });
+    // Reprogramación: cita EXISTENTE + slot REAL (nunca la fecha que inventa el LLM).
+    if (state.rescheduleApptId && deps.reschedule) {
+      const res = await deps.reschedule({ apptId: state.rescheduleApptId, start, end, oficina, profileId });
+      const extra = res.video_link ? `\nEnlace: ${res.video_link}` : res.direccion ? `\nDirección: ${res.direccion}` : '';
+      return {
+        state: { ...state, stage: 'done' },
+        messages: [`Listo${nombreSuffix}. Su consulta quedó reprogramada para el ${fmt(start)} ${lugarLabel(state)}.${extra}\nCualquier cosa que necesite, estoy a disposición.`],
+        active: false,
+      };
+    }
+    const res = await deps.book({ nombre: state.nombre!, start, end, oficina, profileId, telefono: state.telefono });
     const extra = res.video_link ? `\nEnlace: ${res.video_link}` : res.direccion ? `\nDirección: ${res.direccion}` : '';
     return {
       state: { ...state, stage: 'done' },
-      messages: [`Perfecto${state.nombre ? ', ' + state.nombre : ''}. Queda agendado para el ${fmt(start)} ${lugarLabel(state)}.${extra}\nCualquier cosa que necesite, estoy a disposición.`],
+      messages: [`Perfecto${nombreSuffix}. Queda agendado para el ${fmt(start)} ${lugarLabel(state)}.${extra}\nCualquier cosa que necesite, estoy a disposición.`],
       active: false,
     };
   } catch {
@@ -456,6 +481,40 @@ export async function startBooking(
   return offerModalityByZone(state, deps);
 }
 
+/**
+ * Inicia la REPROGRAMACIÓN de una cita existente. Reusa el MISMO motor de slots
+ * reales del agendado: nunca se toma una fecha que venga del LLM. `rescheduleApptId`
+ * viaja en el state; al elegir un slot, bookNow reprograma (no agenda una cita nueva).
+ * Con oficina+modalidad de la cita → ofrece slots de esa sede directo. Sin ellas →
+ * cae al flujo normal (zona → sedes) preservando rescheduleApptId.
+ */
+export async function startReschedule(
+  args: { apptId: string; modalidad?: 'presencial' | 'video'; oficina?: string; needsPhone?: boolean; nombre?: string; telefono?: string },
+  deps: BookingDeps,
+  initialText?: string,
+): Promise<BookingStep> {
+  const nombreLimpio = args.nombre ? cleanName(args.nombre) : '';
+  const state: BookingState = {
+    stage: 'await_slot',
+    rescheduleApptId: args.apptId,
+    modalidad: args.modalidad,
+    oficina: args.oficina,
+    nombre: nombreLimpio && !isPlaceholderName(nombreLimpio) ? nombreLimpio : undefined,
+    telefono: args.telefono?.trim() || undefined,
+    needsPhone: !!args.needsPhone,
+  };
+  // Sin oficina/modalidad conocidas → arrancar como booking normal (zona → sedes),
+  // preservando rescheduleApptId para que al elegir slot REPROGRAME (no agende nuevo).
+  if (!state.oficina || !state.modalidad) {
+    if (state.modalidad === 'video') return afterModality(state, deps);
+    return { state: { ...state, stage: 'ask_zone' }, messages: ['Con gusto reprogramamos su turno. ¿En qué localidad o zona vive?'], active: true };
+  }
+  // Con oficina+modalidad de la cita existente → ofrecer slots reales de esa sede.
+  // Si el texto inicial trae día/hora ("el jueves después de las 15:30"), pre-filtrar.
+  const req = initialText ? parseSlotRequest(initialText) : { isRequest: false as const };
+  return loadSlots(state, deps, { desde: req.desde, turno: req.turno, minHour: req.minHour });
+}
+
 /** Avanza el flujo con el siguiente mensaje del usuario. Determinístico. */
 export async function advanceBooking(state: BookingState, text: string, deps: BookingDeps): Promise<BookingStep> {
   switch (state.stage) {
@@ -494,6 +553,8 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       const picked = resolveOption({ userText: text, offered: state.offered ?? [] });
       if (picked.matchedValue && picked.confianza >= 0.55) {
         const withSlot = { ...state, chosenStart: picked.matchedValue, askRetries: 0 };
+        // Reprogramación: la cita ya existe (nombre/teléfono ya cargados) → reprogramar directo.
+        if (withSlot.rescheduleApptId) return bookNow(withSlot, deps);
         if (withSlot.nombre) return afterName(withSlot, deps);
         return { state: { ...withSlot, stage: 'ask_name' as const }, messages: ['Perfecto. ¿A nombre de quién agendo la consulta?'], active: true };
       }

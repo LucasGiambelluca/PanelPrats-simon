@@ -4,7 +4,7 @@
 // advance() conduce cada paso. El agendado real se delega a la MISMA función
 // book_appointment del ToolRegistry (capacidad, profesional, ficha IA) → sin duplicar.
 
-import { startBooking, advanceBooking, type BookingDeps, type BookingState } from './BookingFlow';
+import { startBooking, startReschedule, advanceBooking, type BookingDeps, type BookingState } from './BookingFlow';
 import { BookingStateStore } from './BookingStateStore';
 import { norm } from './normalize';
 
@@ -28,6 +28,9 @@ export interface BookingServiceDeps {
   // Agenda reusando book_appointment del ToolRegistry. Throw si no hay cupo.
   // b.telefono: número real dado en el chat (FB/IG); si falta, el caller usa el id de canal.
   book: (accountId: string, phone: string, conversation: string, zona: string | null, b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
+  // Reprograma una cita existente reusando reschedule_appointment del ToolRegistry
+  // (ownership + cupo + backstop de fecha). Throw si no se pudo.
+  reschedule: (accountId: string, phone: string, conversation: string, b: { apptId: string; start: string; end: string; oficina: string; profileId?: string | null }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
 }
 
 export class BookingService {
@@ -57,6 +60,7 @@ export class BookingService {
       },
       freeSlots: async (oficina, opts) => (await this.deps.freeSlots(accountId, oficina, opts)).map((s) => ({ start: s.start, end: s.end, oficina })),
       book: (b) => this.deps.book(accountId, phone, conversation, getState()?.zona ?? null, b),
+      reschedule: (b) => this.deps.reschedule(accountId, phone, conversation, b),
     };
   }
 
@@ -68,6 +72,14 @@ export class BookingService {
   async start(accountId: string, phone: string, args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; needsPhone?: boolean }, conversation: string): Promise<{ messages: string[]; active: boolean }> {
     let current: BookingState | undefined;
     const step = await startBooking(args, this.buildDeps(accountId, phone, conversation, () => current));
+    current = step.state;
+    await this.persist(accountId, phone, step.active, step.state);
+    return { messages: step.messages, active: step.active };
+  }
+
+  async startReschedule(accountId: string, phone: string, args: { apptId: string; modalidad?: 'presencial' | 'video'; oficina?: string; needsPhone?: boolean; nombre?: string; telefono?: string }, conversation: string, initialText?: string): Promise<{ messages: string[]; active: boolean }> {
+    let current: BookingState | undefined;
+    const step = await startReschedule(args, this.buildDeps(accountId, phone, conversation, () => current), initialText);
     current = step.state;
     await this.persist(accountId, phone, step.active, step.state);
     return { messages: step.messages, active: step.active };

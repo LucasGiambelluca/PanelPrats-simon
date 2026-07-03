@@ -149,6 +149,41 @@ describe('AgentRuntime.handle', () => {
     expect(out).toEqual(['¿Presencial o por videollamada?']);
   });
 
+  it('reprogramar: detecta la intención y arranca startReschedule (sin gate de booking nuevo ni LLM)', async () => {
+    const deps = makeDeps([{ content: 'NO debería llamarse el LLM' }]);
+    const startReschedule = vi.fn().mockResolvedValue({ messages: ['Le busco otro horario para reprogramar su turno.'], active: true });
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn().mockResolvedValue({ messages: ['NO debería arrancar un turno nuevo'], active: true }),
+      startReschedule,
+    };
+    (deps as any).rescheduleIntent = vi.fn(() => true);
+    (deps as any).bookingIntent = vi.fn(() => ({ start: true }));
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'quiero reprogramar mi turno', {});
+    expect(startReschedule).toHaveBeenCalledWith('acc1', '549111', 'quiero reprogramar mi turno', expect.any(String));
+    expect((deps as any).booking.start).not.toHaveBeenCalled(); // NO arranca un turno nuevo
+    expect(deps.ai.completeWithTools).not.toHaveBeenCalled();    // NO pasó por el LLM
+    expect(out).toEqual(['Le busco otro horario para reprogramar su turno.']);
+  });
+
+  it('reprogramar sin cita futura (messages vacío) → cae al LLM', async () => {
+    const deps = makeDeps([{ content: 'No le encuentro una cita a su nombre para reprogramar.' }]);
+    (deps as any).booking = {
+      isActive: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+      start: vi.fn(),
+      startReschedule: vi.fn().mockResolvedValue({ messages: [], active: false }),
+    };
+    (deps as any).rescheduleIntent = vi.fn(() => true);
+    const rt = new AgentRuntime(deps as any);
+    const out = await rt.handle('acc1', '549111', 'quiero reprogramar mi turno', {});
+    expect((deps as any).booking.startReschedule).toHaveBeenCalled();
+    expect(deps.ai.completeWithTools).toHaveBeenCalled();        // cayó al tool-loop
+    expect(out).toEqual(['No le encuentro una cita a su nombre para reprogramar.']);
+  });
+
   it('gate deterministico bloqueado (mid-jubilación, texto sin área): NO arranca booking, cae al LLM', async () => {
     const deps = makeDeps([{ content: 'Antes de agendar, ¿me confirmás si tuvo tareas insalubres?' }]);
     (deps as any).booking = {

@@ -30,9 +30,14 @@ export interface RuntimeDeps {
     isActive: (accountId: string, phone: string) => Promise<boolean>;
     advance: (accountId: string, phone: string, text: string, conversation: string) => Promise<{ messages: string[]; active: boolean }>;
     start: (accountId: string, phone: string, args: any, conversation: string) => Promise<{ messages: string[]; active: boolean }>;
+    // Reprogramación determinística: busca la próxima cita y ofrece slots REALES de su
+    // sede. Devuelve {messages:[], active:false} si no hay cita futura (cae al LLM).
+    startReschedule?: (accountId: string, phone: string, text: string, conversation: string) => Promise<{ messages: string[]; active: boolean }>;
   };
   // Gate determinístico de intención: arranca el agendado sin esperar al LLM.
   bookingIntent?: (text: string) => { start: boolean; modalidad?: 'presencial' | 'video' };
+  // Gate determinístico de intención de REPROGRAMAR (reusa el motor de slots reales).
+  rescheduleIntent?: (text: string) => boolean;
   // Clasifica el área de la consulta. Si el mensaje toca un área de calificación,
   // el gate NO arranca el booking determinístico (deja calificar al LLM/libreto).
   areaDetector?: (text: string) => AreaKey | null;
@@ -139,6 +144,13 @@ export class AgentRuntime {
         const outcome = await this.deps.conversation.handleTurn(accountId, phone, text).catch(() => ({ kind: 'advance' as const }));
         if (outcome.kind === 'resolved') return finishWith(outcome.messages);
         // 'advance' → sigue al gate de booking pelado + tool-loop de abajo.
+      }
+      // Reprogramación determinística: si el cliente pide reprogramar/cambiar su turno,
+      // reusamos el motor de slots REALES (nunca una fecha inventada por el LLM: bug 2023).
+      // Sin cita futura → messages vacío → cae al LLM (que explica que no encuentra cita).
+      if (this.deps.booking?.startReschedule && this.deps.rescheduleIntent?.(text)) {
+        const r = await this.deps.booking.startReschedule(accountId, phone, text, ctx.conversation ?? text);
+        if (r.messages.length) return finishWith(r.messages);
       }
       // Gate de turno NUEVO sin área (pedido "pelado"): lo arranca el flujo determinístico.
       // Si el mensaje toca un área de calificación, NO se arranca: el LLM/libreto califica primero.

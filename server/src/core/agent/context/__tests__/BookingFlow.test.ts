@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { startBooking, advanceBooking, detectBookingIntent, type BookingDeps } from '../BookingFlow';
+import { startBooking, startReschedule, advanceBooking, detectBookingIntent, detectRescheduleIntent, type BookingDeps } from '../BookingFlow';
 
 const SLOTS = [
   { start: '2026-07-02T12:00:00.000Z', end: '2026-07-02T12:30:00.000Z', profileId: 'p1', oficina: 'Quilmes' }, // 09:00 local
@@ -29,6 +29,7 @@ function makeDeps(over: Partial<BookingDeps> = {}): BookingDeps {
     ]),
     freeSlots: vi.fn(async () => SLOTS),
     book: vi.fn(async () => ({ direccion: 'Moreno 609', video_link: null, modalidad: 'presencial' })),
+    reschedule: vi.fn(async () => ({ direccion: null, video_link: null, modalidad: 'video' })),
     ...over,
   };
 }
@@ -278,6 +279,46 @@ describe('detectBookingIntent — dispara el flujo sin depender del LLM', () => 
   });
   it('"hola buenas" → NO start', () => {
     expect(detectBookingIntent('hola buenas').start).toBe(false);
+  });
+});
+
+describe('reprogramación determinística', () => {
+  it('startReschedule ofrece slots reales y al elegir REPROGRAMA (no book)', async () => {
+    const deps = makeDeps();
+    const s = await startReschedule({ apptId: 'appt-1', modalidad: 'video', oficina: 'DANIELA CANISSA', nombre: 'Ramona' }, deps);
+    expect(s.state.stage).toBe('await_slot');
+    expect(s.state.rescheduleApptId).toBe('appt-1');
+    const r = await advanceBooking(s.state, 'el primero', deps);
+    expect(deps.reschedule).toHaveBeenCalledOnce();
+    expect(deps.book).not.toHaveBeenCalled();
+    expect(r.state.stage).toBe('done');
+    expect(r.active).toBe(false);
+    expect(r.messages[0]).toMatch(/reprogramad/i);
+    // el start que se reprograma es un slot REAL (2026, de SLOTS), nunca inventado por el LLM.
+    const arg = (deps.reschedule as any).mock.calls[0][0];
+    expect(arg.start).toBe(SLOTS[0].start);
+    expect(arg.apptId).toBe('appt-1');
+  });
+
+  it('startReschedule sin oficina/modalidad → cae al flujo de zona preservando rescheduleApptId', async () => {
+    const deps = makeDeps();
+    const s = await startReschedule({ apptId: 'appt-9' }, deps);
+    expect(s.state.stage).toBe('ask_zone');
+    expect(s.state.rescheduleApptId).toBe('appt-9');
+    // al avanzar por zona → sedes → elegir → REPROGRAMA (no agenda nuevo).
+    const s2 = await advanceBooking(s.state, 'soy de Quilmes', deps);
+    expect(s2.state.rescheduleApptId).toBe('appt-9');
+    const s3 = await advanceBooking(s2.state, 'la de Quilmes', deps);
+    expect(s3.state.stage).toBe('await_slot');
+    const s4 = await advanceBooking(s3.state, 'el primero', deps);
+    expect(deps.reschedule).toHaveBeenCalledOnce();
+    expect(deps.book).not.toHaveBeenCalled();
+  });
+
+  it('detectRescheduleIntent reconoce pedidos de reprogramar', () => {
+    expect(detectRescheduleIntent('quiero cambiar mi turno')).toBe(true);
+    expect(detectRescheduleIntent('necesito reprogramar la cita')).toBe(true);
+    expect(detectRescheduleIntent('quiero sacar un turno')).toBe(false); // eso es NUEVO
   });
 });
 

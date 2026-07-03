@@ -118,6 +118,13 @@ export class ToolRegistry {
           if (!appt || appt.account_id !== ctx.accountId || appt.phone !== ctx.phone) {
             return { ok: false, error: 'No encuentro esa cita a tu nombre.' };
           }
+          // Backstop anti-alucinación: el LLM a veces INVENTA la fecha (bug real en prod:
+          // una reprogramación quedó guardada en 2023-07-07, año pasado). Rechazar toda
+          // fecha inválida o en el pasado — la reprogramación debe usar un slot REAL.
+          const startMs = new Date(args.start_time).getTime();
+          if (!args.start_time || Number.isNaN(startMs) || startMs < Date.now()) {
+            return { ok: false, error: 'Ese horario no es válido (fecha pasada). Ofrecé un horario disponible real con el flujo de reprogramación.' };
+          }
           // Permite cambiar de SEDE: si viene args.oficina, valida cupo en la nueva.
           const targetOficina = (args.oficina ?? appt.oficina ?? '') as string;
           const office = await this.deps.availability.getOffice(ctx.accountId, targetOficina);
@@ -130,7 +137,7 @@ export class ToolRegistry {
             return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
           }
           await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, oficina: targetOficina, assigned_profile_id: assigned });
-          return { ok: true };
+          return { ok: true, data: { direccion: office?.direccion ?? undefined, video_link: (office as any)?.video_link ?? undefined, modalidad: office?.modalidad } };
         }
         case 'cancel_appointment': {
           const appt = await this.deps.appointments.getById(args.appointment_id);
