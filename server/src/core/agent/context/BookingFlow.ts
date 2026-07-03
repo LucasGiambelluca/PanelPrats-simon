@@ -12,13 +12,14 @@ import { validarTelefonoAR } from '../../../utils/phone-ar';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
-export type BookingStage = 'ask_modality' | 'ask_zone' | 'await_slot' | 'ask_name' | 'ask_phone' | 'confirm' | 'done';
+export type BookingStage = 'ask_modality' | 'ask_zone' | 'ask_office' | 'await_slot' | 'ask_name' | 'ask_phone' | 'confirm' | 'done';
 
 export interface BookingState {
   stage: BookingStage;
   modalidad?: 'presencial' | 'video';
   zona?: string | null;
   oficina?: string;
+  sedeOptions?: OfferedOption[];                               // sedes+video ofrecidas en ask_office (value = nombre interno, o '__video__')
   offered?: OfferedOption[];                                   // slots mostrados (value = start ISO)
   meta?: Record<string, { end: string; profileId?: string | null; oficina: string }>;
   chosenStart?: string;
@@ -36,6 +37,9 @@ export interface BookingDeps {
   suggestOffice: (text: string) => Promise<{ oficina_sugerida: string | null; necesita_aclaracion: boolean; pregunta_aclaracion?: string }>;
   videoOfficeName: () => Promise<string | null>;
   defaultOffice: () => Promise<string | null>; // sede presencial por defecto (fallback fuera de cobertura si no hay video)
+  // Sedes presenciales del estudio con su etiqueta de zona (CABA/Quilmes/Haedo) y dirección.
+  // nombreInterno = account_offices.nombre (NUNCA se muestra al cliente; solo zona+dirección).
+  presencialOffices: () => Promise<Array<{ nombreInterno: string; zona: string; direccion: string | null }>>;
   // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
   freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
   book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
@@ -343,19 +347,35 @@ async function afterModality(state: BookingState, deps: BookingDeps): Promise<Bo
     }
     return loadSlots({ ...state, oficina: video }, deps);
   }
-  // presencial
+  // presencial: si el cliente YA eligió una sede (ask_office), no re-preguntar zona → cargar slots.
+  if (state.oficina) return loadSlots(state, deps);
   if (!state.zona) {
     return { state: { ...state, stage: 'ask_zone' }, messages: ['¿En qué localidad o zona vive?'], active: true };
   }
-  const sug = await deps.suggestOffice(state.zona);
-  if (sug.oficina_sugerida) {
-    return loadSlots({ ...state, oficina: sug.oficina_sugerida }, deps);
+  return offerModalityByZone(state, deps);
+}
+
+// Libreto: dada la ZONA, evaluar cobertura. En cobertura → OFRECER LAS 3 SEDES con
+// dirección + videollamada (presencial es la prioridad del estudio, se ofrece primero).
+// Fuera de cobertura → videollamada directa. El cliente NUNCA ve el nombre interno de
+// la agenda (solo la zona + la dirección).
+async function offerModalityByZone(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
+  const sug = await deps.suggestOffice(state.zona!);
+  // Zona ambigua (varias localidades con mismo nombre, etc.) → repreguntar.
+  if (sug.necesita_aclaracion && !sug.oficina_sugerida) {
+    return { state: { ...state, stage: 'ask_zone' }, messages: [sug.pregunta_aclaracion || '¿En qué localidad o barrio vive?'], active: true };
   }
-  if (sug.necesita_aclaracion) {
-    return { state: { ...state, stage: 'ask_zone' }, messages: [sug.pregunta_aclaracion || '¿En qué zona o localidad vive?'], active: true };
-  }
-  // fuera de cobertura → presencial en una sede igual (presencial es la opción principal)
-  return outOfCoverage(state, deps);
+  // Fuera de cobertura (otra provincia / lejos de toda sede) → videollamada (libreto).
+  if (!sug.oficina_sugerida) return outOfCoverage(state, deps);
+  // EN COBERTURA → ofrecer las 3 sedes con dirección + videollamada, que elija.
+  const sedes = await deps.presencialOffices();
+  // Sin sedes cargadas → fallback a la sede sugerida (no dejamos al cliente sin oferta).
+  if (!sedes.length) return loadSlots({ ...state, modalidad: 'presencial', oficina: sug.oficina_sugerida }, deps);
+  const opts: OfferedOption[] = sedes.map((s, i) => ({ index: i + 1, label: `${s.zona}${s.direccion ? ' — ' + s.direccion : ''}`, value: s.nombreInterno }));
+  opts.push({ index: sedes.length + 1, label: 'videollamada', value: '__video__' });
+  const lista = sedes.map((s) => `en ${s.zona}, ${s.direccion || 'nuestra oficina'}`).join('; ');
+  const msg = `Tenemos oficinas ${lista}. También puede ser por videollamada, si le queda más cómodo. ¿Cómo prefiere atenderse?`;
+  return { state: { ...state, stage: 'ask_office', sedeOptions: opts }, messages: [msg], active: true };
 }
 
 // Agenda DIRECTO (sin "¿confirmo? sí/no"): el libreto del estudio prohíbe pedir
@@ -407,10 +427,12 @@ export async function startBooking(
     telefono: args.telefono?.trim() || undefined,
     needsPhone: !!args.needsPhone,
   };
-  if (!state.modalidad) {
-    return { state, messages: ['¿Prefiere la consulta presencial o por videollamada?'], active: true };
-  }
-  return afterModality(state, deps);
+  // Si el cliente YA pidió videollamada explícita → respetar (no forzar presencial).
+  if (state.modalidad === 'video') return afterModality(state, deps);
+  // Si NO, arrancar por la ZONA (libreto: zona → cobertura → sedes). NO preguntar
+  // "¿presencial o video?" neutral: eso desviaba a video a clientes de zona de cobertura.
+  if (!state.zona) return { state: { ...state, stage: 'ask_zone' }, messages: ['¿En qué localidad o zona vive?'], active: true };
+  return offerModalityByZone(state, deps);
 }
 
 /** Avanza el flujo con el siguiente mensaje del usuario. Determinístico. */
@@ -422,13 +444,24 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       return afterModality({ ...state, modalidad: m }, deps);
     }
 
-    case 'ask_zone': {
-      const sug = await deps.suggestOffice(text);
-      if (sug.oficina_sugerida) return loadSlots({ ...state, zona: text, oficina: sug.oficina_sugerida }, deps);
-      if (sug.necesita_aclaracion) {
-        return { state: { ...state, zona: text }, messages: [sug.pregunta_aclaracion || '¿En qué localidad estás?'], active: true };
+    case 'ask_zone':
+      // Zona conocida → evaluar cobertura y ofrecer las 3 sedes (o video si está fuera).
+      return offerModalityByZone({ ...state, zona: text }, deps);
+
+    case 'ask_office': {
+      const picked = resolveOption({ userText: text, offered: state.sedeOptions ?? [] });
+      // Eligió la videollamada.
+      if (picked.matchedValue === '__video__') return afterModality({ ...state, modalidad: 'video', oficina: undefined }, deps);
+      // Eligió una sede presencial → cargar slots de ESA oficina.
+      if (picked.matchedValue && picked.confianza >= 0.55) {
+        return loadSlots({ ...state, modalidad: 'presencial', oficina: picked.matchedValue }, deps);
       }
-      return outOfCoverage({ ...state, zona: text }, deps);
+      // No se entendió: ¿pidió video por palabra suelta?
+      if (detectModalidad(text) === 'video') return afterModality({ ...state, modalidad: 'video', oficina: undefined }, deps);
+      // Repreguntar mostrando las zonas ofrecidas (sin repetir la lista larga idéntica).
+      const zonas = (state.sedeOptions ?? []).filter((o) => o.value !== '__video__').map((o) => o.label.split(' — ')[0]);
+      const zonasTxt = zonas.length ? zonas.join(', ') : 'nuestras oficinas';
+      return { state, messages: [`¿Prefiere alguna de nuestras oficinas (${zonasTxt}) o la videollamada?`], active: true };
     }
 
     case 'await_slot': {

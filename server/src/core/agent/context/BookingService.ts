@@ -7,10 +7,20 @@
 import { startBooking, advanceBooking, type BookingDeps, type BookingState } from './BookingFlow';
 import { BookingStateStore } from './BookingStateStore';
 
+// Deriva la ETIQUETA de zona visible al cliente desde el nombre interno de la agenda
+// ("SERENA QUILMES" → "Quilmes"). El nombre interno nunca se muestra; solo esta zona.
+function zonaFromNombre(nombre: string): string {
+  const t = (nombre || '').toUpperCase();
+  for (const z of ['CABA', 'QUILMES', 'HAEDO', 'LOMAS', 'AVELLANEDA', 'MORON', 'LANUS']) {
+    if (t.includes(z)) return z === 'CABA' ? 'CABA' : z.charAt(0) + z.slice(1).toLowerCase();
+  }
+  return nombre; // fallback: si no reconocemos la zona, usamos el nombre tal cual
+}
+
 export interface BookingServiceDeps {
   store: BookingStateStore;
   suggestOffice: (accountId: string, text: string) => Promise<{ oficina_sugerida: any; necesita_aclaracion: boolean; pregunta_aclaracion?: string }>;
-  listOffices: (accountId: string) => Promise<Array<{ nombre: string; modalidad: string }>>;
+  listOffices: (accountId: string) => Promise<Array<{ nombre: string; modalidad: string; direccion?: string | null }>>;
   freeSlots: (accountId: string, oficina: string, opts?: { desde?: Date; max?: number }) => Promise<Array<{ start: string; end: string }>>;
   // Agenda reusando book_appointment del ToolRegistry. Throw si no hay cupo.
   // b.telefono: número real dado en el chat (FB/IG); si falta, el caller usa el id de canal.
@@ -35,6 +45,12 @@ export class BookingService {
         const offs = await this.deps.listOffices(accountId);
         const p = offs.find((o) => o.modalidad === 'presencial') ?? offs.find((o) => o.modalidad === 'ambas') ?? offs[0];
         return p?.nombre ?? null;
+      },
+      presencialOffices: async () => {
+        const offs = await this.deps.listOffices(accountId);
+        return offs
+          .filter((o) => o.modalidad === 'presencial' || o.modalidad === 'ambas')
+          .map((o) => ({ nombreInterno: o.nombre, zona: zonaFromNombre(o.nombre), direccion: o.direccion ?? null }));
       },
       freeSlots: async (oficina, opts) => (await this.deps.freeSlots(accountId, oficina, opts)).map((s) => ({ start: s.start, end: s.end, oficina })),
       book: (b) => this.deps.book(accountId, phone, conversation, getState()?.zona ?? null, b),

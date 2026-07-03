@@ -21,29 +21,42 @@ function makeDeps(over: Partial<BookingDeps> = {}): BookingDeps {
     }),
     videoOfficeName: vi.fn(async () => 'Videollamada'),
     defaultOffice: vi.fn(async () => 'Capital'),
+    presencialOffices: vi.fn(async () => [
+      { nombreInterno: 'DAIANA CABA', zona: 'CABA', direccion: 'Corrientes 1386, oficina 520' },
+      { nombreInterno: 'SERENA QUILMES', zona: 'Quilmes', direccion: 'Moreno 609, oficina 1G' },
+      { nombreInterno: 'MAURA HAEDO', zona: 'Haedo', direccion: 'Héroes de Malvinas Argentinas 35' },
+    ]),
     freeSlots: vi.fn(async () => SLOTS),
     book: vi.fn(async () => ({ direccion: 'Moreno 609', video_link: null, modalidad: 'presencial' })),
     ...over,
   };
 }
 
+// El flujo nuevo (presencial primero) pasa por ask_office: pide zona → ofrece 3 sedes.
+// Este helper llega al estado await_slot eligiendo la sede de Quilmes ('SERENA QUILMES';
+// los SLOTS del mock traen oficina:'Quilmes', que es lo que se agenda finalmente).
+async function reachSlots(deps: BookingDeps, over: { nombre?: string; needsPhone?: boolean; telefono?: string } = {}) {
+  const s = await startBooking({ zona: 'Quilmes', ...over }, deps);
+  return advanceBooking(s.state, 'la de Quilmes', deps);
+}
+
 describe('BookingFlow — camino feliz presencial con zona', () => {
-  it('arranca presencial + Lanús → propone UNA oficina (Quilmes), 3 slots numerados', async () => {
+  it('elegida la sede de Quilmes → propone 3 slots presencial (sin exponer nombre interno)', async () => {
     const deps = makeDeps();
-    const r = await startBooking({ modalidad: 'presencial', zona: 'soy de Lanús' }, deps);
+    const r = await reachSlots(deps);
     expect(deps.suggestOffice).toHaveBeenCalled();
     expect(r.state.stage).toBe('await_slot');
-    expect(r.state.oficina).toBe('Quilmes');   // interno
+    expect(r.state.oficina).toBe('SERENA QUILMES');   // interno (elegido en ask_office)
     expect(r.state.offered).toHaveLength(3);
-    // De cara al cliente NO exponemos el nombre interno de la agenda; sí la modalidad.
+    // El mensaje de slots muestra la modalidad, no el nombre interno de la agenda.
     expect(r.messages.join(' ')).toMatch(/presencial/);
-    expect(r.messages.join(' ')).not.toMatch(/Quilmes/);
+    expect(r.messages.join(' ')).not.toMatch(/SERENA/);
     expect(r.active).toBe(true);
   });
 
   it('flujo completo: elige "el primero", da nombre → agenda DIRECTO (sin confirmar)', async () => {
     const deps = makeDeps();
-    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    let { state } = await reachSlots(deps);
 
     let step = await advanceBooking(state, 'deme el primerito', deps);
     expect(step.state.stage).toBe('ask_name');           // resolvió slot, falta nombre
@@ -63,7 +76,7 @@ describe('BookingFlow — camino feliz presencial con zona', () => {
 
   it('WhatsApp (needsPhone=false): NO pide teléfono, agenda directo', async () => {
     const deps = makeDeps();
-    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    let { state } = await reachSlots(deps);
     let step = await advanceBooking(state, 'el primero', deps);   // → ask_name
     step = await advanceBooking(step.state, 'Juan Pérez', deps);  // nombre → agenda directo
     expect(step.state.stage).toBe('done');
@@ -74,7 +87,7 @@ describe('BookingFlow — camino feliz presencial con zona', () => {
 describe('apego al libreto', () => {
   it('slot elegido + nombre → agenda DIRECTO, sin "¿Confirmo? (sí/no)"', async () => {
     const deps = makeDeps();
-    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús', nombre: 'Juan' }, deps);
+    let { state } = await reachSlots(deps, { nombre: 'Juan' });
     const r = await advanceBooking(state, 'el primero', deps);
     expect(deps.book).toHaveBeenCalledOnce();
     expect(r.state.stage).toBe('done');
@@ -134,7 +147,7 @@ describe('apego al libreto', () => {
       .mockResolvedValueOnce([])                 // presencial: vacío
       .mockResolvedValue(SLOTS);                 // luego video
     const deps = makeDeps({ freeSlots });
-    const r = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const r = await reachSlots(deps);
     expect(r.messages[0]).toMatch(/videollamada/i);
   });
 });
@@ -142,7 +155,7 @@ describe('apego al libreto', () => {
 describe('BookingFlow — FB/IG piden teléfono real (needsPhone)', () => {
   it('tras el nombre pide el número, lo valida y lo pasa a book()', async () => {
     const deps = makeDeps();
-    let { state } = await startBooking({ modalidad: 'presencial', zona: 'Lanús', needsPhone: true }, deps);
+    let { state } = await reachSlots(deps, { needsPhone: true });
 
     let step = await advanceBooking(state, 'el primero', deps);
     expect(step.state.stage).toBe('ask_name');
@@ -172,10 +185,11 @@ describe('BookingFlow — modalidad y zona', () => {
     expect(r.state.stage).toBe('await_slot');
   });
 
-  it('sin modalidad → pregunta presencial o video', async () => {
+  it('sin modalidad → NO pregunta "presencial o video" neutral; pide la ZONA (libreto)', async () => {
     const r = await startBooking({}, makeDeps());
-    expect(r.state.stage).toBe('ask_modality');
-    expect(r.messages.join(' ').toLowerCase()).toMatch(/presencial|videollamada/);
+    expect(r.state.stage).toBe('ask_zone');
+    expect(r.messages.join(' ').toLowerCase()).toMatch(/zona|localidad/);
+    expect(r.messages.join(' ').toLowerCase()).not.toMatch(/videollamada/);
   });
 
   it('presencial sin zona → pregunta la zona', async () => {
@@ -206,7 +220,7 @@ describe('BookingFlow — modalidad y zona', () => {
 describe('BookingFlow — robustez', () => {
   it('en await_slot, respuesta ambigua NO inventa: re-pregunta', async () => {
     const deps = makeDeps();
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     const step = await advanceBooking(start.state, 'mmm no sé', deps);
     expect(step.state.stage).toBe('await_slot');     // sigue esperando
     expect(deps.book).not.toHaveBeenCalled();
@@ -227,14 +241,14 @@ describe('BookingFlow — robustez', () => {
 
   it('sin horarios disponibles → no rompe, ofrece alternativa', async () => {
     const deps = makeDeps({ freeSlots: vi.fn(async () => []) });
-    const r = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const r = await reachSlots(deps);
     expect(r.state.stage).not.toBe('done');
     expect(r.messages.join(' ')).toMatch(/horario|video/i);
   });
 
   it('"el de la mañana" elige un slot de la mañana', async () => {
     const deps = makeDeps();
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     const step = await advanceBooking(start.state, 'el de la mañana', deps);
     expect(step.state.chosenStart).toBeTruthy();
     expect([SLOTS[0].start, SLOTS[1].start]).toContain(step.state.chosenStart);
@@ -349,7 +363,7 @@ describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
 
   it('"después de las 15:30" → sólo ofrece slots ≥ 15:30', async () => {
     const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     const step = await advanceBooking(start.state, 'puedo recién después de las 15:30', deps);
     expect(step.state.stage).toBe('await_slot');
     const offered = (step.state.offered ?? []).map((o) => o.value);
@@ -361,7 +375,7 @@ describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
 
   it('la restricción persiste: tras pedir hora mínima, "para el martes" sigue filtrando', async () => {
     const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     // "15:30" no coincide exacto con ningún slot ofrecido → re-busca y fija minHour.
     let step = await advanceBooking(start.state, 'a partir de las 15:30', deps);
     expect(step.state.minHour).toBe(15.5);
@@ -373,7 +387,7 @@ describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
 
   it('pedir "a la mañana" REEMPLAZA la cota vieja (no esconde las mañanas)', async () => {
     const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     let step = await advanceBooking(start.state, 'a partir de las 15:30', deps);
     expect(step.state.minHour).toBe(15.5);
     // Cambia de idea: ahora quiere mañana → la cota se descarta y ofrece slots <12.
@@ -388,7 +402,7 @@ describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
 describe('BookingFlow — await_slot re-busca otro día/turno', () => {
   it('"¿para el martes?" recarga slots (vuelve a llamar freeSlots) y sigue en await_slot', async () => {
     const deps = makeDeps();
-    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const start = await reachSlots(deps);
     (deps.freeSlots as any).mockClear();
     const step = await advanceBooking(start.state, '¿no tenés para el martes?', deps);
     expect(deps.freeSlots).toHaveBeenCalled();           // recargó
@@ -419,10 +433,75 @@ describe('BookingFlow — oferta diversa por franja (mañana/mediodía/tarde)', 
       { start: '2026-07-02T20:00:00.000Z', end: '2026-07-02T20:30:00.000Z', oficina: 'Q', profileId: 'p' }, // 17:00 tarde
     ];
     const deps = makeDeps({ freeSlots: vi.fn(async () => many) });
-    const r = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const r = await reachSlots(deps);
     const offered = (r.state.offered ?? []).map((o) => o.value);
     expect(offered).toContain('2026-07-02T20:00:00.000Z'); // tarde presente
     expect(offered).toContain('2026-07-02T16:00:00.000Z'); // mediodía presente
     expect(offered).toContain('2026-07-02T12:00:00.000Z'); // mañana presente
+  });
+});
+
+describe('Fix 2 — presencial primero (zona → cobertura → 3 sedes)', () => {
+  it('cliente en cobertura → NO pregunta modalidad, pide zona y luego ofrece las 3 sedes', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({}, deps);
+    expect(r0.state.stage).toBe('ask_zone');
+    expect(r0.messages[0]).toMatch(/zona|localidad/i);
+    expect(r0.messages[0]).not.toMatch(/videollamada/i); // no pregunta modalidad neutral
+
+    const r1 = await advanceBooking(r0.state, 'soy de Quilmes', deps);
+    expect(r1.state.stage).toBe('ask_office');
+    expect(r1.messages[0]).toMatch(/CABA/);
+    expect(r1.messages[0]).toMatch(/Quilmes/);
+    expect(r1.messages[0]).toMatch(/Haedo/);
+    expect(r1.messages[0]).toMatch(/Moreno 609/);        // dirección de la sede
+    expect(r1.messages[0]).toMatch(/videollamada/i);     // menciona video como alternativa
+    expect(r1.messages[0]).not.toMatch(/SERENA|DAIANA|MAURA/); // nunca el nombre interno
+  });
+
+  it('elige una sede → carga slots presencial de esa oficina', async () => {
+    const deps = makeDeps();
+    const s = await advanceBooking((await startBooking({ zona: 'Quilmes' }, deps)).state, 'la de Quilmes', deps);
+    expect(s.state.modalidad).toBe('presencial');
+    expect(s.state.oficina).toBe('SERENA QUILMES');
+    expect(s.state.stage).toBe('await_slot');
+  });
+
+  it('en ask_office elige videollamada → va a video', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    expect(r0.state.stage).toBe('ask_office');
+    const r1 = await advanceBooking(r0.state, 'mejor por videollamada', deps);
+    expect(r1.state.modalidad).toBe('video');
+    expect(r1.state.oficina).toBe('Videollamada');
+    expect(r1.state.stage).toBe('await_slot');
+  });
+
+  it('cliente pidió video explícito en start → respeta, no ofrece sedes', async () => {
+    const deps = makeDeps();
+    const r = await startBooking({ modalidad: 'video' }, deps);
+    expect(r.state.modalidad).toBe('video');
+    expect(r.state.stage).not.toBe('ask_office');
+    expect(deps.presencialOffices).not.toHaveBeenCalled();
+  });
+
+  it('fuera de cobertura → videollamada directa (sin ofrecer sedes)', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({}, deps);
+    const r1 = await advanceBooking(r0.state, 'soy de Córdoba', deps);
+    expect(r1.state.modalidad).toBe('video');
+    expect(r1.state.stage).not.toBe('ask_office');
+    expect(r1.state.stage).toBe('await_slot');
+  });
+
+  it('ningún mensaje con emoji ni voseo', async () => {
+    const deps = makeDeps();
+    const msgs: string[] = [];
+    let s = await startBooking({}, deps); msgs.push(...s.messages);
+    let a = await advanceBooking(s.state, 'quilmes', deps); msgs.push(...a.messages);
+    for (const m of msgs) {
+      expect(m, m).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+      expect(m, m).not.toMatch(/\b(decime|preferís|sos|querés|elegí)\b/i);
+    }
   });
 });
