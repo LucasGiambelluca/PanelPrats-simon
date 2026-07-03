@@ -14,6 +14,10 @@ export interface Appointment {
   start_time?: string;
   end_time?: string;
   reminded?: boolean; // recordatorio 20' antes ya enviado (idempotencia del scheduler)
+  reminder_24h_sent?: boolean; // recordatorio 24h antes ya enviado
+  followup_sent?: boolean;     // seguimiento post-reunión ya enviado
+  doc_chase_count?: number;    // cuántos recordatorios de docs se mandaron
+  doc_chase_last_at?: string | null; // timestamp del último chase de docs
   oficina?: string;   // modalidad/oficina: pool de disponibilidad independiente (Videollamada, CABA, Quilmes, Haedo…)
   assigned_profile_id?: string | null; // abogada/profesional asignado (Fase 2); null = legacy/pool
 
@@ -202,6 +206,34 @@ export const AppointmentService = {
     });
   },
 
+  /**
+   * Citas para el scheduler de proactivos: ventana [now-pastMs, now+futureMs] por
+   * start_time, excluyendo SOLO 'cancelada'. A diferencia de listSchedulerWindow,
+   * INCLUYE asistio/no_asistio/cerrado (el seguimiento post-reunión los usa).
+   */
+  async listFollowupWindow(pastMs: number, futureMs: number): Promise<Appointment[]> {
+    const now = Date.now();
+    const fromIso = new Date(now - pastMs).toISOString();
+    const toIso = new Date(now + futureMs).toISOString();
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .gte('start_time', fromIso)
+        .lte('start_time', toIso)
+        .neq('status', 'cancelada');
+      if (error) throw new Error(error.message);
+      return (data || []).map(deserializeAppointment);
+    }
+
+    return Array.from(memoryAppointments.values()).filter(a => {
+      if (!a.start_time || a.status === 'cancelada') return false;
+      const t = new Date(a.start_time).getTime();
+      return t >= now - pastMs && t <= now + futureMs;
+    });
+  },
+
   // ¿Hay una cita NO cancelada que solape el slot pedido en el mismo pool (oficina)?
   // Re-chequeo anti doble-booking: la disponibilidad se evaluó en otro nodo (TOCTOU);
   // revalidamos contra el estado actual justo antes de insertar.
@@ -369,6 +401,20 @@ export const AppointmentService = {
     memoryAppointments.delete(id);
     console.log(`🗑️ [memory] Appointment deleted: ${id}`);
     return true;
+  },
+
+  /** Actualiza SOLO las columnas de flags del scheduler proactivo (migración 0037), sin pasar por update(). */
+  async setSchedulerFlags(
+    id: string,
+    patch: Partial<{ reminder_24h_sent: boolean; followup_sent: boolean; doc_chase_count: number; doc_chase_last_at: string }>,
+  ): Promise<void> {
+    if (!isSupabaseConfigured) {
+      const cur = memoryAppointments.get(id);
+      if (cur) memoryAppointments.set(id, { ...cur, ...patch } as Appointment);
+      return;
+    }
+    const { error } = await supabase.from('appointments').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
   },
 
   /** Persiste el resultado de la auditoría en la cita. Best-effort si la columna no existe (0032 sin aplicar). */
