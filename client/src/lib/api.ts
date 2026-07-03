@@ -222,6 +222,8 @@ export interface Appointment {
   insalubres?: boolean | null;
   aportes_aprox?: number | null;
   area?: string | null;
+  // Perfil estructurado del contacto/cita; incluye a_confirmar (temas de calificación pendientes de confirmar).
+  perfil_json?: Record<string, any> | null;
 }
 
 export type AppointmentMotivo =

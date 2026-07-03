@@ -1267,6 +1267,9 @@ export default function Agenda() {
                               {(app as any).audit_json?.revisar && (
                                 <span title="Datos a revisar" className="text-amber-200 text-[8px] font-bold flex-shrink-0">⚠</span>
                               )}
+                              {(((app.perfil_json as any)?.a_confirmar?.length ?? 0) > 0) && (
+                                <span title={`Falta confirmar: ${((app.perfil_json as any).a_confirmar as string[]).join(', ')}`} className="text-orange-500 text-[8px] font-black flex-shrink-0">⚠</span>
+                              )}
                             </div>
                           );
                         })}
@@ -1377,6 +1380,9 @@ export default function Agenda() {
                                   )}
                                   {(app as any).audit_json?.revisar && (
                                     <span title="Datos a revisar contra el chat" className="text-amber-600 text-[8px] font-semibold leading-none">⚠</span>
+                                  )}
+                                  {(((app.perfil_json as any)?.a_confirmar?.length ?? 0) > 0) && (
+                                    <span title={`Falta confirmar: ${((app.perfil_json as any).a_confirmar as string[]).join(', ')}`} className="text-orange-500 text-[9px] font-black leading-none">⚠</span>
                                   )}
                                   <StatusBadge status={app.status} size={10} />
                                 </div>
@@ -1737,6 +1743,17 @@ export default function Agenda() {
               }`}>
                 <CheckCircle size={12} />
                 <span>Consulta gratuita</span>
+              </div>
+            )}
+            {/* Badge FALTA CONFIRMAR — dato de calificación que el agente dejó pendiente al agendar "a confirmar". */}
+            {(((selectedApp?.perfil_json as any)?.a_confirmar?.length ?? 0) > 0) && (
+              <div className={`flex-shrink-0 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-sm ${
+                theme === 'light'
+                  ? 'bg-orange-100 text-orange-900 border-orange-300'
+                  : 'bg-orange-500/15 text-orange-200 border-orange-500/40'
+              }`}>
+                <span className="text-base leading-none">⚠</span>
+                <span>FALTA CONFIRMAR: {((selectedApp!.perfil_json as any).a_confirmar as string[]).join(', ')}</span>
               </div>
             )}
 
