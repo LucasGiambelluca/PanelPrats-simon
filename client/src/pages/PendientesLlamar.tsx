@@ -106,7 +106,7 @@ export default function PendientesLlamar() {
               {visibles.map((f) => (
                 <tr key={f.conversation_id} className="border-t hover:bg-brand-panel/50">
                   <td className="px-3 py-2 whitespace-nowrap font-mono">
-                    <a className="text-brand-gold hover:underline" href={`https://wa.me/${f.telefono}`} target="_blank" rel="noreferrer">{f.telefono}</a>
+                    <a className="text-brand-primary hover:underline" href={`https://wa.me/${f.telefono.startsWith('54') ? f.telefono.replace(/^54/, '549') : f.telefono}`} target="_blank" rel="noreferrer">{f.telefono}</a>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{f.nombre ?? '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{CANAL_LABELS[f.canal] ?? f.canal}</td>
