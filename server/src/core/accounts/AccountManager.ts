@@ -142,6 +142,27 @@ export class AccountManager {
   }
 
   /**
+   * Envía un template (HSM) por Cloud API. Solo aplica a WhatsApp oficial
+   * (`WhatsAppOfficialClient`); los templates son específicos de esa API.
+   */
+  async sendTemplate(
+    accountId: string,
+    to: string,
+    name: string,
+    lang: string,
+    components: unknown[],
+    preview?: string,
+  ): Promise<void> {
+    const client = this.clients.get(accountId);
+    if (!client) throw new Error(`Cuenta ${accountId} no conectada`);
+    if (client instanceof WhatsAppOfficialClient) {
+      await client.sendTemplate(to, name, lang, components, preview);
+      return;
+    }
+    throw new Error(`Cuenta ${accountId} no es WhatsApp oficial: no soporta templates`);
+  }
+
+  /**
    * Enruta un `entry` del webhook de Meta al MetaClient correcto (por external_id).
    * Asegura que la cuenta esté conectada antes de procesar.
    */
