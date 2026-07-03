@@ -19,6 +19,7 @@ export interface BookingState {
   modalidad?: 'presencial' | 'video';
   zona?: string | null;
   oficina?: string;
+  oficinaSugerida?: string;                                    // sede que la zona sugiere (default si el cliente no nombra una en ask_office)
   sedeOptions?: OfferedOption[];                               // sedes+video ofrecidas en ask_office (value = nombre interno, o '__video__')
   offered?: OfferedOption[];                                   // slots mostrados (value = start ISO)
   meta?: Record<string, { end: string; profileId?: string | null; oficina: string }>;
@@ -39,7 +40,8 @@ export interface BookingDeps {
   defaultOffice: () => Promise<string | null>; // sede presencial por defecto (fallback fuera de cobertura si no hay video)
   // Sedes presenciales del estudio con su etiqueta de zona (CABA/Quilmes/Haedo) y dirección.
   // nombreInterno = account_offices.nombre (NUNCA se muestra al cliente; solo zona+dirección).
-  presencialOffices: () => Promise<Array<{ nombreInterno: string; zona: string; direccion: string | null }>>;
+  // zona: null si no se pudo derivar (entonces se muestra solo la dirección, jamás el nombre interno).
+  presencialOffices: () => Promise<Array<{ nombreInterno: string; zona: string | null; direccion: string | null }>>;
   // opts.desde: buscar slots desde esa fecha (para "el martes"); opts.max: cantidad.
   freeSlots: (oficina: string, opts?: { desde?: Date; max?: number }) => Promise<BookingSlot[]>;
   book: (b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
@@ -80,6 +82,17 @@ function detectModalidad(text: string): 'presencial' | 'video' | null {
   if (/\b(video|videollamada|llamada|virtual|por video|computadora|pantalla|online|telefono|telefonica)\b/.test(t)) return 'video';
   if (/\b(presencial|en persona|ir|me acerco|acercarme|oficina|personalmente|cara a cara)\b/.test(t)) return 'presencial';
   return null;
+}
+
+// ¿El cliente nombró EXPLÍCITAMENTE esta sede? Un token distintivo de la etiqueta
+// (zona o calle) aparece en el texto. Excluye genéricos ("oficina") para no falsear.
+// En ask_office NO usamos ordinal/posicional (la lista no está numerada) ni aceptaciones
+// vagas: sólo un match de contenido cuenta como "eligió esta sede".
+const SEDE_STOPWORDS = new Set(['oficina', 'oficinas', 'nuestra', 'edificio', 'cuadras', 'esquina', 'entre', 'casi']);
+function textNamesSede(text: string, opt: OfferedOption): boolean {
+  const t = norm(text);
+  const tokens = norm(opt.label).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !SEDE_STOPWORDS.has(w));
+  return tokens.some((tok) => t.includes(tok));
 }
 
 function isAffirmative(text: string): boolean {
@@ -371,11 +384,19 @@ async function offerModalityByZone(state: BookingState, deps: BookingDeps): Prom
   const sedes = await deps.presencialOffices();
   // Sin sedes cargadas → fallback a la sede sugerida (no dejamos al cliente sin oferta).
   if (!sedes.length) return loadSlots({ ...state, modalidad: 'presencial', oficina: sug.oficina_sugerida }, deps);
-  const opts: OfferedOption[] = sedes.map((s, i) => ({ index: i + 1, label: `${s.zona}${s.direccion ? ' — ' + s.direccion : ''}`, value: s.nombreInterno }));
+  // Etiqueta de cara al cliente: zona + dirección. Si no hay zona, SOLO la dirección
+  // (o "nuestra oficina"); el nombre interno de la agenda JAMÁS se muestra.
+  const sedeEtiqueta = (s: { zona: string | null; direccion: string | null }): string =>
+    s.zona && s.direccion ? `${s.zona} — ${s.direccion}` : s.zona || s.direccion || 'nuestra oficina';
+  const sedeFrase = (s: { zona: string | null; direccion: string | null }): string =>
+    s.zona && s.direccion ? `en ${s.zona}, ${s.direccion}` : s.zona ? `en ${s.zona}` : s.direccion ? `en ${s.direccion}` : 'en nuestra oficina';
+  const opts: OfferedOption[] = sedes.map((s, i) => ({ index: i + 1, label: sedeEtiqueta(s), value: s.nombreInterno }));
   opts.push({ index: sedes.length + 1, label: 'videollamada', value: '__video__' });
-  const lista = sedes.map((s) => `en ${s.zona}, ${s.direccion || 'nuestra oficina'}`).join('; ');
+  const lista = sedes.map(sedeFrase).join('; ');
   const msg = `Tenemos oficinas ${lista}. También puede ser por videollamada, si le queda más cómodo. ¿Cómo prefiere atenderse?`;
-  return { state: { ...state, stage: 'ask_office', sedeOptions: opts }, messages: [msg], active: true };
+  // Persistimos la sede sugerida por la zona: es el DEFAULT si el cliente no nombra
+  // una sede puntual (evita agendar en la ciudad equivocada o loopear en ask_office).
+  return { state: { ...state, stage: 'ask_office', sedeOptions: opts, oficinaSugerida: sug.oficina_sugerida }, messages: [msg], active: true };
 }
 
 // Agenda DIRECTO (sin "¿confirmo? sí/no"): el libreto del estudio prohíbe pedir
@@ -444,23 +465,27 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       return afterModality({ ...state, modalidad: m }, deps);
     }
 
-    case 'ask_zone':
+    case 'ask_zone': {
+      // Cambió de idea y pidió video explícito → respetarlo (no tratarlo como "zona").
+      if (detectModalidad(text) === 'video') return afterModality({ ...state, modalidad: 'video' }, deps);
       // Zona conocida → evaluar cobertura y ofrecer las 3 sedes (o video si está fuera).
       return offerModalityByZone({ ...state, zona: text }, deps);
+    }
 
     case 'ask_office': {
-      const picked = resolveOption({ userText: text, offered: state.sedeOptions ?? [] });
-      // Eligió la videollamada.
-      if (picked.matchedValue === '__video__') return afterModality({ ...state, modalidad: 'video', oficina: undefined }, deps);
-      // Eligió una sede presencial → cargar slots de ESA oficina.
-      if (picked.matchedValue && picked.confianza >= 0.55) {
-        return loadSlots({ ...state, modalidad: 'presencial', oficina: picked.matchedValue }, deps);
-      }
-      // No se entendió: ¿pidió video por palabra suelta?
+      // 1) Video explícito ("mejor por videollamada").
       if (detectModalidad(text) === 'video') return afterModality({ ...state, modalidad: 'video', oficina: undefined }, deps);
-      // Repreguntar mostrando las zonas ofrecidas (sin repetir la lista larga idéntica).
-      const zonas = (state.sedeOptions ?? []).filter((o) => o.value !== '__video__').map((o) => o.label.split(' — ')[0]);
-      const zonasTxt = zonas.length ? zonas.join(', ') : 'nuestras oficinas';
+      // 2) ¿Nombró una sede puntual? (token de zona/dirección en el texto). La lista NO
+      //    está numerada: no resolvemos por ordinal/hora ni por aceptaciones vagas
+      //    ("cualquiera", "la más cercana") — eso caería siempre en la 1ª (ciudad equivocada).
+      const sedeOpts = (state.sedeOptions ?? []).filter((o) => o.value !== '__video__');
+      const named = sedeOpts.find((o) => textNamesSede(text, o));
+      if (named) return loadSlots({ ...state, modalidad: 'presencial', oficina: named.value }, deps);
+      // 3) No nombró sede ni video (vago, número suelto, "no sé") → sede SUGERIDA por la
+      //    zona (default determinístico: sin loop y en la ciudad correcta).
+      if (state.oficinaSugerida) return loadSlots({ ...state, modalidad: 'presencial', oficina: state.oficinaSugerida }, deps);
+      // 4) Sin sugerida → repreguntar (edge: sólo si no vino de offerModalityByZone).
+      const zonasTxt = sedeOpts.length ? sedeOpts.map((o) => o.label.split(' — ')[0]).join(', ') : 'nuestras oficinas';
       return { state, messages: [`¿Prefiere alguna de nuestras oficinas (${zonasTxt}) o la videollamada?`], active: true };
     }
 

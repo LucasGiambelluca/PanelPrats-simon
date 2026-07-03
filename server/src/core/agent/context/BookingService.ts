@@ -6,15 +6,18 @@
 
 import { startBooking, advanceBooking, type BookingDeps, type BookingState } from './BookingFlow';
 import { BookingStateStore } from './BookingStateStore';
+import { norm } from './normalize';
 
 // Deriva la ETIQUETA de zona visible al cliente desde el nombre interno de la agenda
-// ("SERENA QUILMES" → "Quilmes"). El nombre interno nunca se muestra; solo esta zona.
-function zonaFromNombre(nombre: string): string {
-  const t = (nombre || '').toUpperCase();
-  for (const z of ['CABA', 'QUILMES', 'HAEDO', 'LOMAS', 'AVELLANEDA', 'MORON', 'LANUS']) {
-    if (t.includes(z)) return z === 'CABA' ? 'CABA' : z.charAt(0) + z.slice(1).toLowerCase();
+// ("SERENA QUILMES" → "Quilmes", "... MORÓN" → "Moron"). Comparamos con norm() (sin
+// acentos). Si NO reconocemos la zona devolvemos null: el nombre interno JAMÁS se
+// muestra al cliente (en ese caso el flujo cae a la dirección o a un genérico).
+function zonaFromNombre(nombre: string): string | null {
+  const t = norm(nombre);
+  for (const z of ['caba', 'quilmes', 'haedo', 'lomas', 'avellaneda', 'moron', 'lanus']) {
+    if (t.includes(z)) return z === 'caba' ? 'CABA' : z.charAt(0).toUpperCase() + z.slice(1);
   }
-  return nombre; // fallback: si no reconocemos la zona, usamos el nombre tal cual
+  return null;
 }
 
 export interface BookingServiceDeps {

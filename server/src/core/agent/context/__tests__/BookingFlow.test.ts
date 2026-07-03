@@ -13,8 +13,9 @@ function makeDeps(over: Partial<BookingDeps> = {}): BookingDeps {
   return {
     suggestOffice: vi.fn(async (raw: string) => {
       const t = deaccent(raw); // el ZoneResolver real normaliza acentos
+      // En prod suggestOffice ya viene resuelto al nombre REAL de la agenda (resolveOfficeName).
       return /lanus|quilmes|bernal/.test(t)
-        ? { oficina_sugerida: 'Quilmes', necesita_aclaracion: false }
+        ? { oficina_sugerida: 'SERENA QUILMES', necesita_aclaracion: false }
         : /cordoba|plata/.test(t)
         ? { oficina_sugerida: null, necesita_aclaracion: false } // fuera de cobertura
         : { oficina_sugerida: null, necesita_aclaracion: true, pregunta_aclaracion: '¿En qué zona o localidad vive?' };
@@ -503,5 +504,92 @@ describe('Fix 2 — presencial primero (zona → cobertura → 3 sedes)', () => 
       expect(m, m).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
       expect(m, m).not.toMatch(/\b(decime|preferís|sos|querés|elegí)\b/i);
     }
+  });
+});
+
+describe('Fix 2 review — ask_office robusto (C1/C2/I3)', () => {
+  it('C1/C2: "la más cercana" usa la sede SUGERIDA por la zona, no la primera (CABA)', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps); // ask_office, sugerida Quilmes
+    expect(r0.state.stage).toBe('ask_office');
+    const r1 = await advanceBooking(r0.state, 'la más cercana', deps);
+    expect(r1.state.modalidad).toBe('presencial');
+    expect(r1.state.oficina).toBe('SERENA QUILMES');
+    expect(r1.state.stage).toBe('await_slot');
+  });
+
+  it('C1/C2: "no sé" NO loopea → cae a la sede sugerida', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    const r1 = await advanceBooking(r0.state, 'no sé', deps);
+    expect(r1.state.stage).toBe('await_slot');
+    expect(r1.state.oficina).toBe('SERENA QUILMES');
+  });
+
+  it('C1/C2: "cualquiera" → sede sugerida (no CABA)', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    const r1 = await advanceBooking(r0.state, 'cualquiera', deps);
+    expect(r1.state.oficina).toBe('SERENA QUILMES');
+  });
+
+  it('I3: "a las 4" en ask_office NO va a video; cae al default presencial sugerido', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    const r1 = await advanceBooking(r0.state, 'a las 4', deps);
+    expect(r1.state.modalidad).toBe('presencial');
+    expect(r1.state.oficina).toBe('SERENA QUILMES');
+  });
+
+  it('respeta la sede nombrada explícita (CABA) aunque la sugerida sea Quilmes', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    const r1 = await advanceBooking(r0.state, 'la de CABA', deps);
+    expect(r1.state.oficina).toBe('DAIANA CABA');
+  });
+
+  it('sigue yendo a video si lo pide explícito en ask_office', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    const r1 = await advanceBooking(r0.state, 'mejor por videollamada', deps);
+    expect(r1.state.modalidad).toBe('video');
+  });
+});
+
+describe('Fix 2 review — I4 video en ask_zone', () => {
+  it('en ask_zone "mejor por videollamada" → modalidad video (no repregunta zona)', async () => {
+    const deps = makeDeps();
+    const r0 = await startBooking({}, deps); // ask_zone
+    expect(r0.state.stage).toBe('ask_zone');
+    const r1 = await advanceBooking(r0.state, 'mejor por videollamada', deps);
+    expect(r1.state.modalidad).toBe('video');
+    expect(r1.state.stage).toBe('await_slot');
+  });
+});
+
+describe('Fix 2 review — I5 nombre interno JAMÁS al cliente', () => {
+  it('sede sin token de zona conocido → muestra dirección, nunca el nombre interno', async () => {
+    const deps = makeDeps({
+      presencialOffices: vi.fn(async () => [
+        { nombreInterno: 'DANIELA CANISSA', zona: null, direccion: 'Calle Falsa 123' },
+      ]),
+    });
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    expect(r0.state.stage).toBe('ask_office');
+    expect(r0.messages[0]).not.toMatch(/DANIELA|CANISSA/i);
+    expect(r0.messages[0]).not.toMatch(/\bnull\b/);
+    expect(r0.messages[0]).toMatch(/Calle Falsa 123/);
+  });
+
+  it('sede sin zona NI dirección → genérico "nuestra oficina", nunca el nombre interno', async () => {
+    const deps = makeDeps({
+      presencialOffices: vi.fn(async () => [
+        { nombreInterno: 'DANIELA CANISSA', zona: null, direccion: null },
+      ]),
+    });
+    const r0 = await startBooking({ zona: 'Quilmes' }, deps);
+    expect(r0.messages[0]).not.toMatch(/DANIELA|CANISSA/i);
+    expect(r0.messages[0]).not.toMatch(/\bnull\b/);
+    expect(r0.messages[0]).toMatch(/nuestra oficina/i);
   });
 });
