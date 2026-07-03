@@ -24,6 +24,7 @@ export function armarPendientes(
   conversations: ConversationRow[],
   contactsByConvId: Map<string, ContactMemoryRow>,
   appointments: Array<{ phone: string | null; telefono: string | null }>,
+  llamados: Map<string, { llamado_at: string; llamado_por: string | null }> = new Map(),
 ): FilaPendiente[] {
   const phonesConCita = new Set<string>();
   for (const a of appointments) {
@@ -37,6 +38,8 @@ export function armarPendientes(
     if (!fila) continue;
     if (vistos.has(fila.telefono)) continue;   // dedup por teléfono llamable (arrastra fix @lid)
     vistos.add(fila.telefono);
+    const hit = llamados.get(`${fila.account_id}|${fila.telefono}`);
+    if (hit) { fila.llamado = true; fila.llamado_at = hit.llamado_at; fila.llamado_por = hit.llamado_por; }
     filas.push(fila);
   }
   return filas;

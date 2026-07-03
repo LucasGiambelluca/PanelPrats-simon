@@ -42,6 +42,9 @@ export interface FilaPendiente {
   tema: string | null;
   conversation_id: string;
   account_id: string;
+  llamado: boolean;                 // true si ya lo llamamos (presencia en contactos_llamados)
+  llamado_at: string | null;
+  llamado_por: string | null;
 }
 
 function strOrNull(v: unknown): string | null {
@@ -146,6 +149,9 @@ export function evaluarPendiente(input: {
     tema: strOrNull(contact?.last_topic) ?? strOrNull(contact?.current_thread?.tema),
     conversation_id: conversation.id,
     account_id: conversation.account_id,
+    llamado: false,
+    llamado_at: null,
+    llamado_por: null,
   };
 }
 

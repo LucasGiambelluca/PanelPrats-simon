@@ -26,4 +26,21 @@ describe('armarPendientes', () => {
     expect(filas.length).toBe(1);
     expect(tels).toContain('542215093499');
   });
+
+  it('marca llamado=true cuando el teléfono está en el mapa de llamados', () => {
+    const conversations: ConversationRow[] = [
+      conv({ id: 'c1', phone: '5492215093499' }),
+      conv({ id: 'c2', phone: '5491155667788' }),
+    ];
+    const llamados = new Map<string, { llamado_at: string; llamado_por: string | null }>([
+      ['a1|542215093499', { llamado_at: '2026-07-03T10:00:00Z', llamado_por: 'Estela' }],
+    ]);
+    const filas = armarPendientes(conversations, new Map(), [], llamados);
+    const c1 = filas.find((f) => f.telefono === '542215093499')!;
+    const c2 = filas.find((f) => f.telefono === '541155667788')!;
+    expect(c1.llamado).toBe(true);
+    expect(c1.llamado_por).toBe('Estela');
+    expect(c2.llamado).toBe(false);
+    expect(c2.llamado_at).toBeNull();
+  });
 });
