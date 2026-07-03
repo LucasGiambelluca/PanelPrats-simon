@@ -24,6 +24,7 @@ import { availabilityRouter } from './routes/availability.routes';
 import { analyticsRouter } from './routes/analytics.routes';
 import { agenteRouter } from './routes/agente.routes';
 import { pendientesRouter } from './routes/pendientes.routes';
+import { appointmentDocsRouter } from './routes/appointmentDocs.routes';
 import { authContext, requireRole } from './middleware/auth';
 import type { WebhookQueue } from '../services/WebhookQueue';
 
@@ -85,6 +86,7 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/professionals', authContext, requireRole('admin'), professionalsRouter());
   app.use('/api/agenda', authContext, agendaRouter());
   app.use('/api/pendientes-llamar', authContext, pendientesRouter());
+  app.use('/api/appointment-docs', authContext, appointmentDocsRouter());
   app.use('/api/availability', authContext, availabilityRouter()); // empleadas: modal de agendado en el chat
   app.use('/api/analytics', authContext, requireRole('admin'), analyticsRouter());
   app.use('/api/agente', authContext, requireRole('admin'), agenteRouter());
