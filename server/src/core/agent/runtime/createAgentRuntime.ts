@@ -20,7 +20,7 @@ import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
 import { createDialogueState } from '../context/DialogueState';
-import { hasCalificacionVigente, QUALIFICATION_AREAS } from '../context/QualificationRules';
+import { hasCalificacionVigente, pickVigenteCalificacion, QUALIFICATION_AREAS } from '../context/QualificationRules';
 
 // Redacta UN mensaje (pregunta de slot / redirección off-topic) con la persona REAL
 // del estudio + el OBJETIVO inyectado por el controller. El LLM SOLO redacta; el flujo
@@ -167,8 +167,15 @@ export function getAgentRuntime(): AgentRuntime {
       buildReceptionFicha({ complete: (o) => AIService.complete(o) }, { conversation, ctx, model: 'gpt-4o' })
         .then((f) => ({ resumen_ia: f.resumen_ia, perfil: f })),
     setCalificacion: (a, p, area, entry) => memory.setCalificacion(a, p, area, entry),
-    // Fix 4: al agendar, copiar la calificación vigente (validada) a la cita.
-    getCalificacion: async (a, p) => { try { const m = await memory.load(a, p); return m.calificacion ?? null; } catch { return null; } },
+    // Fix 4: al agendar, copiar la calificación del ÁREA ACTUAL y VIGENTE (validada) a la cita.
+    getCalificacion: async (a, p, area) => {
+      try {
+        if (!area) return null;
+        const m = await memory.load(a, p);
+        const acct = await loadAccount(a).catch(() => null);
+        return pickVigenteCalificacion(m.calificacion ?? null, area, acct?.calificacionTtlDays ?? 30, Date.now());
+      } catch { return null; }
+    },
   });
 
   // Capacidad 1: loader de continuidad.
@@ -189,9 +196,11 @@ export function getAgentRuntime(): AgentRuntime {
     book: async (a, phone, conversation, _zona, b) => {
       // zona NO se thread-ea cruda: que gpt-4o extraiga la localidad limpia del diálogo.
       // telefono: número real dado en el chat (FB/IG). Si falta, book_appointment cae al id de canal.
+      // area: la de ESTA conversación → book_appointment copia SOLO esa calificación (no otra área/vencida).
+      const areaKey = await memory.getDialogueState(a, phone).then((s) => s?.area ?? null).catch(() => null);
       const r = await tools.execute('book_appointment',
         { nombre: b.nombre, start_time: b.start, end_time: b.end, oficina: b.oficina, resumen: '', telefono: b.telefono },
-        { accountId: a, phone, conversation });
+        { accountId: a, phone, conversation, area: areaKey });
       if (!r.ok) throw new Error(r.error || 'sin cupo');
       return { direccion: r.data?.direccion ?? null, video_link: r.data?.video_link ?? null, modalidad: r.data?.modalidad };
     },

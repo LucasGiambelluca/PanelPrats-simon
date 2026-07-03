@@ -279,7 +279,7 @@ describe('ToolRegistry book_appointment auto-asigna profesional', () => {
   });
 });
 
-describe('ToolRegistry book_appointment copia la calificación (Fix 4)', () => {
+describe('ToolRegistry book_appointment copia la calificación del área actual y vigente (Fix 4)', () => {
   const office = { id: 'o1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1', video_link: null };
   const baseDeps = (created: any[], getCalificacion?: any): any => ({
     appointments: { create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); } },
@@ -291,38 +291,76 @@ describe('ToolRegistry book_appointment copia la calificación (Fix 4)', () => {
     knowledge: {}, handoff: () => Promise.resolve(),
     ...(getCalificacion ? { getCalificacion } : {}),
   });
-  const ctx = { accountId: 'acc1', phone: '549111' } as any;
+  // getCalificacion ahora recibe (accountId, phone, area) y devuelve {area, entry} | null:
+  // simula pickVigenteCalificacion (área actual + vigente). Acá elegimos por igualdad simple.
+  const pickFrom = (cal: Record<string, any>) => vi.fn(async (_a: string, _p: string, area: string | null) => {
+    if (!area) return null;
+    const keys = area.startsWith('jubilacion') ? ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion'] : [area];
+    for (const k of keys) if (cal[k]?.resultado) return { area: k, entry: cal[k] };
+    return null;
+  });
   const args = { nombre: 'Juan', start_time: 's', end_time: 'e', oficina: 'CABA', resumen: 'x' };
+  const ctx = (area: string | null): any => ({ accountId: 'acc1', phone: '549111', area });
 
-  it('resultado "pago" → tipo_consulta/monto + edad/nacionalidad/insalubres/area de la calificación', async () => {
+  it('area=jubilacion_hombre pago vigente → tipo_consulta/monto + edad/nacionalidad/insalubres/area', async () => {
     const created: any[] = [];
-    const getCalificacion = vi.fn().mockResolvedValue({
+    const getCalificacion = pickFrom({
       jubilacion_hombre: { resultado: 'pago', datos: { edad: 62, nacionalidad: 'argentino', insalubres: false, aportes_aprox: 25 } },
     });
     const reg = new ToolRegistry(baseDeps(created, getCalificacion));
-    const r = await reg.execute('book_appointment', args, ctx);
+    const r = await reg.execute('book_appointment', args, ctx('jubilacion_hombre'));
     expect(r.ok).toBe(true);
+    expect(getCalificacion).toHaveBeenCalledWith('acc1', '549111', 'jubilacion_hombre');
     expect(created[0]).toMatchObject({
       area: 'jubilacion_hombre', edad: 62, nacionalidad: 'argentino', insalubres: false,
       aportes_aprox: 25, tipo_consulta: 'pago', monto_a_cobrar: 29000,
     });
   });
 
-  it('resultado "gratis" → tipo_consulta gratis y monto 0', async () => {
+  it('CRÍTICO: area=laboral con jubilación pago vieja + laboral gratis → NO cobra (gratis/0/laboral)', async () => {
     const created: any[] = [];
-    const getCalificacion = vi.fn().mockResolvedValue({
-      jubilacion_mujer: { resultado: 'gratis', datos: { edad: 64 } },
+    const getCalificacion = pickFrom({
+      jubilacion_hombre: { resultado: 'pago', datos: { edad: 62 } },
+      laboral: { resultado: 'gratis', datos: {} },
     });
     const reg = new ToolRegistry(baseDeps(created, getCalificacion));
-    const r = await reg.execute('book_appointment', args, ctx);
+    const r = await reg.execute('book_appointment', args, ctx('laboral'));
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: 'laboral', tipo_consulta: 'gratis', monto_a_cobrar: 0 });
+    expect(created[0].tipo_consulta).not.toBe('pago');
+  });
+
+  it('area vencida (getCalificacion devuelve null) → no copia (tipo_consulta null, monto 0)', async () => {
+    const created: any[] = [];
+    const getCalificacion = vi.fn().mockResolvedValue(null); // simula TTL vencido
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx('jubilacion_hombre'));
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: null, tipo_consulta: null, monto_a_cobrar: 0 });
+  });
+
+  it('resultado "gratis" → tipo_consulta gratis y monto 0', async () => {
+    const created: any[] = [];
+    const getCalificacion = pickFrom({ jubilacion_mujer: { resultado: 'gratis', datos: { edad: 64 } } });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx('jubilacion'));
     expect(r.ok).toBe(true);
     expect(created[0]).toMatchObject({ area: 'jubilacion_mujer', edad: 64, tipo_consulta: 'gratis', monto_a_cobrar: 0 });
+  });
+
+  it('sin ctx.area → no copia (campos null/0)', async () => {
+    const created: any[] = [];
+    const getCalificacion = pickFrom({ jubilacion_hombre: { resultado: 'pago', datos: { edad: 62 } } });
+    const reg = new ToolRegistry(baseDeps(created, getCalificacion));
+    const r = await reg.execute('book_appointment', args, ctx(null));
+    expect(r.ok).toBe(true);
+    expect(created[0]).toMatchObject({ area: null, tipo_consulta: null, monto_a_cobrar: 0 });
   });
 
   it('sin getCalificacion no rompe: campos null/0', async () => {
     const created: any[] = [];
     const reg = new ToolRegistry(baseDeps(created));
-    const r = await reg.execute('book_appointment', args, ctx);
+    const r = await reg.execute('book_appointment', args, ctx('laboral'));
     expect(r.ok).toBe(true);
     expect(created[0]).toMatchObject({ area: null, edad: null, nacionalidad: null, insalubres: null, tipo_consulta: null, monto_a_cobrar: 0 });
   });
@@ -331,7 +369,7 @@ describe('ToolRegistry book_appointment copia la calificación (Fix 4)', () => {
     const created: any[] = [];
     const getCalificacion = vi.fn().mockRejectedValue(new Error('db down'));
     const reg = new ToolRegistry(baseDeps(created, getCalificacion));
-    const r = await reg.execute('book_appointment', args, ctx);
+    const r = await reg.execute('book_appointment', args, ctx('laboral'));
     expect(r.ok).toBe(true);
     expect(created[0]).toMatchObject({ area: null, tipo_consulta: null, monto_a_cobrar: 0 });
   });

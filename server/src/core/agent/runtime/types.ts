@@ -6,6 +6,8 @@ export interface ToolContext {
   conversation?: string;
   // Zona resuelta por suggest_office en este hilo (para etiquetar la ficha).
   zona?: string | null;
+  // Área de calificación de ESTA conversación (para copiar la calificación correcta al agendar).
+  area?: string | null;
 }
 
 // Resultado normalizado de una tool (lo que se devuelve al modelo).

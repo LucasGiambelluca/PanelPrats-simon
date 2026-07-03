@@ -55,6 +55,21 @@ export function validateQualification(area: string, resultado: string, datos: Re
   return { ok: true };
 }
 
+/** Entrada de calificación VIGENTE (dentro del TTL) para el área, o null. 'jubilacion' acepta hombre/mujer. */
+export function pickVigenteCalificacion(
+  cal: Record<string, any> | null | undefined, area: string | null, ttlDays: number, now: number,
+): { area: string; entry: any } | null {
+  if (!cal || !area) return null;
+  const keys = area.startsWith('jubilacion') ? ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion'] : [area];
+  for (const k of keys) {
+    const e = cal[k];
+    if (!e?.calificado_at || !e.resultado) continue;
+    const t = new Date(e.calificado_at).getTime();
+    if (Number.isFinite(t) && now - t >= 0 && now - t <= ttlDays * 86_400_000) return { area: k, entry: e };
+  }
+  return null;
+}
+
 /** ¿Hay calificación vigente (dentro del TTL) para el área? "jubilacion" acepta hombre/mujer. */
 export function hasCalificacionVigente(
   cal: Record<string, any> | null | undefined,

@@ -37,7 +37,8 @@ export interface ToolDeps {
   setCalificacion?: (accountId: string, phone: string, area: string, entry: { resultado: string; datos: Record<string, any>; calificado_at: string }) => Promise<void>;
   // Lectura de la calificación vigente del contacto (Fix 4): se copia a columnas
   // estructuradas de la cita al agendar (dato ya validado, no se re-extrae por IA).
-  getCalificacion?: (accountId: string, phone: string) => Promise<Record<string, any> | null>;
+  // Devuelve SOLO la entrada del área ACTUAL y VIGENTE (dentro del TTL), o null.
+  getCalificacion?: (accountId: string, phone: string, area: string | null) => Promise<{ area: string; entry: any } | null>;
 }
 
 // Esquema de tools en formato OpenAI function-calling.
@@ -109,29 +110,26 @@ export class ToolRegistry {
               perfil_json = ficha.perfil ?? null;
             } catch { /* sin ficha: la cita se crea igual */ }
           }
-          // Copiar la calificación vigente (dato ya validado) a columnas estructuradas de la cita,
-          // para que la recepcionista tenga edad/nacionalidad/insalubres/aportes y sepa si cobrar.
+          // Copiar la calificación del ÁREA ACTUAL y VIGENTE (dato ya validado) a columnas
+          // estructuradas de la cita, para que recepción tenga edad/nacionalidad/insalubres/aportes
+          // y sepa si cobrar. SOLO el área de esta cita y dentro del TTL: nunca copia el
+          // "pago" de una jubilación vieja a una consulta laboral gratis, ni datos vencidos.
           let intake: any = {};
           if (this.deps.getCalificacion) {
             try {
-              const cal = await this.deps.getCalificacion(ctx.accountId, ctx.phone);
-              if (cal) {
-                // elegir la entrada de jubilación (o la primera con resultado)
-                const areaKey = ['jubilacion_hombre', 'jubilacion_mujer', 'jubilacion', 'pension_viudez', 'laboral', 'art', 'transito']
-                  .find((k) => cal[k]?.resultado) ?? Object.keys(cal).find((k) => cal[k]?.resultado);
-                const entry = areaKey ? cal[areaKey] : null;
-                if (entry) {
-                  const d = entry.datos || {};
-                  intake = {
-                    area: areaKey,
-                    edad: d.edad ?? null,
-                    nacionalidad: d.nacionalidad ?? null,
-                    insalubres: (d.insalubres === true || d.insalubres === 'true') ? true : (d.insalubres === false ? false : null),
-                    aportes_aprox: d.aportes_aprox ?? null,
-                    tipo_consulta: entry.resultado === 'pago' ? 'pago' : (entry.resultado === 'gratis' ? 'gratis' : null),
-                    monto_a_cobrar: entry.resultado === 'pago' ? MONTO_CONSULTA_PAGA : 0,
-                  };
-                }
+              const picked = await this.deps.getCalificacion(ctx.accountId, ctx.phone, ctx.area ?? null);
+              if (picked) {
+                const d = picked.entry.datos || {};
+                const r = picked.entry.resultado;
+                intake = {
+                  area: picked.area,
+                  edad: d.edad ?? null,
+                  nacionalidad: d.nacionalidad ?? null,
+                  insalubres: (d.insalubres === true || d.insalubres === 'true') ? true : (d.insalubres === false ? false : null),
+                  aportes_aprox: d.aportes_aprox ?? null,
+                  tipo_consulta: r === 'pago' ? 'pago' : (r === 'gratis' ? 'gratis' : null),
+                  monto_a_cobrar: r === 'pago' ? MONTO_CONSULTA_PAGA : 0,
+                };
               }
             } catch { /* best-effort: la cita se crea igual */ }
           }

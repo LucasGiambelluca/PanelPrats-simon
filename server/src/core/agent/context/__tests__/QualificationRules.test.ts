@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateQualification, hasCalificacionVigente } from '../QualificationRules';
+import { validateQualification, hasCalificacionVigente, pickVigenteCalificacion } from '../QualificationRules';
 
 describe('validateQualification — libreto jubilación', () => {
   const H = 'jubilacion_hombre', M = 'jubilacion_mujer';
@@ -80,5 +80,41 @@ describe('hasCalificacionVigente', () => {
     expect(hasCalificacionVigente(cal, 'jubilacion_hombre', 30, now)).toBe(false);
     expect(hasCalificacionVigente(null, 'jubilacion_hombre', 30, now)).toBe(false);
     expect(hasCalificacionVigente({}, 'laboral', 30, now)).toBe(false);
+  });
+});
+
+describe('pickVigenteCalificacion — solo el área actual y vigente', () => {
+  const now = Date.parse('2026-07-02T12:00:00Z');
+  const dias = (n: number) => new Date(now - n * 86_400_000).toISOString();
+
+  it('multi-área: con area=laboral devuelve la laboral (no la jubilación pago vieja)', () => {
+    const cal = {
+      jubilacion_hombre: { resultado: 'pago', datos: { edad: 62 }, calificado_at: dias(5) },
+      laboral: { resultado: 'gratis', datos: {}, calificado_at: dias(1) },
+    };
+    const r = pickVigenteCalificacion(cal, 'laboral', 30, now);
+    expect(r?.area).toBe('laboral');
+    expect(r?.entry.resultado).toBe('gratis');
+  });
+
+  it('area=jubilacion con la de jubilación vencida (40 días, ttl 30) → null', () => {
+    const cal = { jubilacion_hombre: { resultado: 'pago', datos: {}, calificado_at: dias(40) } };
+    expect(pickVigenteCalificacion(cal, 'jubilacion', 30, now)).toBeNull();
+  });
+
+  it('area=jubilacion vigente → devuelve hombre/mujer', () => {
+    const cal = { jubilacion_mujer: { resultado: 'gratis', datos: { edad: 64 }, calificado_at: dias(2) } };
+    const r = pickVigenteCalificacion(cal, 'jubilacion', 30, now);
+    expect(r?.area).toBe('jubilacion_mujer');
+  });
+
+  it('area null o cal null → null', () => {
+    expect(pickVigenteCalificacion(null, 'laboral', 30, now)).toBeNull();
+    expect(pickVigenteCalificacion({ laboral: { resultado: 'gratis', calificado_at: dias(1) } }, null, 30, now)).toBeNull();
+  });
+
+  it('entrada sin resultado o sin calificado_at → se ignora', () => {
+    expect(pickVigenteCalificacion({ laboral: { datos: {} } }, 'laboral', 30, now)).toBeNull();
+    expect(pickVigenteCalificacion({ laboral: { resultado: 'gratis' } }, 'laboral', 30, now)).toBeNull();
   });
 });
