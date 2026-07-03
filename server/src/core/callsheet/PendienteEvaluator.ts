@@ -72,7 +72,7 @@ export function resolveCallablePhone(conversation: ConversationRow, contact: Con
     const v = validarTelefonoAR(conversation.phone);
     if (v.normalizado) return v.normalizado;
     const norm = PhoneUtils.normalize(conversation.phone);
-    return norm ? norm : null;
+    return norm && /^\d+$/.test(norm) ? norm : null;
   }
   // FB/IG: el phone es el PSID (no llamable). Necesitamos un teléfono real del chat.
   const cand = telefonoDesdeMemoria(contact);
@@ -132,5 +132,5 @@ export function claveCita(telefono: string | null | undefined): string | null {
   const v = validarTelefonoAR(telefono);
   if (v.normalizado) return v.normalizado;
   const norm = PhoneUtils.normalize(telefono);
-  return norm ? norm : null;
+  return norm && /^\d+$/.test(norm) ? norm : null;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluarPendiente, resolveCallablePhone, type ConversationRow, type ContactMemoryRow } from '../PendienteEvaluator';
+import { evaluarPendiente, resolveCallablePhone, claveCita, type ConversationRow, type ContactMemoryRow } from '../PendienteEvaluator';
 
 const baseConv = (over: Partial<ConversationRow> = {}): ConversationRow => ({
   id: 'c1', account_id: 'a1', phone: '5492215093499', channel: 'whatsapp',
@@ -30,6 +30,24 @@ describe('resolveCallablePhone', () => {
     const conv = baseConv({ channel: 'facebook', phone: '27998877665544' });
     const contact: ContactMemoryRow = { dialogue_state: { slots: { telefono: { valor: 'no tengo' } } } } as any;
     expect(resolveCallablePhone(conv, contact)).toBeNull();
+  });
+});
+
+describe('claveCita', () => {
+  it('AR con y sin 9 colapsan a la misma clave', () => {
+    expect(claveCita('5492215093499')).toBe('542215093499');
+    expect(claveCita('542215093499')).toBe('542215093499');
+  });
+  it('null / vacío → null', () => {
+    expect(claveCita(null)).toBeNull();
+    expect(claveCita('')).toBeNull();
+  });
+});
+
+describe('resolveCallablePhone — @lid no es llamable', () => {
+  it('WhatsApp con phone @lid → null', () => {
+    // baseConv está definido arriba en este archivo
+    expect(resolveCallablePhone(baseConv({ phone: '2712345678901@lid' }), null)).toBeNull();
   });
 });
 
