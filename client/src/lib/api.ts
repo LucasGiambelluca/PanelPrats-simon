@@ -498,3 +498,29 @@ export const pendientesApi = {
       '/api/pendientes-llamar/marcar',
       { method: 'POST', body: JSON.stringify({ account_id: params.accountId, telefono: params.telefono, llamado: params.llamado }) }),
 };
+
+// ── Documentación de la cita ────────────────────────────────
+export interface AppointmentDoc {
+  id: string;
+  appointment_id: string;
+  account_id: string;
+  documento: string;
+  estado: 'pendiente' | 'entregado';
+  requested_at: string;
+  delivered_at: string | null;
+  created_at: string;
+}
+export const docsApi = {
+  list: (appointmentId: string) =>
+    api<{ docs: AppointmentDoc[] }>(`/api/appointment-docs/${appointmentId}`),
+  add: (appointmentId: string, accountId: string, documento: string) =>
+    api<{ doc: AppointmentDoc }>(`/api/appointment-docs/${appointmentId}`, {
+      method: 'POST', body: JSON.stringify({ account_id: accountId, documento }),
+    }),
+  setEstado: (id: string, estado: 'pendiente' | 'entregado') =>
+    api<{ ok: boolean }>(`/api/appointment-docs/item/${id}`, {
+      method: 'PATCH', body: JSON.stringify({ estado }),
+    }),
+  remove: (id: string) =>
+    api<{ ok: boolean }>(`/api/appointment-docs/item/${id}`, { method: 'DELETE' }),
+};

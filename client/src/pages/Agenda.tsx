@@ -10,6 +10,7 @@ import {
 import type { ProfessionalLite } from '../types';
 import CallReminderModal from '../components/CallReminderModal';
 import CallActions from '../components/CallActions';
+import { DocsChecklist } from '../components/DocsChecklist';
 import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
@@ -2049,6 +2050,11 @@ export default function Agenda() {
                   />
                   <span>Carpeta armada</span>
                 </label>
+
+                {/* Checklist de documentación (Task 6 Plan C) */}
+                {selectedApp && (
+                  <DocsChecklist appointmentId={selectedApp.id} accountId={selectedApp.account_id} />
+                )}
               </div>
 
               {/* Auditoría: diferencias entre datos de la cita y el chat */}
