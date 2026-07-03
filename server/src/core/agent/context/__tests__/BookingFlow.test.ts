@@ -291,6 +291,68 @@ describe('parseSlotRequest — pedir otro día/horario (determinístico)', () =>
   });
 });
 
+describe('parseSlotRequest minHour', () => {
+  const now = new Date('2026-07-02T12:00:00Z');
+  it('"después de las 3 y media" → minHour 15.5', () => {
+    expect(parseSlotRequest('puedo después de las 3 y media', now).minHour).toBe(15.5);
+  });
+  it('"a partir de las 16" → 16', () => {
+    expect(parseSlotRequest('a partir de las 16 hs', now).minHour).toBe(16);
+  });
+  it('"de 4 de la tarde en adelante" → 16', () => {
+    expect(parseSlotRequest('de 4 de la tarde en adelante', now).minHour).toBe(16);
+  });
+  it('"a partir de las 15:30" → 15.5', () => {
+    expect(parseSlotRequest('a partir de las 15:30', now).minHour).toBe(15.5);
+  });
+  it('"no antes de las 16" → 16', () => {
+    expect(parseSlotRequest('no antes de las 16', now).minHour).toBe(16);
+  });
+  it('"pasado el mediodía" → 13', () => {
+    expect(parseSlotRequest('recién pasado el mediodía', now).minHour).toBe(13);
+  });
+  it('sin restricción de hora → minHour undefined', () => {
+    expect(parseSlotRequest('el martes', now).minHour).toBeUndefined();
+  });
+  it('minHour hace isRequest=true', () => {
+    expect(parseSlotRequest('después de las 3 y media', now).isRequest).toBe(true);
+  });
+});
+
+describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
+  // 09:00, 14:00 y 16:00 hora AR (UTC-3).
+  const SLOTS_HH = [
+    { start: '2026-07-02T12:00:00.000Z', end: '2026-07-02T12:30:00.000Z', profileId: 'p1', oficina: 'Quilmes' }, // 09:00
+    { start: '2026-07-02T17:00:00.000Z', end: '2026-07-02T17:30:00.000Z', profileId: 'p1', oficina: 'Quilmes' }, // 14:00
+    { start: '2026-07-02T19:00:00.000Z', end: '2026-07-02T19:30:00.000Z', profileId: 'p2', oficina: 'Quilmes' }, // 16:00
+  ];
+  const decAR = (iso: string) => ((new Date(iso).getUTCHours() - 3 + 24) % 24) + new Date(iso).getUTCMinutes() / 60;
+
+  it('"después de las 15:30" → sólo ofrece slots ≥ 15:30', async () => {
+    const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
+    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    const step = await advanceBooking(start.state, 'puedo recién después de las 15:30', deps);
+    expect(step.state.stage).toBe('await_slot');
+    const offered = (step.state.offered ?? []).map((o) => o.value);
+    expect(offered.length).toBeGreaterThan(0);
+    for (const v of offered) expect(decAR(v)).toBeGreaterThanOrEqual(15.5);
+    expect(offered).toContain('2026-07-02T19:00:00.000Z'); // el de las 16:00
+    expect(offered).not.toContain('2026-07-02T12:00:00.000Z'); // no el de 09:00
+  });
+
+  it('la restricción persiste: tras pedir hora mínima, "para el martes" sigue filtrando', async () => {
+    const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
+    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    // "15:30" no coincide exacto con ningún slot ofrecido → re-busca y fija minHour.
+    let step = await advanceBooking(start.state, 'a partir de las 15:30', deps);
+    expect(step.state.minHour).toBe(15.5);
+    step = await advanceBooking(step.state, 'mejor el martes', deps);
+    const offered = (step.state.offered ?? []).map((o) => o.value);
+    expect(offered.length).toBeGreaterThan(0);
+    for (const v of offered) expect(decAR(v)).toBeGreaterThanOrEqual(15.5);
+  });
+});
+
 describe('BookingFlow — await_slot re-busca otro día/turno', () => {
   it('"¿para el martes?" recarga slots (vuelve a llamar freeSlots) y sigue en await_slot', async () => {
     const deps = makeDeps();

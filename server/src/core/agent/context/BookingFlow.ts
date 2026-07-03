@@ -26,6 +26,7 @@ export interface BookingState {
   telefono?: string;                                          // teléfono real dado en el chat (FB/IG: el id de la red NO es teléfono)
   needsPhone?: boolean;                                       // canal sin número real (FB/IG) → pedirlo explícito
   desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
+  minHour?: number;                                           // hora AR mínima pedida por el cliente ("después de las 15:30" → 15.5); persiste en re-búsquedas
   askRetries?: number;                                        // intentos fallidos de parseo en await_slot → rota la plantilla (anti-repetición)
 }
 
@@ -90,6 +91,18 @@ function slotHourAR(iso: string): number {
   return (new Date(iso).getUTCHours() - 3 + 24) % 24;
 }
 
+// Hora DECIMAL AR del slot (15:30 → 15.5), para comparar contra minHour pedido.
+function slotDecAR(iso: string): number {
+  return slotHourAR(iso) + new Date(iso).getUTCMinutes() / 60;
+}
+
+// Hora decimal → "HH:MM" para el mensaje ("15.5" → "15:30").
+function fmtHour(dec: number): string {
+  const h = Math.floor(dec);
+  const m = Math.round((dec - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 const DOW: Record<string, number> = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 
 /**
@@ -97,7 +110,34 @@ const DOW: Record<string, number> = { domingo: 0, lunes: 1, martes: 2, miercoles
  * "el martes", "mañana", "la semana que viene", "a la tarde", "más tarde", "otra fecha".
  * `now` se inyecta para testear. Devuelve si es un pedido de re-búsqueda + desde/turno.
  */
-export function parseSlotRequest(text: string, now: Date = new Date()): { isRequest: boolean; desde?: Date; turno?: 'manana' | 'tarde' } {
+/**
+ * Extrae la hora AR MÍNIMA pedida ("después de las 3 y media" → 15.5), como decimal.
+ * Conservador: sólo devuelve algo si hay una señal clara de cota inferior; ante duda,
+ * undefined (mejor no filtrar que filtrar mal). `t` ya viene normalizado (sin acentos).
+ */
+function extractMinHour(t: string): number | undefined {
+  // "pasado el mediodía" / "después del mediodía" → 13.
+  if (/\b(pasad[oa]s?|despues del?)\s+(el\s+)?mediodia\b/.test(t)) return 13;
+
+  // Busca una cota inferior: "(después/a partir/no antes/recién/pasadas/desde/de) [las] HH[:MM] [y media/cuarto]".
+  const m = t.match(/(?:despues de(?:l)?|a partir de|no antes de|recien(?:\s+despues de)?|pasad[oa]s?|desde|de)\s+(?:las?\s+)?(\d{1,2})(?:[:.](\d{2}))?(?:\s*y\s+(media|cuarto))?/);
+  if (!m) return undefined;
+  let hour = Number(m[1]);
+  let min = m[2] ? Number(m[2]) : 0;
+  if (m[3] === 'media') min = 30;
+  else if (m[3] === 'cuarto') min = 15;
+  if (hour > 23 || min > 59) return undefined;
+
+  // Contexto de tarde: número ≤7 junto a "tarde"/"pm"/"después" → asumimos PM (+12).
+  const tardeCtx = /\b(tarde|pm)\b/.test(t) || /\bdespues\b/.test(t);
+  if (hour < 8 && tardeCtx) hour += 12;
+
+  const dec = hour + min / 60;
+  if (dec < 0 || dec > 23.99) return undefined;
+  return dec;
+}
+
+export function parseSlotRequest(text: string, now: Date = new Date()): { isRequest: boolean; desde?: Date; turno?: 'manana' | 'tarde'; minHour?: number } {
   const t = norm(text);
   if (!t) return { isRequest: false };
 
@@ -126,9 +166,11 @@ export function parseSlotRequest(text: string, now: Date = new Date()): { isRequ
     else if (/\b(otro dia|otra fecha|mas adelante|proximo|siguiente)\b/.test(t)) desde = atDay(1);
   }
 
-  // Es un pedido de re-búsqueda si hay día, turno, o un "otro/más tarde/no me sirve" explícito.
+  const minHour = extractMinHour(t);
+
+  // Es un pedido de re-búsqueda si hay día, turno, hora mínima, o un "otro/más tarde/no me sirve" explícito.
   const otherSignal = /\b(otro|otra|mas tarde|mas temprano|no me sirve|no tenes|no hay|ninguno|ninguna)\b/.test(t);
-  return { isRequest: !!(desde || turno || otherSignal), desde, turno };
+  return { isRequest: !!(desde || turno || otherSignal || minHour !== undefined), desde, turno, minHour };
 }
 
 // Extrae un nombre razonable ("mi nombre es Juan Pérez" → "Juan Pérez").
@@ -221,9 +263,14 @@ async function outOfCoverage(state: BookingState, deps: BookingDeps): Promise<Bo
 
 // Carga slots de UNA oficina y arma el paso await_slot. Si no hay, ofrece alternativa.
 // opts.desde: buscar desde otra fecha ("el martes"); opts.turno: filtrar mañana/tarde.
-async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?: Date; turno?: 'manana' | 'tarde' } = {}): Promise<BookingStep> {
+async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?: Date; turno?: 'manana' | 'tarde'; minHour?: number } = {}): Promise<BookingStep> {
   const oficina = state.oficina!;
-  const raw = await deps.freeSlots(oficina, { desde: opts.desde, max: 30 });
+  // Hora mínima pedida (persiste entre re-búsquedas, igual que `desde`).
+  const minHour = opts.minHour ?? state.minHour;
+  // Con restricción de hora pedimos más slots (abarcan más días) para poder cumplirla.
+  const rawAll = await deps.freeSlots(oficina, { desde: opts.desde, max: minHour !== undefined ? 60 : 30 });
+  // Cumplen la hora mínima pedida (comparación en hora decimal AR: 15:30 → 15.5).
+  const raw = minHour !== undefined ? rawAll.filter((s) => slotDecAR(s.start) >= minHour) : rawAll;
   let slots = diversifyByTurno(raw); // por defecto: 1 por franja (mañana/mediodía/tarde)
   let lead: string | undefined;
   if (opts.turno) {
@@ -239,6 +286,15 @@ async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?:
     }
   }
   if (!slots.length) {
+    // La restricción de hora vació todo, pero SÍ había horarios (antes de filtrar): avisar preciso.
+    if (minHour !== undefined && rawAll.length) {
+      const hh = fmtHour(minHour);
+      const nextS = { ...state, minHour };
+      if (opts.desde) {
+        return { state: nextS, messages: [`No tengo horarios después de las ${hh} ese día ${lugarLabel(state)}. ¿Quiere que busque otro día?`], active: true };
+      }
+      return { state: nextS, messages: [`No tengo horarios después de las ${hh} en los próximos días ${lugarLabel(state)}. ¿Le sirve algún otro horario?`], active: true };
+    }
     // Pidió un día/turno puntual sin disponibilidad: avisar sin romper.
     if (opts.desde || opts.turno) {
       return { state, messages: [`No tengo horarios para ese día/horario ${lugarLabel(state)}. ¿Quiere que le muestre los más próximos?`], active: true };
@@ -263,7 +319,7 @@ async function loadSlots(state: BookingState, deps: BookingDeps, opts: { desde?:
   const offered: OfferedOption[] = slots.map((s, i) => ({ index: i + 1, label: SLOT_LABEL(s), value: s.start }));
   const meta: Record<string, { end: string; profileId?: string | null; oficina: string }> = {};
   for (const s of slots) meta[s.start] = { end: s.end, profileId: s.profileId ?? null, oficina: s.oficina ?? oficina };
-  const nextState = { ...state, stage: 'await_slot' as const, offered, meta, desde: opts.desde ? opts.desde.toISOString() : state.desde };
+  const nextState = { ...state, stage: 'await_slot' as const, offered, meta, desde: opts.desde ? opts.desde.toISOString() : state.desde, minHour };
   return {
     state: nextState,
     messages: [showSlotsMessage(nextState, offered, lead)],
@@ -379,7 +435,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       const req = parseSlotRequest(text);
       // Pidió un DÍA explícito distinto ("el martes", "mañana") → re-buscamos ese día.
       if (req.desde) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { desde: req.desde, turno: req.turno });
+        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { desde: req.desde, turno: req.turno, minHour: req.minHour });
       }
       // ¿Cambió de modalidad?
       const m = detectModalidad(text);
@@ -387,7 +443,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       // ¿Pidió otro turno/horario ("de tarde", "más temprano", "otro")? → re-buscar,
       // manteniendo el día que ya venía mirando (state.desde) si lo hay.
       if (req.isRequest) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined });
+        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined, minHour: req.minHour });
       }
       // No entendió: rotar la plantilla (en producción 22 convos loopearon con el
       // mismo "Decime qué horario preferís" repetido).

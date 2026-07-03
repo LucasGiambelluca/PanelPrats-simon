@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { AppointmentService } from './AppointmentService';
+import { isHolidayAR } from '../core/agent/context/holidays';
 
 export interface Office {
   id: string; account_id: string; nombre: string; modalidad: 'presencial' | 'video' | 'ambas';
@@ -177,6 +178,9 @@ export class AvailabilityService {
       const day = new Date(base.getTime() + dayOffset * 86400000);
       const { dia } = localParts(day);
       if (!office.dias.includes(dia)) continue;
+      // Excluir feriados nacionales AR: la fecha-calendario LOCAL del estudio de `day`.
+      const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(day);
+      if (isHolidayAR(ymd)) continue;
       const workStart = studioDateAt(day, sh || 9, sm || 0);
       const workEnd = studioDateAt(day, eh || 18, em || 0);
       if (workStart.getTime() > hasta) break; // pasado el fin de ventana → no seguir días

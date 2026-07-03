@@ -116,6 +116,20 @@ describe('AvailabilityService.freeSlots', () => {
     expect(apptList.mock.calls.length).toBeLessThanOrEqual(1); // …pero pide las citas 1 sola vez
   });
 
+  it('excluye feriados nacionales (9 de julio 2026): no ofrece slots ese día', async () => {
+    db.account_offices[0] = { ...OFICINA, slot_min: 60, capacidad: 1 };
+    apptList.mockResolvedValue([]);
+    const svc = new AvailabilityService();
+    // 2026-07-09 (jueves, día hábil) es feriado; now = ese día 09:00 AR (12:00Z).
+    const slots = await svc.freeSlots('acc1', 'CABA', { now: new Date('2026-07-09T12:00:00.000Z'), max: 3 } as any);
+    // Ningún slot cae en el 9 de julio (fecha local AR).
+    for (const s of slots) {
+      const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(s.start));
+      expect(ymd).not.toBe('2026-07-09');
+    }
+    expect(slots.length).toBeGreaterThan(0); // sí ofrece los días siguientes
+  });
+
   it('professionalId: sólo slots donde ese profesional está libre', async () => {
     db.account_offices[0] = { ...OFICINA, slot_min: 60, capacidad: 5 };
     db.office_professionals.push({ office_id: 'o1', profile_id: 'p1', activa: true });
