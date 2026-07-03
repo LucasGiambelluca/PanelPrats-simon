@@ -478,6 +478,9 @@ export interface FilaPendiente {
   tema: string | null;
   conversation_id: string;
   account_id: string;
+  llamado: boolean;
+  llamado_at: string | null;
+  llamado_por: string | null;
 }
 export interface PendientesResponse { total: number; filas: FilaPendiente[]; }
 
@@ -489,4 +492,9 @@ export const pendientesApi = {
     const qs = q.toString();
     return api<PendientesResponse>(`/api/pendientes-llamar${qs ? `?${qs}` : ''}`);
   },
+
+  marcar: (params: { accountId: string; telefono: string; llamado: boolean }) =>
+    api<{ ok: boolean; llamado: boolean; llamado_por?: string | null }>(
+      '/api/pendientes-llamar/marcar',
+      { method: 'POST', body: JSON.stringify({ account_id: params.accountId, telefono: params.telefono, llamado: params.llamado }) }),
 };
