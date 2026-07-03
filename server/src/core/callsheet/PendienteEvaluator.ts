@@ -65,6 +65,29 @@ function telefonoDesdeMemoria(contact: ContactMemoryRow | null): string | null {
   return parcial;
 }
 
+/** ¿El valor parece un PSID de FB/IG (todo dígitos y largo)? No sirve como nombre. */
+function esPsid(v: string): boolean {
+  return /^\d{11,}$/.test(v);
+}
+
+/** Nombre real del contacto en cualquier canal, nunca el PSID de FB. null si no hay. */
+export function nombreLimpio(conversation: ConversationRow, contact: ContactMemoryRow | null): string | null {
+  const candidatos: Array<string | null> = [
+    strOrNull(conversation.contact_name),
+    strOrNull(contact?.dialogue_state?.slots?.nombre?.valor),
+  ];
+  if (contact?.calificacion) {
+    for (const entry of Object.values(contact.calificacion)) {
+      candidatos.push(strOrNull((entry as any)?.datos?.nombre));
+    }
+  }
+  candidatos.push(strOrNull(contact?.current_thread?.datos_parciales?.nombre as unknown));
+  for (const c of candidatos) {
+    if (c && !esPsid(c)) return c;
+  }
+  return null;
+}
+
 /** Teléfono LLAMABLE del contacto, o null si no lo tenemos. */
 export function resolveCallablePhone(conversation: ConversationRow, contact: ContactMemoryRow | null): string | null {
   const canal: Canal = (conversation.channel ?? 'whatsapp') as Canal;
@@ -106,7 +129,7 @@ export function evaluarPendiente(input: {
 
   const canal: Canal = (conversation.channel ?? 'whatsapp') as Canal;
   const area = contact?.dialogue_state?.area ?? null;
-  const nombre = strOrNull(conversation.contact_name) ?? strOrNull(contact?.dialogue_state?.slots?.nombre?.valor);
+  const nombre = nombreLimpio(conversation, contact);
   const estado = conversation.closed_at
     ? `cerrada (${conversation.close_reason ?? 'sin motivo'})`
     : (conversation.status ?? 'BOT');

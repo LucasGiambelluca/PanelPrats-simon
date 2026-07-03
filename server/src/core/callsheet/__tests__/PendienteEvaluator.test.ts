@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluarPendiente, resolveCallablePhone, claveCita, type ConversationRow, type ContactMemoryRow } from '../PendienteEvaluator';
+import { evaluarPendiente, resolveCallablePhone, claveCita, nombreLimpio, type ConversationRow, type ContactMemoryRow } from '../PendienteEvaluator';
 
 const baseConv = (over: Partial<ConversationRow> = {}): ConversationRow => ({
   id: 'c1', account_id: 'a1', phone: '5492215093499', channel: 'whatsapp',
@@ -89,5 +89,30 @@ describe('evaluarPendiente', () => {
   it('estado cerrada muestra el motivo', () => {
     const conv = baseConv({ closed_at: '2026-07-02T00:00:00Z', close_reason: 'despedida' });
     expect(evaluarPendiente({ conversation: conv, contact: null, phonesConCita: vacio })!.estado).toBe('cerrada (despedida)');
+  });
+});
+
+describe('nombreLimpio', () => {
+  it('usa contact_name cuando es un nombre real', () => {
+    expect(nombreLimpio(baseConv({ contact_name: 'Juan Perez' }), null)).toBe('Juan Perez');
+  });
+  it('descarta un contact_name tipo-PSID (numérico largo) y cae al slot nombre', () => {
+    const conv = baseConv({ channel: 'facebook', contact_name: '24678901234567890' });
+    const contact: ContactMemoryRow = { dialogue_state: { slots: { nombre: { valor: 'María López' } } } } as any;
+    expect(nombreLimpio(conv, contact)).toBe('María López');
+  });
+  it('cae a calificacion.datos.nombre si no hay contact_name ni slot', () => {
+    const conv = baseConv({ channel: 'facebook', contact_name: null });
+    const contact: ContactMemoryRow = { calificacion: { jubilacion: { datos: { nombre: 'Pedro Gómez' } } } } as any;
+    expect(nombreLimpio(conv, contact)).toBe('Pedro Gómez');
+  });
+  it('cae a current_thread.datos_parciales.nombre como último recurso', () => {
+    const conv = baseConv({ channel: 'instagram', contact_name: null });
+    const contact: ContactMemoryRow = { current_thread: { datos_parciales: { nombre: 'Ana Ruiz' } } } as any;
+    expect(nombreLimpio(conv, contact)).toBe('Ana Ruiz');
+  });
+  it('devuelve null cuando no hay ningún nombre real (sólo PSID)', () => {
+    const conv = baseConv({ channel: 'facebook', contact_name: '24678901234567890' });
+    expect(nombreLimpio(conv, null)).toBeNull();
   });
 });
