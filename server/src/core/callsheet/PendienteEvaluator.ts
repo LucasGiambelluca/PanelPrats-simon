@@ -94,17 +94,26 @@ export function nombreLimpio(conversation: ConversationRow, contact: ContactMemo
 /** Teléfono LLAMABLE del contacto, o null si no lo tenemos. */
 export function resolveCallablePhone(conversation: ConversationRow, contact: ContactMemoryRow | null): string | null {
   const canal: Canal = (conversation.channel ?? 'whatsapp') as Canal;
+  // 1) WhatsApp con número real: el propio phone valida como teléfono AR.
   if (canal === 'whatsapp') {
     const v = validarTelefonoAR(conversation.phone);
-    if (v.normalizado) return v.normalizado;
-    const norm = PhoneUtils.normalize(conversation.phone);
-    return norm && /^\d+$/.test(norm) ? norm : null;
+    if (v.valido) return v.normalizado;
   }
-  // FB/IG: el phone es el PSID (no llamable). Necesitamos un teléfono real del chat.
+  // 2) Teléfono que el cliente dejó escrito en el chat (FB/IG, o WhatsApp cuyo phone es
+  //    un id de privacidad @lid sin número real).
   const cand = telefonoDesdeMemoria(contact);
-  if (!cand) return null;
-  const v = validarTelefonoAR(cand);
-  return v.valido ? v.normalizado : null;
+  if (cand) {
+    const v = validarTelefonoAR(cand);
+    if (v.valido) return v.normalizado;
+  }
+  // 3) Último recurso SOLO para WhatsApp: número internacional plausible (8-13 díg).
+  //    NUNCA un @lid ni un id de privacidad de 16-17 díg — esos NO son llamables y antes
+  //    se colaban como "teléfono" basura (bug: ~60% de la planilla eran ids @lid).
+  if (canal === 'whatsapp') {
+    const norm = PhoneUtils.normalize(conversation.phone);
+    if (norm && !norm.includes('@') && /^\d{8,13}$/.test(norm)) return norm;
+  }
+  return null;
 }
 
 /** Calificación (resultado) del área vigente, o la primera que haya. */

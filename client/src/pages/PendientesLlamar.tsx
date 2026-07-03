@@ -51,7 +51,7 @@ export default function PendientesLlamar() {
   const [range, setRange] = useState('all');
   const [canal, setCanal] = useState('all');
   const [calif, setCalif] = useState('all');
-  const [ocultarLlamados, setOcultarLlamados] = useState(true);
+  const [ocultarLlamados, setOcultarLlamados] = useState(false);
 
   const toggleLlamado = async (f: FilaPendiente) => {
     const nuevo = !f.llamado;
@@ -72,6 +72,10 @@ export default function PendientesLlamar() {
       .catch((e) => setError(e?.message ?? 'Error'))
       .finally(() => setLoading(false));
   }, [range]);
+
+  // Canales realmente presentes en los datos: hoy es todo WhatsApp, así que el filtro de
+  // canal solo se muestra si hay más de uno (antes ofrecía FB/IG y daba lista vacía).
+  const canalesPresentes = useMemo(() => Array.from(new Set(filas.map((f) => f.canal))), [filas]);
 
   const visibles = useMemo(() => filas.filter((f) =>
     (canal === 'all' || f.canal === canal) &&
@@ -97,10 +101,12 @@ export default function PendientesLlamar() {
         <select value={range} onChange={(e) => setRange(e.target.value)} className="border rounded-lg px-2 py-1 bg-white">
           {RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
-        <select value={canal} onChange={(e) => setCanal(e.target.value)} className="border rounded-lg px-2 py-1 bg-white">
-          <option value="all">Todos los canales</option>
-          <option value="whatsapp">WhatsApp</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option>
-        </select>
+        {canalesPresentes.length > 1 && (
+          <select value={canal} onChange={(e) => setCanal(e.target.value)} className="border rounded-lg px-2 py-1 bg-white">
+            <option value="all">Todos los canales</option>
+            {canalesPresentes.map((c) => <option key={c} value={c}>{CANAL_LABELS[c] ?? c}</option>)}
+          </select>
+        )}
         <select value={calif} onChange={(e) => setCalif(e.target.value)} className="border rounded-lg px-2 py-1 bg-white">
           <option value="all">Toda calificación</option>
           <option value="gratis">Gratis</option><option value="pago">Pago</option><option value="a_confirmar">A confirmar</option>
@@ -127,7 +133,7 @@ export default function PendientesLlamar() {
               {visibles.map((f) => (
                 <tr key={f.conversation_id} className={`border-t hover:bg-brand-panel/50 ${f.llamado ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2 whitespace-nowrap font-mono">
-                    <a className="text-brand-primary hover:underline" href={`https://wa.me/${f.telefono.startsWith('54') ? f.telefono.replace(/^54/, '549') : f.telefono}`} target="_blank" rel="noreferrer">{f.telefono}</a>
+                    <a className="text-brand-primary hover:underline" href={`whatsapp://send?phone=${f.telefono.startsWith('54') ? f.telefono.replace(/^54/, '549') : f.telefono}`} title="Abrir en WhatsApp Desktop">{f.telefono}</a>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{f.nombre ?? <span className="text-brand-inkmuted italic">Sin nombre</span>}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{CANAL_LABELS[f.canal] ?? f.canal}</td>

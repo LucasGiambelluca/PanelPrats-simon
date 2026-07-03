@@ -13,9 +13,12 @@ describe('resolveCallablePhone', () => {
     const r = resolveCallablePhone(baseConv({ phone: '5492215093499' }), null);
     expect(r).toBe('542215093499');
   });
-  it('WhatsApp con phone no-AR igual devuelve algo llamable (fallback normalize)', () => {
-    const r = resolveCallablePhone(baseConv({ phone: '123' }), null);
-    expect(r).toBe('123');
+  it('WhatsApp con id de privacidad @lid (17 díg, sin sufijo) → null (NO llamable)', () => {
+    expect(resolveCallablePhone(baseConv({ phone: '27460864876906568' }), null)).toBeNull();
+  });
+  it('WhatsApp con intl plausible no-AR (13 díg) → lo devuelve normalizado', () => {
+    // Brasil 55 + 11 987654321 → normalize lo deja igual (13 díg, dentro de 8-13).
+    expect(resolveCallablePhone(baseConv({ phone: '5511987654321' }), null)).toBe('5511987654321');
   });
   it('FB/IG sin teléfono en la memoria → null (PSID no es llamable)', () => {
     const conv = baseConv({ channel: 'facebook', phone: '27998877665544' });
