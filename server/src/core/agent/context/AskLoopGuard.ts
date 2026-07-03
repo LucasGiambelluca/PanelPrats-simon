@@ -17,8 +17,9 @@ export interface AskStreak { topic: AskTopic; count: number }
 const TOPIC_PATTERNS: Array<[AskTopic, RegExp]> = [
   ['insalubres', /insalubre|tareas? pesadas?|trabajo (pesado|insalubre)/],
   ['anio_ingreso', /ano.*ingreso|ingreso al pais|figura en el dni/],
-  ['aportes', /aportes?|anios? de aporte|cuanto aporto/],
-  ['nacionalidad', /argentino o extranjero|nacionalidad|es extranjero/],
+  ['aportes', /aportes?|anios? de aporte|cuanto aporto|trabajo en blanco|anos? en blanco/],
+  // "argentino"/"argentina" pelado alcanza: el bot solo lo dice al preguntar nacionalidad.
+  ['nacionalidad', /argentin|extranjer|nacionalidad|nacido en/],
   ['hijos', /cuantos hijos|tiene hijos/],
   ['edad', /cuantos anos tiene|su edad|que edad/],
   ['nombre', /su nombre|como se llama|a nombre de quien|me dice su nombre|decirme su nombre/],
@@ -50,9 +51,13 @@ export function clientAnswered(topic: AskTopic, clientText: string): boolean {
     case 'telefono':
       return (t.replace(/\D/g, '').length >= 8);
     case 'insalubres':
+      // "no sé / ni idea" es confusión, NO un "no" válido: no resetear el streak acá.
+      if (/\bno (se|lo se|sabria)\b|ni idea/.test(t)) return false;
       return /\b(si|sip|no|nop|tengo|tuve|nunca|jamas|tareas? insalubres?)\b/.test(t) || mencionaOficioInsalubre(t);
     case 'nacionalidad':
       return /argentin|extranjer|boliviano|paraguayo|peruano|chileno|uruguayo|nacido/.test(t);
+    // nombre/zona: heurística laxa a propósito. No son datos decisivos para gratis/pago,
+    // así que preferimos dar por respondido y avanzar antes que trabar el flujo. No tightenear.
     case 'nombre':
       return t.split(' ').some((w) => /^[a-z]{3,}$/.test(w) && !['hola', 'buenas', 'gracias', 'senor', 'senora'].includes(w));
     case 'zona':
@@ -88,5 +93,11 @@ export function escalationDirective(topic: AskTopic, count: number): string | nu
   if (count === 3) {
     return `Es tu ÚLTIMO intento por ${tema}: preguntalo de la forma más simple posible, con un ejemplo concreto. Si el cliente ya intentó responder, no insistas más.`;
   }
-  return `NO vuelvas a preguntar ${tema}. Registrá la calificación con lo que ya tenés: si ${tema} es necesario para decidir gratis/pago, llamá set_qualification con a_confirmar incluyendo "${topic}" y resultado "gratis"; si no es decisivo, seguí al paso siguiente (agendar). Nunca dejes al cliente esperando por ${tema}.`;
+  // count >= 4: rama según tipo de tema. Los de calificación deciden gratis/pago (registrar
+  // en a_confirmar); los logísticos (horario/teléfono/nombre/zona) solo hay que dejarlos y avanzar.
+  const esCalificacion = ['aportes', 'insalubres', 'nacionalidad', 'anio_ingreso', 'edad', 'hijos'].includes(topic);
+  if (esCalificacion) {
+    return `NO vuelvas a preguntar ${tema}. Registrá la calificación con lo que ya tenés: si ${tema} es necesario para decidir gratis/pago, llamá set_qualification con a_confirmar incluyendo "${topic}" y resultado "gratis"; si no es decisivo, seguí al paso siguiente (agendar). Nunca dejes al cliente esperando por ${tema}.`;
+  }
+  return `NO vuelvas a preguntar ${tema}. Dejá de insistir y avanzá al paso siguiente (agendar) con lo que ya tenés.`;
 }

@@ -16,6 +16,10 @@ describe('detectAskedTopic', () => {
   it('no confunde una afirmación con una pregunta de dato', () => {
     expect(detectAskedTopic('Perfecto, queda agendado.')).toBeNull();
   });
+  it('detecta nacionalidad con "argentino" pelado (fraseo más común)', () => {
+    expect(detectAskedTopic('¿es argentino?')).toBe('nacionalidad');
+    expect(detectAskedTopic('¿sos argentina?')).toBe('nacionalidad');
+  });
 });
 
 describe('clientAnswered', () => {
@@ -27,6 +31,13 @@ describe('clientAnswered', () => {
   it('sí/no responde insalubres', () => {
     expect(clientAnswered('insalubres', 'no, trabajé en un lavadero')).toBe(true);
     expect(clientAnswered('insalubres', 'mañana a la tarde')).toBe(false);
+  });
+  it('"no sé" NO cuenta como respuesta de insalubres (es la confusión que hay que cortar)', () => {
+    expect(clientAnswered('insalubres', 'no sé nada de eso')).toBe(false);
+    expect(clientAnswered('insalubres', 'no, nunca')).toBe(true);
+  });
+  it('aportes: "años en blanco" cuenta como respuesta', () => {
+    expect(clientAnswered('aportes', 'trabajé 20 años en blanco')).toBe(true);
   });
   it('argentino/extranjero responde nacionalidad', () => {
     expect(clientAnswered('nacionalidad', 'soy argentino')).toBe(true);
@@ -62,5 +73,12 @@ describe('escalationDirective', () => {
     const d = escalationDirective('aportes', 4);
     expect(d).toMatch(/NO vuelvas a preguntar/i);
     expect(d).toMatch(/a_confirmar/);
+  });
+  it('count>=4 en tema NO decisivo (horario) no habla de gratis/pago', () => {
+    const d = escalationDirective('horario', 4)!;
+    expect(d).toMatch(/NO vuelvas a preguntar/i);
+    expect(d).not.toMatch(/gratis/i);
+    expect(d).not.toMatch(/pago/i);
+    expect(d).not.toMatch(/a_confirmar/);
   });
 });
