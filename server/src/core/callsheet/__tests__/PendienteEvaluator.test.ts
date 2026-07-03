@@ -1,0 +1,75 @@
+import { describe, it, expect } from 'vitest';
+import { evaluarPendiente, resolveCallablePhone, type ConversationRow, type ContactMemoryRow } from '../PendienteEvaluator';
+
+const baseConv = (over: Partial<ConversationRow> = {}): ConversationRow => ({
+  id: 'c1', account_id: 'a1', phone: '5492215093499', channel: 'whatsapp',
+  contact_name: 'Juan Perez', last_message: 'gracias', last_message_at: '2026-07-01T12:00:00.000Z',
+  status: 'BOT', closed_at: null, close_reason: null, ...over,
+});
+
+describe('resolveCallablePhone', () => {
+  it('WhatsApp: teléfono real AR → normalizado 54+10', () => {
+    // 221 (La Plata) + 5093499 = 2215093499 (10 díg) → '542215093499'
+    const r = resolveCallablePhone(baseConv({ phone: '5492215093499' }), null);
+    expect(r).toBe('542215093499');
+  });
+  it('WhatsApp con phone no-AR igual devuelve algo llamable (fallback normalize)', () => {
+    const r = resolveCallablePhone(baseConv({ phone: '123' }), null);
+    expect(r).toBe('123');
+  });
+  it('FB/IG sin teléfono en la memoria → null (PSID no es llamable)', () => {
+    const conv = baseConv({ channel: 'facebook', phone: '27998877665544' });
+    expect(resolveCallablePhone(conv, null)).toBeNull();
+  });
+  it('FB/IG con teléfono real en slot telefono → normalizado', () => {
+    const conv = baseConv({ channel: 'instagram', phone: '27998877665544' });
+    const contact: ContactMemoryRow = { dialogue_state: { slots: { telefono: { valor: '011 4785-9600' } } } } as any;
+    expect(resolveCallablePhone(conv, contact)).toBe('541147859600');
+  });
+  it('FB/IG con teléfono inválido en slot → null', () => {
+    const conv = baseConv({ channel: 'facebook', phone: '27998877665544' });
+    const contact: ContactMemoryRow = { dialogue_state: { slots: { telefono: { valor: 'no tengo' } } } } as any;
+    expect(resolveCallablePhone(conv, contact)).toBeNull();
+  });
+});
+
+describe('evaluarPendiente', () => {
+  const vacio = new Set<string>();
+  it('WhatsApp sin cita, sin opt_out → fila con datos', () => {
+    const contact: ContactMemoryRow = {
+      opt_out: false,
+      dialogue_state: { area: 'jubilacion_mujer', slots: {} },
+      calificacion: { jubilacion_mujer: { resultado: 'gratis' } },
+      last_topic: 'jubilación',
+    } as any;
+    const fila = evaluarPendiente({ conversation: baseConv(), contact, phonesConCita: vacio });
+    expect(fila).not.toBeNull();
+    expect(fila!.telefono).toBe('542215093499');
+    expect(fila!.nombre).toBe('Juan Perez');
+    expect(fila!.canal).toBe('whatsapp');
+    expect(fila!.area).toBe('jubilacion_mujer');
+    expect(fila!.calificacion).toBe('gratis');
+    expect(fila!.conversation_id).toBe('c1');
+  });
+  it('opt_out → null', () => {
+    const contact = { opt_out: true } as any;
+    expect(evaluarPendiente({ conversation: baseConv(), contact, phonesConCita: vacio })).toBeNull();
+  });
+  it('con cita (teléfono en el set) → null', () => {
+    const con = new Set(['542215093499']);
+    expect(evaluarPendiente({ conversation: baseConv(), contact: null, phonesConCita: con })).toBeNull();
+  });
+  it('sin teléfono llamable (FB/IG sin slot) → null', () => {
+    const conv = baseConv({ channel: 'facebook', phone: '27998877665544' });
+    expect(evaluarPendiente({ conversation: conv, contact: null, phonesConCita: vacio })).toBeNull();
+  });
+  it('nombre cae al slot nombre si no hay contact_name', () => {
+    const conv = baseConv({ contact_name: null });
+    const contact = { opt_out: false, dialogue_state: { slots: { nombre: { valor: 'Ana' } } } } as any;
+    expect(evaluarPendiente({ conversation: conv, contact, phonesConCita: vacio })!.nombre).toBe('Ana');
+  });
+  it('estado cerrada muestra el motivo', () => {
+    const conv = baseConv({ closed_at: '2026-07-02T00:00:00Z', close_reason: 'despedida' });
+    expect(evaluarPendiente({ conversation: conv, contact: null, phonesConCita: vacio })!.estado).toBe('cerrada (despedida)');
+  });
+});
