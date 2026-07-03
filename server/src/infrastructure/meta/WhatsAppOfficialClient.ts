@@ -81,6 +81,53 @@ export class WhatsAppOfficialClient implements ChannelClient {
     }
   }
 
+  /** Envía un mensaje de plantilla (template) por Cloud API, ej. recordatorios fuera de la ventana de 24h. */
+  async sendTemplate(
+    to: string,
+    name: string,
+    lang: string,
+    components: unknown[],
+    preview?: string,
+  ): Promise<void> {
+    if (!this.config.accessToken || !this.config.phone_number_id) {
+      logger.warn(`[WhatsAppOfficialClient:${this.accountId}] Falta accessToken o phone_number_id, no se puede enviar template.`);
+      return;
+    }
+    const cleanPhone = to.replace('@s.whatsapp.net', '');
+
+    try {
+      await withRetry(
+        () => axios.post(
+          `${GRAPH_BASE}/${this.config.phone_number_id}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'template',
+            template: { name, language: { code: lang }, components },
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${this.config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        ),
+        { label: `WhatsAppOfficialClient:${this.accountId} sendTemplate` },
+      );
+
+      await this.store.record({
+        accountId: this.accountId,
+        phone: cleanPhone,
+        direction: 'OUTBOUND',
+        content: preview ?? `[template: ${name}]`,
+        messageType: 'template',
+      });
+    } catch (err: any) {
+      await this.handleSendError(err, `enviando template a ${cleanPhone}`);
+    }
+  }
+
   /**
    * Maneja errores de envío. Si el error es de auth (HTTP 401 o code 190 =
    * token vencido/inválido), marca la línea DESCONECTADA en la DB para que el

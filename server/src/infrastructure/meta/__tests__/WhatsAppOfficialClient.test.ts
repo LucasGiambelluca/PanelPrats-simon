@@ -82,3 +82,32 @@ describe('WhatsAppOfficialClient.handleWebhookEvent', () => {
     expect(posts[0].body.interactive).toEqual(interactive);
   });
 });
+
+describe('WhatsAppOfficialClient.sendTemplate', () => {
+  beforeEach(() => { posts.length = 0; });
+
+  it('postea type:template a la Graph API', async () => {
+    const store = { record: vi.fn().mockResolvedValue(undefined) } as any;
+    const onMsg = vi.fn();
+    const client = new WhatsAppOfficialClient('acc1', cfg, onMsg, store);
+
+    const components = [{ type: 'body', parameters: [{ type: 'text', text: 'María' }] }];
+    await client.sendTemplate('5492215093499', 'recordatorio_cita_24h', 'es_AR', components as any, 'Hola María…');
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body.type).toBe('template');
+    expect(posts[0].body.template).toEqual({
+      name: 'recordatorio_cita_24h',
+      language: { code: 'es_AR' },
+      components,
+    });
+    expect(posts[0].body.to).toBe('5492215093499');
+    expect(store.record).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'acc1',
+      phone: '5492215093499',
+      direction: 'OUTBOUND',
+      content: 'Hola María…',
+      messageType: 'template',
+    }));
+  });
+});
