@@ -181,19 +181,23 @@ export default function WhatsAppInbox() {
   // Deep-link desde la Agenda: /inbox?account=&phone= → abre esa conversación.
   // Forzamos bandeja unificada para garantizar que la conversación esté cargada.
   useEffect(() => {
-    if (searchParams.get('phone')) setAllLines(true);
+    if (searchParams.get('phone') || searchParams.get('conv')) setAllLines(true);
     // sólo al montar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
+    const convId = searchParams.get('conv');
     const ph = searchParams.get('phone');
-    if (!ph || deepLinkedRef.current || conversations.length === 0) return;
-    const acc = searchParams.get('account');
-    const target = normPhone(ph);
-    const match =
-      conversations.find(c => normPhone(c.phone) === target && (!acc || c.account_id === acc)) ||
-      conversations.find(c => normPhone(c.phone) === target);
+    if ((!convId && !ph) || deepLinkedRef.current || conversations.length === 0) return;
     deepLinkedRef.current = true;
+    let match = convId ? conversations.find(c => c.id === convId) : undefined;
+    if (!match && ph) {
+      const acc = searchParams.get('account');
+      const target = normPhone(ph);
+      match =
+        conversations.find(c => normPhone(c.phone) === target && (!acc || c.account_id === acc)) ||
+        conversations.find(c => normPhone(c.phone) === target);
+    }
     if (match) {
       setActiveConvo(match);
       setTimeout(() => textareaRef.current?.focus(), 100);

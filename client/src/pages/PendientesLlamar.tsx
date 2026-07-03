@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { pendientesApi, type FilaPendiente } from '../lib/api';
 
 const AREA_LABELS: Record<string, string> = {
@@ -20,7 +21,7 @@ function fmtFecha(iso: string | null): string {
 }
 
 function toCSV(filas: FilaPendiente[]): string {
-  const head = ['Telefono', 'Nombre', 'Canal', 'Area', 'Calificacion', 'Estado', 'Ultimo tema', 'Ultimo mensaje', 'Fecha'];
+  const head = ['Telefono', 'Nombre', 'Canal', 'Area', 'Calificacion', 'Estado', 'Ultimo tema', 'Ultimo mensaje', 'Fecha', 'Llamado'];
   const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const rows = filas.map((f) => [
     // Teléfono como texto (prefijo tab) para que Excel no coma el 0/15 ni lo pase a notación científica.
@@ -28,6 +29,7 @@ function toCSV(filas: FilaPendiente[]): string {
     f.nombre ?? '', CANAL_LABELS[f.canal] ?? f.canal, f.area ? (AREA_LABELS[f.area] ?? f.area) : '',
     f.calificacion ? (CALIF_LABELS[f.calificacion] ?? f.calificacion) : '',
     f.estado, f.tema ?? '', (f.ultimo_mensaje ?? '').replace(/\s+/g, ' ').slice(0, 200), fmtFecha(f.fecha),
+    f.llamado ? `sí (${fmtFecha(f.llamado_at)})` : 'no',
   ].map((c) => esc(String(c))).join(','));
   return [head.map(esc).join(','), ...rows].join('\r\n');
 }
@@ -49,6 +51,19 @@ export default function PendientesLlamar() {
   const [range, setRange] = useState('all');
   const [canal, setCanal] = useState('all');
   const [calif, setCalif] = useState('all');
+  const [ocultarLlamados, setOcultarLlamados] = useState(true);
+
+  const toggleLlamado = async (f: FilaPendiente) => {
+    const nuevo = !f.llamado;
+    // Optimista: actualizo la fila en memoria; si falla, revierto.
+    setFilas((prev) => prev.map((x) => x.conversation_id === f.conversation_id
+      ? { ...x, llamado: nuevo, llamado_at: nuevo ? new Date().toISOString() : null } : x));
+    try {
+      await pendientesApi.marcar({ accountId: f.account_id, telefono: f.telefono, llamado: nuevo });
+    } catch {
+      setFilas((prev) => prev.map((x) => x.conversation_id === f.conversation_id ? { ...x, llamado: f.llamado, llamado_at: f.llamado_at } : x));
+    }
+  };
 
   useEffect(() => {
     setLoading(true); setError(null);
@@ -59,8 +74,10 @@ export default function PendientesLlamar() {
   }, [range]);
 
   const visibles = useMemo(() => filas.filter((f) =>
-    (canal === 'all' || f.canal === canal) && (calif === 'all' || f.calificacion === calif)
-  ), [filas, canal, calif]);
+    (canal === 'all' || f.canal === canal) &&
+    (calif === 'all' || f.calificacion === calif) &&
+    (!ocultarLlamados || !f.llamado)
+  ), [filas, canal, calif, ocultarLlamados]);
 
   return (
     <div className="p-4 sm:p-6 max-w-full">
@@ -88,6 +105,10 @@ export default function PendientesLlamar() {
           <option value="all">Toda calificación</option>
           <option value="gratis">Gratis</option><option value="pago">Pago</option><option value="a_confirmar">A confirmar</option>
         </select>
+        <label className="flex items-center gap-2 px-2 py-1 select-none">
+          <input type="checkbox" checked={ocultarLlamados} onChange={(e) => setOcultarLlamados(e.target.checked)} />
+          Ocultar llamados
+        </label>
       </div>
 
       {loading && <p className="text-brand-inkmuted text-sm">Cargando…</p>}
@@ -97,28 +118,38 @@ export default function PendientesLlamar() {
           <table className="min-w-full text-sm">
             <thead className="bg-brand-panel text-brand-inkmuted">
               <tr>
-                {['Teléfono', 'Nombre', 'Canal', 'Área', 'Calificación', 'Estado', 'Tema', 'Fecha'].map((h) => (
+                {['Teléfono', 'Nombre', 'Canal', 'Área', 'Calificación', 'Estado', 'Tema', 'Fecha', 'Acciones'].map((h) => (
                   <th key={h} className="text-left font-semibold px-3 py-2 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {visibles.map((f) => (
-                <tr key={f.conversation_id} className="border-t hover:bg-brand-panel/50">
+                <tr key={f.conversation_id} className={`border-t hover:bg-brand-panel/50 ${f.llamado ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2 whitespace-nowrap font-mono">
                     <a className="text-brand-primary hover:underline" href={`https://wa.me/${f.telefono.startsWith('54') ? f.telefono.replace(/^54/, '549') : f.telefono}`} target="_blank" rel="noreferrer">{f.telefono}</a>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{f.nombre ?? '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{f.nombre ?? <span className="text-brand-inkmuted italic">Sin nombre</span>}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{CANAL_LABELS[f.canal] ?? f.canal}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{f.area ? (AREA_LABELS[f.area] ?? f.area) : '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{f.calificacion ? (CALIF_LABELS[f.calificacion] ?? f.calificacion) : '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{f.estado}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate" title={f.tema ?? ''}>{f.tema ?? '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtFecha(f.fecha)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Link to={`/inbox?conv=${f.conversation_id}`} className="text-brand-primary hover:underline">Ir al chat</Link>
+                      <button
+                        onClick={() => toggleLlamado(f)}
+                        title={f.llamado && f.llamado_por ? `Llamado por ${f.llamado_por}` : ''}
+                        className={`px-2 py-0.5 rounded text-xs font-semibold ${f.llamado ? 'bg-green-100 text-green-800' : 'bg-brand-gold text-brand-ink'}`}
+                      >{f.llamado ? '✓ Llamado' : '☎ Marcar llamado'}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!visibles.length && (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-brand-inkmuted">Nadie pendiente con estos filtros.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-6 text-center text-brand-inkmuted">Nadie pendiente con estos filtros.</td></tr>
               )}
             </tbody>
           </table>
