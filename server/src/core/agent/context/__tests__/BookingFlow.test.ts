@@ -317,6 +317,25 @@ describe('parseSlotRequest minHour', () => {
   it('minHour hace isRequest=true', () => {
     expect(parseSlotRequest('después de las 3 y media', now).isRequest).toBe(true);
   });
+  // Guardas: números que NO son hora no deben volverse minHour (bloquearían la cita).
+  it('"dentro de 15 días" (duración) → undefined', () => {
+    expect(parseSlotRequest('¿tenés algo dentro de 15 días?', now).minHour).toBeUndefined();
+  });
+  it('"en un plazo de 20 días" (duración) → undefined', () => {
+    expect(parseSlotRequest('lo necesito en un plazo de 20 días', now).minHour).toBeUndefined();
+  });
+  it('"antes de las 15" (techo, no piso) → undefined', () => {
+    expect(parseSlotRequest('necesito algo antes de las 15', now).minHour).toBeUndefined();
+  });
+  it('"no puedo antes de las 4 de la tarde" (negación → piso) → 16', () => {
+    expect(parseSlotRequest('no puedo antes de las 4 de la tarde', now).minHour).toBe(16);
+  });
+  it('"después de las 7 de la mañana" (AM veta el +12) → 7', () => {
+    expect(parseSlotRequest('después de las 7 de la mañana', now).minHour).toBe(7);
+  });
+  it('"tengo 5 hijos" (cantidad) → undefined', () => {
+    expect(parseSlotRequest('tengo 5 hijos y no puedo temprano', now).minHour).toBeUndefined();
+  });
 });
 
 describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
@@ -350,6 +369,19 @@ describe('BookingFlow — respeta la hora mínima pedida (Fix 1)', () => {
     const offered = (step.state.offered ?? []).map((o) => o.value);
     expect(offered.length).toBeGreaterThan(0);
     for (const v of offered) expect(decAR(v)).toBeGreaterThanOrEqual(15.5);
+  });
+
+  it('pedir "a la mañana" REEMPLAZA la cota vieja (no esconde las mañanas)', async () => {
+    const deps = makeDeps({ freeSlots: vi.fn(async () => SLOTS_HH) });
+    const start = await startBooking({ modalidad: 'presencial', zona: 'Lanús' }, deps);
+    let step = await advanceBooking(start.state, 'a partir de las 15:30', deps);
+    expect(step.state.minHour).toBe(15.5);
+    // Cambia de idea: ahora quiere mañana → la cota se descarta y ofrece slots <12.
+    step = await advanceBooking(step.state, 'uf, mejor a la mañana', deps);
+    expect(step.state.minHour).toBeUndefined();
+    const offered = (step.state.offered ?? []).map((o) => o.value);
+    expect(offered.length).toBeGreaterThan(0);
+    for (const v of offered) expect(decAR(v)).toBeLessThan(12);
   });
 });
 

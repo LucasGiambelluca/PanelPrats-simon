@@ -119,8 +119,13 @@ function extractMinHour(t: string): number | undefined {
   // "pasado el mediodía" / "después del mediodía" → 13.
   if (/\b(pasad[oa]s?|despues del?)\s+(el\s+)?mediodia\b/.test(t)) return 13;
 
+  // "antes de las N" es un TECHO, no un piso: ignorar salvo negación ("no puedo antes
+  // de las 4") o "recién". Sin esta guarda, "antes de las 15" invertía la restricción.
+  if (/\bantes de\b/.test(t) && !/\b(no|recien)\b/.test(t)) return undefined;
+
   // Busca una cota inferior: "(después/a partir/no antes/recién/pasadas/desde/de) [las] HH[:MM] [y media/cuarto]".
-  const m = t.match(/(?:despues de(?:l)?|a partir de|no antes de|recien(?:\s+despues de)?|pasad[oa]s?|desde|de)\s+(?:las?\s+)?(\d{1,2})(?:[:.](\d{2}))?(?:\s*y\s+(media|cuarto))?/);
+  // Lookahead negativo: el número NO puede ser una duración/cantidad ("15 días", "5 hijos") — eso no es hora.
+  const m = t.match(/(?:despues de(?:l)?|a partir de|no antes de|recien(?:\s+despues de)?|pasad[oa]s?|desde|de)\s+(?:las?\s+)?(\d{1,2})(?!\d)(?!\s*(?:dias?|anos?|anios?|meses|semanas?|cuadras|hijos|personas|minutos|km|kilometros|millones|mil))(?:[:.](\d{2}))?(?:\s*y\s+(media|cuarto))?/);
   if (!m) return undefined;
   let hour = Number(m[1]);
   let min = m[2] ? Number(m[2]) : 0;
@@ -129,8 +134,10 @@ function extractMinHour(t: string): number | undefined {
   if (hour > 23 || min > 59) return undefined;
 
   // Contexto de tarde: número ≤7 junto a "tarde"/"pm"/"después" → asumimos PM (+12).
+  // PERO si dice mañana explícita ("de la mañana"/"am"), NO sumamos 12 ("7 de la mañana" = 7).
   const tardeCtx = /\b(tarde|pm)\b/.test(t) || /\bdespues\b/.test(t);
-  if (hour < 8 && tardeCtx) hour += 12;
+  const amCtx = /\b(de|a|por)\s+la\s+manana\b/.test(t) || /\b(am|madrugada)\b/.test(t);
+  if (hour < 8 && tardeCtx && !amCtx) hour += 12;
 
   const dec = hour + min / 60;
   if (dec < 0 || dec > 23.99) return undefined;
@@ -433,9 +440,12 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
         return { state: { ...withSlot, stage: 'ask_name' as const }, messages: ['Perfecto. ¿A nombre de quién agendo la consulta?'], active: true };
       }
       const req = parseSlotRequest(text);
+      // Un TURNO explícito ("a la mañana") reemplaza la cota vieja; un cambio de día la conserva.
+      const keepMin = req.turno ? undefined : state.minHour;
+      const effMin = req.minHour ?? keepMin;
       // Pidió un DÍA explícito distinto ("el martes", "mañana") → re-buscamos ese día.
       if (req.desde) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { desde: req.desde, turno: req.turno, minHour: req.minHour });
+        return loadSlots({ ...state, minHour: effMin, offered: undefined, meta: undefined, askRetries: 0 }, deps, { desde: req.desde, turno: req.turno, minHour: effMin });
       }
       // ¿Cambió de modalidad?
       const m = detectModalidad(text);
@@ -443,7 +453,7 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       // ¿Pidió otro turno/horario ("de tarde", "más temprano", "otro")? → re-buscar,
       // manteniendo el día que ya venía mirando (state.desde) si lo hay.
       if (req.isRequest) {
-        return loadSlots({ ...state, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined, minHour: req.minHour });
+        return loadSlots({ ...state, minHour: effMin, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined, minHour: effMin });
       }
       // No entendió: rotar la plantilla (en producción 22 convos loopearon con el
       // mismo "Decime qué horario preferís" repetido).
