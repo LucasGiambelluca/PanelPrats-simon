@@ -18,6 +18,8 @@ describe('sanitizeProspect — saneadores', () => {
     expect(r.slots.telefono).toBe('541151749871');  // ajustar al normalizado REAL de validarTelefonoAR
     expect(r.slots.modalidad).toBe('presencial');
     expect(r.slots.hijos).toBe(2);
+    expect(r.slots.urgencia).toBe('normal');
+    expect(r.slots.mejor_horario).toBe('a la tarde');
   });
 
   it('valores fuera de rango o inválidos se DESCARTAN sin romper el resto', () => {
