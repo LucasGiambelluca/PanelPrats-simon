@@ -16,6 +16,7 @@ import {
 } from '../context/DialogueState';
 import { norm } from '../context/normalize';
 import { detectAskedTopic, clientAnswered, nextStreak, escalationDirective, slotDetected } from '../context/AskLoopGuard';
+import { shouldExtract, type ProspectResult } from '../context/ProspectExtractor';
 
 // Despedida/acuse PURO: todos los tokens pertenecen al vocabulario de cierre.
 // Emojis y signos los elimina norm(). Texto vacío tras norm (solo emojis) cuenta como ack.
@@ -37,6 +38,9 @@ export function isBareAck(text: string): boolean {
 
 export interface ControllerDeps {
   classify: (text: string, ctx: IntentContext) => Promise<IntentResult>;
+  // Extracción profunda de datos (spec extractor P1): corre en paralelo al clasificador
+  // SOLO en mensajes ricos (shouldExtract). Best-effort: falla → null y el turno sigue.
+  extract?: (text: string, ctx: { history: Array<{ role: 'user' | 'assistant'; content: string }> }) => Promise<ProspectResult | null>;
   // Historial reciente (ambas direcciones) para darle CONTEXTO al clasificador: sin
   // esto, respuestas cortas ("Argentino", "a la tarde") se confunden con off_topic.
   history?: (accountId: string, phone: string) => Promise<Array<{ role: 'user' | 'assistant'; content: string }>>;
@@ -79,6 +83,7 @@ export class ConversationController {
   ): Promise<ControllerOutcome> {
     const {
       classify,
+      extract,
       history: loadHistory,
       loadState,
       saveState,
@@ -112,10 +117,23 @@ export class ConversationController {
       state2 = { ...state, cerrada: false, cierre_motivo: null, fase: 'consulta', redirecciones_offtopic: 0 };
     }
 
-    // ── Detectar área + clasificar intención (con historial como contexto) ─────
-    const area = detectArea(text) ?? state2.area;
+    // ── Detectar área + clasificar + extraer (extractor en PARALELO: cero latencia extra) ─
+    let area = detectArea(text) ?? state2.area;
     const hist = loadHistory ? await loadHistory(accountId, phone).catch(() => []) : [];
-    const intent = await classify(text, { dialogueState: state2, area, history: hist });
+    const wantExtract = !!extract && shouldExtract({
+      text, historyLength: hist.length,
+      extractorLastAt: state2.extractor_last_at ?? null, now: now(),
+    });
+    const [intent, prospect] = await Promise.all([
+      classify(text, { dialogueState: state2, area, history: hist }),
+      wantExtract ? extract!(text, { history: hist }).catch(() => null) : Promise.resolve(null),
+    ]);
+    // Merge del extractor ANTES del turno (la fase 5 mergea los slots del clasificador
+    // DESPUÉS → en un empate gana el clasificador, que es específico de este turno).
+    if (prospect) {
+      state2 = mergeSlots({ ...state2, extractor_last_at: now() }, prospect.slots);
+      if (!area && prospect.area) area = prospect.area;
+    }
 
     // ── Helper: persistir SIEMPRE y devolver resolved ──────────────────────────
     const finish = async (

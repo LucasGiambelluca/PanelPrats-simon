@@ -400,3 +400,78 @@ describe('ask_streak → directiva en advance', () => {
     expect(saved.ask_streak).toBeNull();
   });
 });
+
+// ─── ProspectExtractor integrado: extractor en paralelo al clasificador ──────
+
+function extractorDeps(overrides: Partial<ControllerDeps> = {}): { deps: ControllerDeps; saved: any[] } {
+  const saved: any[] = [];
+  const deps: ControllerDeps = {
+    classify: async () => ({
+      intent: 'responder_dato', quiere_continuar: true, nivel_frustracion: 0,
+      es_cierre: false, slots_detectados: {}, confianza: 0.9,
+    }),
+    history: async () => [],
+    loadState: async () => null,
+    saveState: async (_a, _p, s) => { saved.push(s); },
+    setOptOut: async () => {},
+    closeConversation: async () => {},
+    handoff: async () => {},
+    redactar: async (obj) => `[msg:${obj.slice(0, 20)}]`,
+    detectArea: () => null,
+    now: () => '2026-07-06T15:00:00.000Z',
+    ...overrides,
+  };
+  return { deps, saved };
+}
+
+describe('ConversationController — ProspectExtractor integrado', () => {
+  it('primer mensaje: llama extract y mergea slots + area al estado', async () => {
+    let extractCalled = false;
+    const { deps, saved } = extractorDeps({
+      extract: async () => { extractCalled = true; return { slots: { nombre: 'Ana', edad: 63 }, area: 'jubilacion' }; },
+    });
+    const c = new ConversationController(deps);
+    await c.handleTurn('acc', '549x', 'Hola soy Ana, 63 años, quiero jubilarme');
+    expect(extractCalled).toBe(true);
+    const final = saved[saved.length - 1];
+    expect(final.slots.nombre?.valor).toBe('Ana');
+    expect(final.slots.edad?.valor).toBe(63);
+    expect(final.area).toBe('jubilacion');
+    expect(final.extractor_last_at).toBe('2026-07-06T15:00:00.000Z');
+  });
+
+  it('mensaje corto con historial: NO llama extract', async () => {
+    let extractCalled = false;
+    const { deps } = extractorDeps({
+      history: async () => [{ role: 'assistant', content: '¿Su edad?' }],
+      extract: async () => { extractCalled = true; return { slots: {}, area: null }; },
+    });
+    const c = new ConversationController(deps);
+    await c.handleTurn('acc', '549x', '63');
+    expect(extractCalled).toBe(false);
+  });
+
+  it('extract rechaza (promise reject) → el turno sigue normal', async () => {
+    const { deps, saved } = extractorDeps({
+      extract: async () => { throw new Error('api caída'); },
+    });
+    const c = new ConversationController(deps);
+    const out = await c.handleTurn('acc', '549x', 'Hola soy Ana, 63 años');
+    expect(out.kind === 'resolved' || out.kind === 'advance').toBe(true);
+    expect(saved.length).toBeGreaterThan(0);
+  });
+
+  it('el clasificador GANA sobre el extractor en el mismo slot (fase 5 mergea después)', async () => {
+    const { deps, saved } = extractorDeps({
+      classify: async () => ({
+        intent: 'responder_dato', quiere_continuar: true, nivel_frustracion: 0,
+        es_cierre: false, slots_detectados: { edad: 64 }, confianza: 0.9,
+      }),
+      extract: async () => ({ slots: { edad: 63 }, area: null }),
+    });
+    const c = new ConversationController(deps);
+    await c.handleTurn('acc', '549x', 'Perdón, tengo 64, no 63. Como le decía, aporté 30 años en relación de dependencia y vivo en Quilmes centro.');
+    const final = saved[saved.length - 1];
+    expect(final.slots.edad?.valor).toBe(64);
+  });
+});
