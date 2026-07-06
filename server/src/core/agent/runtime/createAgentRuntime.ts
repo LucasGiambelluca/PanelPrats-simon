@@ -19,8 +19,9 @@ import { detectBookingIntent, detectRescheduleIntent } from '../context/BookingF
 import { detectArea } from '../context/AreaDetector';
 import { ConversationController } from './ConversationController';
 import { classifyIntent } from '../context/IntentClassifier';
-import { createDialogueState } from '../context/DialogueState';
+import { createDialogueState, buildDatosAportados, slotsPrefill } from '../context/DialogueState';
 import { hasCalificacionVigente, pickVigenteCalificacion, QUALIFICATION_AREAS } from '../context/QualificationRules';
+import { extractProspect } from '../context/ProspectExtractor';
 
 // Redacta UN mensaje (pregunta de slot / redirección off-topic) con la persona REAL
 // del estudio + el OBJETIVO inyectado por el controller. El LLM SOLO redacta; el flujo
@@ -221,6 +222,9 @@ export function getAgentRuntime(): AgentRuntime {
   const conversationController = new ConversationController({
     // gpt-4o para clasificar (más preciso en frases cortas ambiguas que el mini).
     classify: (text, cctx) => classifyIntent({ complete: (o) => AIService.complete(o) }, { text, ctx: cctx, model: 'gpt-4o' }),
+    // Extracción profunda en mensajes ricos (1er mensaje / ≥120 chars). gpt-4o:
+    // corre poco (tope 1/día por conversación) y es el turno que más plata vale.
+    extract: (text, ectx) => extractProspect({ complete: (o) => AIService.complete(o) }, { text, history: ectx.history, model: 'gpt-4o' }),
     history: (a, p) => recentHistory(a, p),
     loadState: (a, p) => memory.getDialogueState(a, p),
     saveState: (a, p, s) => memory.saveDialogueState(a, p, s),
@@ -284,7 +288,20 @@ export function getAgentRuntime(): AgentRuntime {
     bookingIntent: detectBookingIntent,
     rescheduleIntent: detectRescheduleIntent,
     areaDetector: detectArea,
-    conversation: { handleTurn: (a, p, t) => conversationController.handleTurn(a, p, t) },
+    conversation: {
+      handleTurn: async (a, p, t) => {
+        const o = await conversationController.handleTurn(a, p, t);
+        if (o.kind === 'resolved') return o;
+        // El estado del turno sale del controller: de ahí el bloque para el prompt
+        // y el prefill de agendado (spec extractor P2).
+        return {
+          kind: 'advance' as const,
+          directive: o.directive,
+          datosAportados: buildDatosAportados(o.state),
+          prefill: slotsPrefill(o.state),
+        };
+      },
+    },
     // LoopGuard: estado persistido en contact_memory (sobrevive reinicios del VPS);
     // al tocar el tope con action=handoff reusa el handover real (bot calla, pasa a Atención).
     loopGuard: {
