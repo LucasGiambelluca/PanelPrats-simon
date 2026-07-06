@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeProspect, shouldExtract } from '../ProspectExtractor';
+import { sanitizeProspect, shouldExtract, extractProspect } from '../ProspectExtractor';
+import { detectArea as detectAreaOf } from '../AreaDetector';
 
 describe('sanitizeProspect — saneadores', () => {
   it('mensaje rico completo → todos los slots saneados', () => {
@@ -63,5 +64,37 @@ describe('shouldExtract — cuándo corre la pasada profunda', () => {
   it('tope 1/día: ya corrió hoy → false; corrió ayer → true', () => {
     expect(shouldExtract({ text: 'x'.repeat(200), historyLength: 2, extractorLastAt: '2026-07-06T09:00:00.000Z', now: NOW })).toBe(false);
     expect(shouldExtract({ text: 'x'.repeat(200), historyLength: 2, extractorLastAt: '2026-07-05T09:00:00.000Z', now: NOW })).toBe(true);
+  });
+});
+
+describe('extractProspect — LLM mockeado', () => {
+  it('mensaje rico → JSON del modelo saneado y con área', async () => {
+    const ai = {
+      complete: async () => JSON.stringify({
+        nombre: 'Ana López', edad: 63, anios_aporte: 30, localidad: 'Quilmes',
+        genero: 'f', area_texto: 'quiero jubilarme',
+      }),
+    };
+    const r = await extractProspect(ai, { text: 'Hola soy Ana López, tengo 63 años, 30 de aportes, vivo en Quilmes, quiero jubilarme' });
+    expect(r.slots).toMatchObject({ nombre: 'Ana López', edad: 63, anios_aporte: 30, zona: 'Quilmes', genero: 'f' });
+    expect(r.area).toMatch(/^jubilacion/);
+  });
+
+  it('modelo devuelve basura no-JSON → slots vacíos, área solo del regex del texto', async () => {
+    const ai = { complete: async () => 'no puedo ayudarte con eso' };
+    const r = await extractProspect(ai, { text: 'hola' });
+    expect(r).toEqual({ slots: {}, area: detectAreaOf('hola') });
+  });
+
+  it('IA tira excepción → vacío, sin throw', async () => {
+    const ai = { complete: async () => { throw new Error('sin saldo'); } };
+    const r = await extractProspect(ai, { text: 'hola' });
+    expect(r).toEqual({ slots: {}, area: null });
+  });
+
+  it('markdown fences se limpian', async () => {
+    const ai = { complete: async () => '```json\n{"edad": 70}\n```' };
+    const r = await extractProspect(ai, { text: 'hola tengo setenta' });
+    expect(r.slots.edad).toBe(70);
   });
 });
