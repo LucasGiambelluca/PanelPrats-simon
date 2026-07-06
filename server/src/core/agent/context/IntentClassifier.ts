@@ -40,6 +40,13 @@ const INTENT_LABELS: IntentLabel[] = [
   'negacion', 'despedida', 'opt_out', 'off_topic', 'frustracion', 'otro',
 ];
 
+// Claves de slots PERMITIDAS — mismo esquema que ProspectExtractor (spec P3).
+// Cualquier otra clave que invente el modelo se descarta en el sanitizador.
+export const SLOT_KEYS = new Set([
+  'nombre', 'dni', 'edad', 'anios_aporte', 'fecha', 'hora', 'modalidad',
+  'zona', 'nacionalidad', 'telefono', 'genero', 'hijos', 'urgencia', 'mejor_horario',
+]);
+
 // ─── Fallback neutro ───────────────────────────────────────────────────────────
 const NEUTRAL_FALLBACK: IntentResult = {
   intent: 'otro',
@@ -72,7 +79,7 @@ const CLASSIFY_PROMPT = [
   '- "off_topic" SOLO si el tema es ajeno al estudio (jubilación, pensión, laboral, ART,',
   '  accidentes). Una respuesta breve a lo que se venía hablando NO es off_topic.',
   '- "slots_detectados": objeto con datos aportados SOLO en ESTE mensaje (no inventes, no repitas del historial).',
-  '  Claves sugeridas: nombre, dni, edad, anios_aporte, fecha, hora, modalidad, zona, nacionalidad.',
+  '  Claves PERMITIDAS (las únicas válidas; cualquier otra se ignora): nombre, dni, edad, anios_aporte, fecha, hora, modalidad, zona, nacionalidad, telefono, genero, hijos, urgencia, mejor_horario.',
   '- "confianza": número 0.0-1.0 de qué tan seguro estás.',
   '- Respondé en español rioplatense. Temperatura 0. SOLO JSON, sin markdown.',
 ].join('\n');
@@ -142,12 +149,15 @@ export function sanitizeIntent(raw: any): IntentResult {
   const quiere_continuar = Boolean(raw.quiere_continuar ?? true);
   const es_cierre = Boolean(raw.es_cierre ?? false);
 
-  // slots_detectados: solo si es objeto plano (no array, no null)
+  // slots_detectados: solo objeto plano + SOLO claves permitidas + valores primitivos
   const slotsRaw = raw.slots_detectados;
-  const slots_detectados: Record<string, string | number> =
-    slotsRaw && typeof slotsRaw === 'object' && !Array.isArray(slotsRaw)
-      ? (slotsRaw as Record<string, string | number>)
-      : {};
+  const slots_detectados: Record<string, string | number> = {};
+  if (slotsRaw && typeof slotsRaw === 'object' && !Array.isArray(slotsRaw)) {
+    for (const [k, v] of Object.entries(slotsRaw)) {
+      if (!SLOT_KEYS.has(k)) continue;
+      if (typeof v === 'string' || typeof v === 'number') slots_detectados[k] = v;
+    }
+  }
 
   return { intent, quiere_continuar, nivel_frustracion, es_cierre, slots_detectados, confianza };
 }

@@ -109,6 +109,20 @@ describe('sanitizeIntent — normaliza el crudo del modelo', () => {
   });
 });
 
+describe('sanitizeIntent — claves de slots cerradas', () => {
+  it('claves permitidas pasan; desconocidas se descartan', () => {
+    const r = sanitizeIntent({
+      intent: 'responder_dato',
+      slots_detectados: { edad: 63, zona: 'Quilmes', signo_zodiacal: 'tauro', comida_favorita: 'ñoquis' },
+    });
+    expect(r.slots_detectados).toEqual({ edad: 63, zona: 'Quilmes' });
+  });
+  it('valores no-primitivos se descartan', () => {
+    const r = sanitizeIntent({ intent: 'otro', slots_detectados: { edad: { anidado: true }, nombre: 'Ana' } });
+    expect(r.slots_detectados).toEqual({ nombre: 'Ana' });
+  });
+});
+
 // ─── detectOptOut ──────────────────────────────────────────────────────────────
 describe('detectOptOut — regex offline, sin LLM', () => {
   it('matchea "no me escriban mas"', () => expect(detectOptOut('no me escriban mas')).toBe(true));
