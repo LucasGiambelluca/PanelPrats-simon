@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import type { AccountManager } from '../core/accounts/AccountManager';
@@ -56,7 +56,16 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   // Límite general por IP para la API protegida. El webhook de Meta queda EXCLUItdo
   // (Meta envía ráfagas legítimas y ya valida firma HMAC). Limiter estricto para
   // endpoints sensibles (alta de usuarios, mutación de config).
-  const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+  // Balde por usuario (token JWT), no por IP: toda la oficina sale por la misma IP
+  // (NAT) y un balde compartido por IP hacía 429 en cascada con el polling del inbox
+  // (~480 req/15min por usuario con un chat abierto). Fallback a IP si no hay token.
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.header('Authorization') || ipKeyGenerator(req.ip ?? ''),
+  });
   const sensitiveLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
   // Público: health + webhook de Meta (firma HMAC) + entrar a una sala como invitado
