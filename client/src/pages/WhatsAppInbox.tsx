@@ -32,6 +32,10 @@ function ApptBadge({ agendado }: { agendado: boolean }) {
 
 type Channel = 'whatsapp' | 'facebook' | 'instagram';
 
+// Tamaño de página del backend (/api/conversations). Si una página vuelve llena,
+// asumimos que hay más para cargar.
+const CONVOS_PAGE = 500;
+
 const channelConfig = {
   whatsapp:  { label: 'WhatsApp',  icon: MessageSquare, color: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20' },
   facebook:  { label: 'Facebook',  icon: Facebook,      color: 'text-blue-600 bg-blue-500/10 border-blue-500/20' },
@@ -87,6 +91,10 @@ export default function WhatsAppInbox() {
   const [sending, setSending] = useState(false);
   const [allLines, setAllLines] = useState(true); // bandeja unificada por defecto (todas las líneas)
   const [loadError, setLoadError] = useState(false); // error en la carga de conversaciones
+  // Paginado de la lista (el backend devuelve de a CONVOS_PAGE).
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadedBeyondFirstRef = useRef(false); // ya se pidió más allá de la página 1
   const [bookOpen, setBookOpen] = useState(false); // modal de agendado manual desde el chat
   const [apptPhones, setApptPhones] = useState<Set<string>>(new Set()); // teléfonos con cita activa
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,7 +125,7 @@ export default function WhatsAppInbox() {
   const activeConvoIdRef = useRef<string | undefined>(undefined);
   useEffect(() => { activeConvoIdRef.current = activeConvoId; }, [activeConvoId]);
 
-  // Load conversations
+  // Load conversations (primera página; las siguientes se traen con "Cargar más")
   const loadConversations = useCallback(async () => {
     try {
       let data: WhatsAppConversation[];
@@ -128,7 +136,13 @@ export default function WhatsAppInbox() {
         if (!activeAccountId) return;
         data = await conversationsApi.list(activeAccountId);
       }
-      setConversations(data);
+      // El poll refresca SOLO la primera página: preservamos las páginas viejas ya
+      // cargadas (dedup por id — un convo viejo con mensaje nuevo sube a la página 1).
+      setConversations(prev => {
+        const ids = new Set(data.map(c => c.id));
+        return [...data, ...prev.filter(c => !ids.has(c.id))];
+      });
+      if (!loadedBeyondFirstRef.current) setHasMore(data.length === CONVOS_PAGE);
       setLoadError(false);
       // Refrescar el convo activo SOLO si cambió algo relevante. Pisarlo con un objeto
       // nuevo en cada poll (cada 5s) re-renderiza y hace "saltar" el panel de mensajes.
@@ -153,12 +167,37 @@ export default function WhatsAppInbox() {
   }, [allLines, activeAccountId]);
 
   useEffect(() => {
+    // Cambió la línea/vista: descartar lo acumulado de la anterior.
+    setConversations([]);
+    setHasMore(false);
+    loadedBeyondFirstRef.current = false;
     setLoadingConvos(true);
     loadConversations().then(() => setLoadingConvos(false));
     if (pollConvoRef.current) clearInterval(pollConvoRef.current);
     pollConvoRef.current = setInterval(() => { if (!document.hidden) loadConversations(); }, 5000);
     return () => { if (pollConvoRef.current) clearInterval(pollConvoRef.current); };
   }, [loadConversations]);
+
+  // Página siguiente (conversaciones más viejas que las ya cargadas).
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const offset = conversations.length;
+      const data = allLines
+        ? await conversationsApi.listAll(offset)
+        : activeAccountId ? await conversationsApi.list(activeAccountId, offset) : [];
+      setConversations(prev => {
+        const ids = new Set(prev.map(c => c.id));
+        return [...prev, ...data.filter(c => !ids.has(c.id))];
+      });
+      loadedBeyondFirstRef.current = true;
+      setHasMore(data.length === CONVOS_PAGE);
+    } catch {
+      toast.error('No se pudieron cargar más conversaciones');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [conversations.length, allLines, activeAccountId]);
 
   // Teléfonos con cita activa (no cancelada) → etiqueta "Agendado" / "Sin agendar".
   const loadApptPhones = useCallback(async () => {
@@ -475,6 +514,16 @@ export default function WhatsAppInbox() {
               </button>
             );
           })}
+
+          {!loadingConvos && hasMore && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="w-full py-3 text-xs font-semibold text-brand-primary hover:bg-brand-primary/[0.04] transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? 'Cargando…' : 'Cargar conversaciones anteriores'}
+            </button>
+          )}
 
           {!loadingConvos && conversations.length === 0 && (
             <div className="text-center py-20 px-6">

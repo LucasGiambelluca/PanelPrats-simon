@@ -8,6 +8,10 @@ export function conversationsRouter(): Router {
 
   r.get('/', async (req, res) => {
     const accountId = req.query.account_id as string;
+    // Paginado: limit (tope 500 por página, PostgREST además capea en 1000) + offset.
+    // El inbox pollea solo la primera página y trae las siguientes con "Cargar más".
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ''), 10) || 500, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? ''), 10) || 0, 0);
     // account_id ausente o 'all' => bandeja unificada (todas las líneas del estudio).
     let q = supabase
       .from('whatsapp_conversations')
@@ -16,7 +20,7 @@ export function conversationsRouter(): Router {
       // last_message_at se reordenan en cada poll (5s) y la lista "salta".
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: true })
-      .limit(500);
+      .range(offset, offset + limit - 1);
     if (accountId && accountId !== 'all') q = q.eq('account_id', accountId);
     const { data, error } = await q;
     if (error) return res.status(400).json({ error: error.message });

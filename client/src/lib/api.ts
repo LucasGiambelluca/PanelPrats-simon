@@ -134,12 +134,12 @@ export const flowsApi = {
 import type { WhatsAppConversation, WhatsAppMessage } from '../types';
 
 export const conversationsApi = {
-  list: (accountId: string) =>
-    api<WhatsAppConversation[]>(`/api/conversations?account_id=${encodeURIComponent(accountId)}`),
+  list: (accountId: string, offset = 0) =>
+    api<WhatsAppConversation[]>(`/api/conversations?account_id=${encodeURIComponent(accountId)}&offset=${offset}`),
 
   // Bandeja unificada: todas las líneas del estudio en una sola query.
-  listAll: () =>
-    api<WhatsAppConversation[]>(`/api/conversations?account_id=all`),
+  listAll: (offset = 0) =>
+    api<WhatsAppConversation[]>(`/api/conversations?account_id=all&offset=${offset}`),
 
   messages: (conversationId: string) =>
     api<WhatsAppMessage[]>(`/api/conversations/${conversationId}/messages`),
