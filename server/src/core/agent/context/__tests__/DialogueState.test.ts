@@ -12,6 +12,8 @@ import {
   markAsked,
   isSlotStuck,
   stuckSlot,
+  buildDatosAportados,
+  slotsPrefill,
   type DialogueState,
 } from '../DialogueState';
 
@@ -388,5 +390,42 @@ describe('isSlotStuck + stuckSlot — anti-loop', () => {
 
     s = markAsked(s, 'edad', '2026-06-30T10:02:00.000Z');
     expect(stuckSlot(s)).toBe('edad');
+  });
+});
+
+// ── buildDatosAportados ───────────────────────────────────────────────────────
+
+describe('buildDatosAportados', () => {
+  it('sin slots llenos → string vacío', () => {
+    expect(buildDatosAportados(createDialogueState())).toBe('');
+  });
+  it('slots llenos → bloque con encabezado y una línea por dato', () => {
+    const s = mergeSlots(createDialogueState(), { nombre: 'Ana', edad: 63, zona: 'Quilmes' });
+    const block = buildDatosAportados(s);
+    expect(block).toContain('DATOS YA APORTADOS');
+    expect(block).toContain('- nombre: Ana');
+    expect(block).toContain('- edad: 63');
+    expect(block).toContain('- zona: Quilmes');
+  });
+  it('slots pendientes NO aparecen', () => {
+    let s = createDialogueState();
+    s = { ...s, slots: { edad: { valor: null, estado: 'pendiente', pedido_count: 1 } } };
+    expect(buildDatosAportados(s)).toBe('');
+  });
+});
+
+// ── slotsPrefill ──────────────────────────────────────────────────────────────
+
+describe('slotsPrefill', () => {
+  it('extrae solo las claves de booking, con modalidad validada', () => {
+    const s = mergeSlots(createDialogueState(), {
+      nombre: 'Ana', zona: 'Quilmes', modalidad: 'video', telefono: '541151749871', edad: 63,
+    });
+    expect(slotsPrefill(s)).toEqual({ nombre: 'Ana', zona: 'Quilmes', modalidad: 'video', telefono: '541151749871' });
+  });
+  it('modalidad inválida no entra; vacío → {}', () => {
+    const s = mergeSlots(createDialogueState(), { modalidad: 'telepatia' });
+    expect(slotsPrefill(s)).toEqual({});
+    expect(slotsPrefill(createDialogueState())).toEqual({});
   });
 });

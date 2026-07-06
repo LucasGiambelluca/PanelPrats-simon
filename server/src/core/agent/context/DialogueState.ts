@@ -31,6 +31,7 @@ export interface DialogueState {
   cerrada: boolean;
   cierre_motivo: CierreMotivo | null;
   ask_streak?: AskStreak | null;  // anti-loop: tema repetido sin respuesta del cliente
+  extractor_last_at?: string | null; // última pasada del ProspectExtractor (tope 1/día)
 }
 
 // ─── Constantes internas ─────────────────────────────────────────────────────
@@ -180,4 +181,42 @@ export function stuckSlot(state: DialogueState): string | null {
   const next = nextPendingSlot(state);
   if (next === null) return null;
   return isSlotStuck(state, next) ? next : null;
+}
+
+/**
+ * Bloque "DATOS YA APORTADOS" para el system prompt del tool-loop.
+ * Solo slots 'lleno' con valor real. Vacío si no hay nada (no ensucia el prompt).
+ */
+export function buildDatosAportados(state: DialogueState): string {
+  const llenos = Object.entries(state.slots)
+    .filter(([, s]) => s.estado === 'lleno' && s.valor !== null && s.valor !== '');
+  if (llenos.length === 0) return '';
+  return [
+    'DATOS YA APORTADOS POR EL CLIENTE (no los vuelvas a preguntar; usalos):',
+    ...llenos.map(([k, s]) => `- ${k}: ${s.valor}`),
+  ].join('\n');
+}
+
+export interface BookingPrefill {
+  nombre?: string;
+  zona?: string;
+  modalidad?: 'presencial' | 'video';
+  telefono?: string;
+}
+
+/**
+ * Datos de agendado ya aportados, para pre-cargar BookingFlow
+ * (que ya saltea etapas cuando los recibe).
+ */
+export function slotsPrefill(state: DialogueState): BookingPrefill {
+  const val = (k: string): string | undefined => {
+    const s = state.slots[k];
+    return s && s.estado === 'lleno' && s.valor !== null && s.valor !== '' ? String(s.valor) : undefined;
+  };
+  const out: BookingPrefill = {};
+  const nombre = val('nombre'); if (nombre) out.nombre = nombre;
+  const zona = val('zona'); if (zona) out.zona = zona;
+  const m = val('modalidad'); if (m === 'presencial' || m === 'video') out.modalidad = m;
+  const tel = val('telefono'); if (tel) out.telefono = tel;
+  return out;
 }
