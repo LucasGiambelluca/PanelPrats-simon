@@ -669,6 +669,16 @@ describe('telefonoSugerido — confirmar en vez de pedir de cero (FB/IG)', () =>
     expect(booked[0].telefono).toBe('541151749871');
   });
 
+  it('afirmación + número nuevo en el mismo mensaje → gana el número nuevo', async () => {
+    const booked: any[] = [];
+    const deps = depsConSlot(booked);
+    let step = await startBooking({ modalidad: 'video', needsPhone: true, telefonoSugerido: '541151749871', nombre: 'Ana' }, deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'sí, mejor al 011 4785 9600', deps);
+    expect(booked).toHaveLength(1);
+    expect(booked[0].telefono).not.toBe('541151749871');
+  });
+
   it('responde con OTRO número → valida y usa el nuevo', async () => {
     const booked: any[] = [];
     const deps = depsConSlot(booked);

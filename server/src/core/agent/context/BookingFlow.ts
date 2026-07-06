@@ -603,7 +603,8 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
 
     case 'ask_phone': {
       // Confirmación del teléfono sugerido por el extractor: "sí/dale" → usarlo.
-      if (state.telefonoSugerido && isAffirmative(text)) {
+      // Si además trae un número ("sí, mejor al 011..."), gana el número nuevo (cae al parseo).
+      if (state.telefonoSugerido && isAffirmative(text) && !/\d{6,}/.test(text.replace(/[\s.-]/g, ''))) {
         return bookNow({ ...state, telefono: state.telefonoSugerido }, deps);
       }
       // FB/IG: "este mismo"/"desde este" NO es un teléfono (es la red). Pedir número real.
