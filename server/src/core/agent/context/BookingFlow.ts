@@ -26,6 +26,7 @@ export interface BookingState {
   chosenStart?: string;
   nombre?: string;
   telefono?: string;                                          // teléfono real dado en el chat (FB/IG: el id de la red NO es teléfono)
+  telefonoSugerido?: string;                                  // teléfono capturado por el extractor: se CONFIRMA antes de usar
   needsPhone?: boolean;                                       // canal sin número real (FB/IG) → pedirlo explícito
   desde?: string;                                             // ISO del día desde el que se buscó (para "de tarde" tras "el viernes")
   minHour?: number;                                           // hora AR mínima pedida por el cliente ("después de las 15:30" → 15.5); persiste en re-búsquedas
@@ -448,6 +449,14 @@ async function bookNow(state: BookingState, deps: BookingDeps): Promise<BookingS
 // pedir el teléfono; si ya lo tenemos (WhatsApp), agendar DIRECTO.
 function afterName(state: BookingState, deps: BookingDeps): Promise<BookingStep> {
   if (state.needsPhone && !state.telefono) {
+    // Teléfono capturado por el extractor → CONFIRMAR, no pedir de cero (spec P2d).
+    if (state.telefonoSugerido) {
+      return Promise.resolve({
+        state: { ...state, stage: 'ask_phone' as const },
+        messages: [`¿Lo contactamos al ${state.telefonoSugerido}? Si prefiere otro número, escríbamelo con código de área.`],
+        active: true,
+      });
+    }
     return Promise.resolve({
       state: { ...state, stage: 'ask_phone' as const },
       messages: ['¿A qué número de teléfono lo contactamos? Con código de área, por favor.'],
@@ -459,7 +468,7 @@ function afterName(state: BookingState, deps: BookingDeps): Promise<BookingStep>
 
 /** Inicia el flujo (lo llama el LLM vía tool start_booking). */
 export async function startBooking(
-  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; telefono?: string; needsPhone?: boolean },
+  args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; telefono?: string; telefonoSugerido?: string; needsPhone?: boolean },
   deps: BookingDeps,
 ): Promise<BookingStep> {
   // Limpiar PRIMERO y validar el resultado: "Sr."/"Sra." normalizan a "sr"/"sra"
@@ -471,6 +480,7 @@ export async function startBooking(
     zona: args.zona ?? null,
     nombre: nombreLimpio && !isPlaceholderName(nombreLimpio) ? nombreLimpio : undefined,
     telefono: args.telefono?.trim() || undefined,
+    telefonoSugerido: args.telefonoSugerido?.trim() || undefined,
     needsPhone: !!args.needsPhone,
   };
   // Si el cliente YA pidió videollamada explícita → respetar (no forzar presencial).
@@ -592,6 +602,10 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
     }
 
     case 'ask_phone': {
+      // Confirmación del teléfono sugerido por el extractor: "sí/dale" → usarlo.
+      if (state.telefonoSugerido && isAffirmative(text)) {
+        return bookNow({ ...state, telefono: state.telefonoSugerido }, deps);
+      }
       // FB/IG: "este mismo"/"desde este" NO es un teléfono (es la red). Pedir número real.
       if (state.needsPhone && /\b(este|el mismo|este mismo|desde este)\b/.test(norm(text))) {
         return { state, messages: ['Le escribo por esta red, así que necesito un número de teléfono para contactarlo. ¿Me lo pasa con código de área?'], active: true };

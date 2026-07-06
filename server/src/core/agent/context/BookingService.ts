@@ -69,7 +69,7 @@ export class BookingService {
     return !!s && s.stage !== 'done';
   }
 
-  async start(accountId: string, phone: string, args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; needsPhone?: boolean }, conversation: string): Promise<{ messages: string[]; active: boolean }> {
+  async start(accountId: string, phone: string, args: { modalidad?: 'presencial' | 'video'; zona?: string; nombre?: string; telefonoSugerido?: string; needsPhone?: boolean }, conversation: string): Promise<{ messages: string[]; active: boolean }> {
     let current: BookingState | undefined;
     const step = await startBooking(args, this.buildDeps(accountId, phone, conversation, () => current));
     current = step.state;

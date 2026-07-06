@@ -634,3 +634,56 @@ describe('Fix 2 review — I5 nombre interno JAMÁS al cliente', () => {
     expect(r0.messages[0]).toMatch(/nuestra oficina/i);
   });
 });
+
+describe('telefonoSugerido — confirmar en vez de pedir de cero (FB/IG)', () => {
+  function depsConSlot(booked: any[]) {
+    return {
+      suggestOffice: async () => ({ oficina_sugerida: null, necesita_aclaracion: false }),
+      videoOfficeName: async () => 'VIDEO',
+      defaultOffice: async () => null,
+      presencialOffices: async () => [],
+      freeSlots: async () => [{ start: '2026-07-08T13:00:00.000Z', end: '2026-07-08T13:30:00.000Z', oficina: 'VIDEO' }],
+      book: async (b: any) => { booked.push(b); return { modalidad: 'video' }; },
+    } as any;
+  }
+
+  it('needsPhone + telefonoSugerido: tras el nombre pide CONFIRMACIÓN del número', async () => {
+    const booked: any[] = [];
+    const deps = depsConSlot(booked);
+    let step = await startBooking({ modalidad: 'video', needsPhone: true, telefonoSugerido: '541151749871' }, deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'Ana López', deps);
+    expect(step.state.stage).toBe('ask_phone');
+    expect(step.messages[0]).toContain('541151749871');
+    expect(booked).toHaveLength(0);
+  });
+
+  it('confirma con "sí" → agenda con el teléfono sugerido', async () => {
+    const booked: any[] = [];
+    const deps = depsConSlot(booked);
+    let step = await startBooking({ modalidad: 'video', needsPhone: true, telefonoSugerido: '541151749871', nombre: 'Ana' }, deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    expect(step.state.stage).toBe('ask_phone');
+    step = await advanceBooking(step.state, 'sí, ese', deps);
+    expect(booked).toHaveLength(1);
+    expect(booked[0].telefono).toBe('541151749871');
+  });
+
+  it('responde con OTRO número → valida y usa el nuevo', async () => {
+    const booked: any[] = [];
+    const deps = depsConSlot(booked);
+    let step = await startBooking({ modalidad: 'video', needsPhone: true, telefonoSugerido: '541151749871', nombre: 'Ana' }, deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'mejor al 011 4785 9600', deps);
+    expect(booked).toHaveLength(1);
+    expect(booked[0].telefono).not.toBe('541151749871');
+  });
+
+  it('sin needsPhone (WhatsApp): telefonoSugerido se ignora, agenda directo', async () => {
+    const booked: any[] = [];
+    const deps = depsConSlot(booked);
+    let step = await startBooking({ modalidad: 'video', needsPhone: false, telefonoSugerido: '541151749871', nombre: 'Ana' }, deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    expect(booked).toHaveLength(1);
+  });
+});
