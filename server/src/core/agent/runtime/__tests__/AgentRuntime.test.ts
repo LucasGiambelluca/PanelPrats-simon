@@ -359,3 +359,61 @@ describe('AgentRuntime — LoopGuard (tope de llamadas IA por conversación)', (
     expect(out).toEqual(['Hola']);
   });
 });
+
+function runtimeDeps(overrides: any = {}) {
+  const calls: any = { systemPrompts: [] as string[], bookingStartArgs: [] as any[] };
+  const deps: any = {
+    ai: { completeWithTools: async (o: any) => { calls.systemPrompts.push(o.systemPrompt); return { content: 'ok' }; } },
+    persona: { build: () => 'PERSONA_BASE' },
+    memory: { load: async () => ({ fichaText: 'FICHA', calificacion: null }) },
+    tools: { schemas: () => [], execute: async () => ({ ok: true }) },
+    loadAccount: async () => ({ channel: 'whatsapp' }),
+    history: async () => [],
+    ...overrides,
+  };
+  return { deps, calls };
+}
+
+describe('AgentRuntime — datosAportados + prefill', () => {
+  it('advance con datosAportados → el system prompt del tool-loop lo incluye', async () => {
+    const { deps, calls } = runtimeDeps({
+      conversation: { handleTurn: async () => ({ kind: 'advance', datosAportados: 'DATOS YA APORTADOS POR EL CLIENTE (no los vuelvas a preguntar; usalos):\n- edad: 63' }) },
+    });
+    const rt = new AgentRuntime(deps);
+    await rt.handle('acc', '549x', 'quiero jubilarme');
+    expect(calls.systemPrompts[0]).toContain('DATOS YA APORTADOS');
+    expect(calls.systemPrompts[0]).toContain('- edad: 63');
+  });
+
+  it('gate determinístico pasa nombre/zona/telefonoSugerido del prefill a booking.start', async () => {
+    const { deps, calls } = runtimeDeps({
+      conversation: { handleTurn: async () => ({ kind: 'advance', prefill: { nombre: 'Ana', zona: 'Quilmes', telefono: '541151749871' } }) },
+      bookingIntent: () => ({ start: true }),
+      areaDetector: () => null,
+      booking: {
+        isActive: async () => false,
+        advance: async () => ({ messages: [], active: false }),
+        start: async (_a: string, _p: string, args: any) => { calls.bookingStartArgs.push(args); return { messages: ['¿En qué localidad vive?'], active: true }; },
+      },
+    });
+    const rt = new AgentRuntime(deps);
+    await rt.handle('acc', '549x', 'quiero un turno');
+    expect(calls.bookingStartArgs[0]).toMatchObject({ nombre: 'Ana', zona: 'Quilmes', telefonoSugerido: '541151749871' });
+  });
+
+  it('start_booking del LLM: los args del modelo GANAN sobre el prefill, pero el prefill completa lo vacío', async () => {
+    let started: any = null;
+    const { deps } = runtimeDeps({
+      conversation: { handleTurn: async () => ({ kind: 'advance', prefill: { nombre: 'Ana', zona: 'Quilmes' } }) },
+      ai: { completeWithTools: async () => ({ toolCalls: [{ id: '1', name: 'start_booking', args: { zona: 'Haedo' } }] }) },
+      booking: {
+        isActive: async () => false,
+        advance: async () => ({ messages: [], active: false }),
+        start: async (_a: string, _p: string, args: any) => { started = args; return { messages: ['ok'], active: true }; },
+      },
+    });
+    const rt = new AgentRuntime(deps);
+    await rt.handle('acc', '549x', 'dale agendame');
+    expect(started).toMatchObject({ nombre: 'Ana', zona: 'Haedo' });
+  });
+});

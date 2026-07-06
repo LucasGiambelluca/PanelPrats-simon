@@ -46,7 +46,17 @@ export interface RuntimeDeps {
   // 'advance' → delega al tool-loop (set_qualification / start_booking / FAQ).
   conversation?: {
     handleTurn: (accountId: string, phone: string, text: string) =>
-      Promise<{ kind: 'resolved'; messages: string[] } | { kind: 'advance'; directive?: string }>;
+      Promise<
+        | { kind: 'resolved'; messages: string[] }
+        | {
+            kind: 'advance';
+            directive?: string;
+            // Bloque "DATOS YA APORTADOS" para el system prompt (spec extractor P2a).
+            datosAportados?: string;
+            // Datos ya aportados para pre-cargar el agendado (spec P2b/P2c/P2d).
+            prefill?: { nombre?: string; zona?: string; modalidad?: 'presencial' | 'video'; telefono?: string };
+          }
+      >;
   };
   // LoopGuard: tope de llamadas IA por contacto (config en account.loopGuard).
   // Sin esto, el guard queda inactivo (comportamiento previo intacto).
@@ -130,6 +140,10 @@ export class AgentRuntime {
       return finishWith([]);
     };
 
+    // Prefill de agendado que sale del controller (slots ya aportados). El teléfono viaja
+    // como telefonoSugerido: BookingFlow lo CONFIRMA antes de usarlo (spec P2d).
+    let prefill: { nombre?: string; zona?: string; modalidad?: 'presencial' | 'video'; telefono?: string } = {};
+
     // Agendado en curso: el state machine determinístico conduce, sin pasar por el LLM.
     // (La fase 'agendado' está DELEGADA a BookingFlow; el controller no interfiere a medio agendar.)
     if (this.deps.booking && (await this.deps.booking.isActive(accountId, phone).catch(() => false))) {
@@ -142,11 +156,13 @@ export class AgentRuntime {
       // off-topic / preguntas de calificación sin tocar el LLM-con-tools.
       if (this.deps.conversation) {
         const outcome = await this.deps.conversation.handleTurn(accountId, phone, text)
-          .catch((): { kind: 'advance'; directive?: string } => ({ kind: 'advance' }));
+          .catch((): { kind: 'advance'; directive?: string; datosAportados?: string; prefill?: typeof prefill } => ({ kind: 'advance' }));
         if (outcome.kind === 'resolved') return finishWith(outcome.messages);
         // 'advance' → sigue al gate de booking pelado + tool-loop de abajo.
         // Puede traer una directiva anti-loop para enjaular al LLM ESTE turno.
         if (outcome.directive) systemPrompt = `${systemPrompt}\n\nDIRECTIVA DEL SISTEMA (obligatoria): ${outcome.directive}`;
+        if (outcome.datosAportados) systemPrompt = `${systemPrompt}\n\n${outcome.datosAportados}`;
+        if (outcome.prefill) prefill = outcome.prefill;
       }
       // Reprogramación determinística: si el cliente pide reprogramar/cambiar su turno,
       // reusamos el motor de slots REALES (nunca una fecha inventada por el LLM: bug 2023).
@@ -168,7 +184,13 @@ export class AgentRuntime {
               ? await this.deps.canStartBooking(accountId, phone).catch(() => ({ ok: true as const }))
               : { ok: true as const };
             if (gate.ok) {
-              const r = await this.deps.booking.start(accountId, phone, { modalidad: intent.modalidad, needsPhone }, ctx.conversation ?? text);
+              const r = await this.deps.booking.start(accountId, phone, {
+                modalidad: intent.modalidad ?? prefill.modalidad,
+                zona: prefill.zona,
+                nombre: prefill.nombre,
+                telefonoSugerido: prefill.telefono,
+                needsPhone,
+              }, ctx.conversation ?? text);
               if (r.messages.length) return finishWith(r.messages);
             }
             // gate bloqueado → cae al tool-loop; el LLM sigue calificando
@@ -213,7 +235,14 @@ export class AgentRuntime {
           ? await this.deps.canStartBooking(accountId, phone).catch(() => ({ ok: true as const }))
           : { ok: true as const };
         if (gate.ok) {
-          const r = await this.deps.booking.start(accountId, phone, { ...(startCall.args ?? {}), needsPhone }, ctx.conversation ?? text);
+          const r = await this.deps.booking.start(accountId, phone, {
+            modalidad: prefill.modalidad,
+            zona: prefill.zona,
+            nombre: prefill.nombre,
+            telefonoSugerido: prefill.telefono,
+            ...(startCall.args ?? {}),   // lo que dijo el modelo GANA sobre el prefill
+            needsPhone,
+          }, ctx.conversation ?? text);
           if (r.messages.length) return finishWith(r.messages);
         } else {
           bookingBlockedReason = gate.reason ?? 'Completá la calificación del área con set_qualification antes de agendar.';
