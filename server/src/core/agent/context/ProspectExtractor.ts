@@ -19,14 +19,16 @@ const num = (v: any): number | null => {
 };
 const str = (v: any): string => (typeof v === 'string' ? v.trim() : '');
 
-/** Gating puro: 1er mensaje o ≥120 chars, máx 1 pasada por día (comparación fecha UTC). */
+/** Gating puro: 1er mensaje o ≥120 chars, máx 1 pasada por día (comparación fecha UTC).
+ *  "1er mensaje" = historial ≤1: el entrante ya fue persistido ANTES de llegar al runtime,
+ *  así que en el primer contacto el historial nunca es 0 (llega con el propio mensaje). */
 export function shouldExtract(input: {
   text: string;
   historyLength: number;
   extractorLastAt: string | null | undefined;
   now: string;
 }): boolean {
-  const rich = input.historyLength === 0 || input.text.trim().length >= 120;
+  const rich = input.historyLength <= 1 || input.text.trim().length >= 120;
   if (!rich) return false;
   if (input.extractorLastAt && input.extractorLastAt.slice(0, 10) === input.now.slice(0, 10)) return false;
   return true;

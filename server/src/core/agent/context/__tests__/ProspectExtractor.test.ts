@@ -57,6 +57,9 @@ describe('shouldExtract — cuándo corre la pasada profunda', () => {
   it('primer mensaje (sin historial) → true aunque sea corto', () => {
     expect(shouldExtract({ text: 'hola quiero jubilarme', historyLength: 0, extractorLastAt: null, now: NOW })).toBe(true);
   });
+  it('primer mensaje real (el entrante ya persistido → historial 1) → true', () => {
+    expect(shouldExtract({ text: 'hola quiero jubilarme', historyLength: 1, extractorLastAt: null, now: NOW })).toBe(true);
+  });
   it('mensaje ≥120 chars con historial → true', () => {
     expect(shouldExtract({ text: 'x'.repeat(120), historyLength: 8, extractorLastAt: null, now: NOW })).toBe(true);
   });

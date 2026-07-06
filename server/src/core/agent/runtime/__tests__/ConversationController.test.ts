@@ -443,7 +443,10 @@ describe('ConversationController — ProspectExtractor integrado', () => {
   it('mensaje corto con historial: NO llama extract', async () => {
     let extractCalled = false;
     const { deps } = extractorDeps({
-      history: async () => [{ role: 'assistant', content: '¿Su edad?' }],
+      history: async () => [
+        { role: 'user', content: 'hola quiero jubilarme' },
+        { role: 'assistant', content: '¿Su edad?' },
+      ],
       extract: async () => { extractCalled = true; return { slots: {}, area: null }; },
     });
     const c = new ConversationController(deps);
