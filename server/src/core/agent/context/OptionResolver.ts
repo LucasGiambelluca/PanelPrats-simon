@@ -231,11 +231,18 @@ export function resolveOption(input: { userText: string; offered: OfferedOption[
     }
   }
 
-  // 8) presencial genérico → primera opción presencial.
+  // 8) presencial genérico → primera opción presencial. SOLO si la lista distingue
+  //    modalidades (hay al menos una opción marcada como video): ante una lista
+  //    homogénea de horarios, "no video ⇒ presencial" marcaba TODOS los slots y
+  //    "busco presencial" terminaba eligiendo un horario de video (prod 2026-07-06).
+  //    Ahí es un cambio de modalidad: lo resuelve el caller, no una elección.
   if (wantsPresencial) {
-    const cand = offered.filter((o) => /presencial/.test(norm(o.label)) || !/video|llamada|virtual/.test(norm(o.label + ' ' + o.value)));
-    if (cand.length === 1) return { matchedValue: cand[0].value, confianza: 0.85 };
-    if (cand.length > 1) return { matchedValue: cand[0].value, confianza: 0.6 };
+    const hasVideoOpt = offered.some((o) => /video|llamada|virtual/.test(norm(o.label + ' ' + o.value)));
+    if (hasVideoOpt) {
+      const cand = offered.filter((o) => /presencial/.test(norm(o.label)) || !/video|llamada|virtual/.test(norm(o.label + ' ' + o.value)));
+      if (cand.length === 1) return { matchedValue: cand[0].value, confianza: 0.85 };
+      if (cand.length > 1) return { matchedValue: cand[0].value, confianza: 0.6 };
+    }
   }
 
   // 8) aceptación vaga → elegir el primero, confianza media (el agente confirma).

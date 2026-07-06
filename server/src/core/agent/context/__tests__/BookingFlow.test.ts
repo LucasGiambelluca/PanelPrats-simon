@@ -697,3 +697,83 @@ describe('telefonoSugerido — confirmar en vez de pedir de cero (FB/IG)', () =>
     expect(booked).toHaveLength(1);
   });
 });
+
+// Caso prod 2026-07-06 (Luján de Cuyo, Mendoza): fuera de cobertura → slots de video;
+// el cliente pidió presencial (se tomó como elección de slot) y su "No gracias" se
+// tomó como NOMBRE → se agendó una cita rechazada. El flujo debe respetar el "no".
+describe('rechazo explícito: nunca agendar contra un "no"', () => {
+  async function reachVideoSlotsOutOfCoverage(deps: BookingDeps) {
+    // Zona fuera de cobertura (mock: 'La Plata') → outOfCoverage → slots de video.
+    return startBooking({ zona: 'La Plata', needsPhone: true }, deps);
+  }
+
+  it('pedir presencial mirando slots de video NO elige un slot (cambia modalidad)', async () => {
+    const deps = makeDeps();
+    const s = await reachVideoSlotsOutOfCoverage(deps);
+    expect(s.state.stage).toBe('await_slot');
+    const r = await advanceBooking(s.state, 'Te agradezco mucho pero busco algo presencial gracias', deps);
+    expect(r.state.stage).not.toBe('ask_name'); // no lo trató como elección de slot
+    expect(deps.book).not.toHaveBeenCalled();
+  });
+
+  it('"No gracias" en ask_name NO es un nombre: cierra sin agendar', async () => {
+    const deps = makeDeps();
+    let step = await reachSlots(deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    expect(step.state.stage).toBe('ask_name');
+    step = await advanceBooking(step.state, 'No gracias', deps);
+    expect(deps.book).not.toHaveBeenCalled();
+    expect(step.state.stage).toBe('done');
+    expect(step.active).toBe(false);
+    expect(step.messages.join(' ')).not.toMatch(/queda agendado/i);
+  });
+
+  it('"no" pelado en ask_name también es rechazo', async () => {
+    const deps = makeDeps();
+    let step = await reachSlots(deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'no', deps);
+    expect(deps.book).not.toHaveBeenCalled();
+    expect(step.state.stage).toBe('done');
+  });
+
+  it('"Noelia" en ask_name sigue siendo un nombre válido (no dispara el rechazo)', async () => {
+    const deps = makeDeps();
+    let step = await reachSlots(deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'Noelia', deps);
+    expect(deps.book).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Noelia' }));
+  });
+
+  it('"no gracias" en await_slot cierra sin agendar (no rota plantillas)', async () => {
+    const deps = makeDeps();
+    const { state } = await reachSlots(deps);
+    const step = await advanceBooking(state, 'no gracias', deps);
+    expect(deps.book).not.toHaveBeenCalled();
+    expect(step.state.stage).toBe('done');
+    expect(step.active).toBe(false);
+  });
+
+  it('rechazo explícito en ask_phone cierra sin agendar', async () => {
+    const deps = makeDeps();
+    let step = await reachSlots(deps, { needsPhone: true });
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'Juan Pérez', deps);
+    expect(step.state.stage).toBe('ask_phone');
+    step = await advanceBooking(step.state, 'no gracias, dejalo', deps);
+    expect(deps.book).not.toHaveBeenCalled();
+    expect(step.state.stage).toBe('done');
+  });
+
+  it('"no" pelado en ask_phone con telefonoSugerido NO cancela: pide el número', async () => {
+    const deps = makeDeps();
+    let step = await startBooking({ zona: 'Quilmes', needsPhone: true, telefonoSugerido: '1151749871' }, deps);
+    step = await advanceBooking(step.state, 'la de Quilmes', deps);
+    step = await advanceBooking(step.state, 'el primero', deps);
+    step = await advanceBooking(step.state, 'Juan Pérez', deps);
+    expect(step.state.stage).toBe('ask_phone');
+    step = await advanceBooking(step.state, 'no', deps);
+    expect(step.state.stage).toBe('ask_phone'); // sigue pidiendo número, no cancela
+    expect(deps.book).not.toHaveBeenCalled();
+  });
+});

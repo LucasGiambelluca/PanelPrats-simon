@@ -185,3 +185,26 @@ describe('formatos de hora extra (fricción prod)', () => {
   it('hora sin match exacto sigue devolviendo null', () => { expect(pick('a las 20').matchedValue).toBeNull(); });
   it('no rompe: "tengo 3 hijos" no matchea horario', () => { expect(pick('tengo 3 hijos').matchedValue).toBeNull(); });
 });
+
+// Caso prod 2026-07-06: el cliente pidió presencial mirando una lista de SOLO
+// horarios de video; la regla "presencial genérico" eligió el primer slot y terminó
+// agendando una videollamada rechazada.
+describe('pedido de modalidad sobre lista homogénea de horarios', () => {
+  const slotsVideo = [
+    { index: 1, label: 'mar 07/07 09:40', value: '2026-07-07T12:40:00.000Z' },
+    { index: 2, label: 'mar 07/07 12:40', value: '2026-07-07T15:40:00.000Z' },
+    { index: 3, label: 'mar 07/07 16:20', value: '2026-07-07T19:20:00.000Z' },
+  ];
+  it('"busco algo presencial" ante slots (sin opción video en la lista) → null', () => {
+    const r = resolveOption({ userText: 'Te agradezco mucho pero busco algo presencial gracias', offered: slotsVideo });
+    expect(r.matchedValue).toBeNull();
+  });
+  it('lista mixta sedes+video: "prefiero en persona" sigue eligiendo la sede', () => {
+    const mixtas = [
+      { index: 1, label: 'CABA — Corrientes 1386', value: 'DAIANA CABA' },
+      { index: 2, label: 'videollamada', value: '__video__' },
+    ];
+    const r = resolveOption({ userText: 'prefiero en persona', offered: mixtas });
+    expect(r.matchedValue).toBe('DAIANA CABA');
+  });
+});

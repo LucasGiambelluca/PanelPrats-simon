@@ -115,6 +115,26 @@ function isNegative(text: string): boolean {
   return /\b(no|nop|otro|otra|cambiar|mejor otro|distinto|ninguno|ninguna)\b/.test(norm(text));
 }
 
+// Rechazo EXPLÍCITO del agendado ("no gracias", "mejor no", "dejalo"). En producción
+// se agendó una cita contra un "No gracias" que ask_name tomó como nombre. `bareNo`:
+// el "no" pelado solo cuenta como rechazo donde no admite otra lectura (ask_name);
+// en ask_phone un "no" puede ser "no a ese número" y en await_slot "ninguno me sirve".
+const DECLINE_RE = /\b(no,?\s+gracias|mejor\s+no|no\s+quiero|no\s+me\s+interesa|no\s+por\s+ahora|ya\s+no\s+(quiero|hace\s+falta)|dejal[oa]|dejemosl[oa]|olvidal[oa]|cancelar|cancelo|cancela(lo)?|en\s+otro\s+momento)\b/;
+function isDecline(text: string, opts: { bareNo?: boolean } = {}): boolean {
+  const t = norm(text);
+  if (opts.bareNo && /^no+[.!\s]*$/.test(t)) return true;
+  return DECLINE_RE.test(t);
+}
+
+// Cierre cordial sin agendar (libreto: usted + puerta abierta, sin insistir).
+function declineStep(state: BookingState): BookingStep {
+  return {
+    state: { ...state, stage: 'done' },
+    messages: ['Como guste, no hay problema. Si más adelante quiere coordinar la consulta, me escribe por acá.'],
+    active: false,
+  };
+}
+
 // Hora del slot en horario Argentina (UTC-3), para filtrar mañana/tarde.
 function slotHourAR(iso: string): number {
   return (new Date(iso).getUTCHours() - 3 + 24) % 24;
@@ -584,6 +604,9 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
       if (req.isRequest) {
         return loadSlots({ ...state, minHour: effMin, offered: undefined, meta: undefined, askRetries: 0 }, deps, { turno: req.turno, desde: state.desde ? new Date(state.desde) : undefined, minHour: effMin });
       }
+      // Rechazo explícito sin otra señal accionable (ya se descartó slot/día/modalidad)
+      // → cerrar SIN agendar. Nunca insistir contra un "no gracias".
+      if (isDecline(text)) return declineStep(state);
       // No entendió: rotar la plantilla (en producción 22 convos loopearon con el
       // mismo "Decime qué horario preferís" repetido).
       const retries = (state.askRetries ?? 0) + 1;
@@ -596,12 +619,17 @@ export async function advanceBooking(state: BookingState, text: string, deps: Bo
     }
 
     case 'ask_name': {
+      // "No gracias"/"no" acá es rechazo del agendado, NO un nombre (en prod se
+      // creó una cita a nombre de "No gracias").
+      if (isDecline(text, { bareNo: true })) return declineStep(state);
       const nombre = cleanName(text);
       if (!nombre || nombre.length < 2 || isPlaceholderName(nombre)) return { state, messages: ['¿Me dice su nombre para agendarlo?'], active: true };
       return afterName({ ...state, nombre }, deps);
     }
 
     case 'ask_phone': {
+      // Rechazo explícito → cerrar sin agendar ("no" pelado NO: puede ser "no a ese número").
+      if (isDecline(text)) return declineStep(state);
       // Confirmación del teléfono sugerido por el extractor: "sí/dale" → usarlo.
       // Si además trae un número ("sí, mejor al 011..."), gana el número nuevo (cae al parseo).
       if (state.telefonoSugerido && isAffirmative(text) && !/\d{6,}/.test(text.replace(/[\s.-]/g, ''))) {
