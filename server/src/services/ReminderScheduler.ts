@@ -14,6 +14,36 @@ import { supabase } from '../config/supabase';
  *  - Idempotente: marca la cita como `reminded` para no repetir.
  *  - No recuerda citas canceladas ni ya pasadas.
  */
+/** Fin del día (23:59:59) de la fecha dada, en horario Argentina (UTC-3), en ms UTC. */
+export function endOfDayArMs(ms: number): number {
+  const AR_OFFSET = 3 * 60 * 60 * 1000; // UTC-3
+  const local = new Date(ms - AR_OFFSET);
+  local.setUTCHours(23, 59, 59, 999);
+  return local.getTime() + AR_OFFSET;
+}
+
+/**
+ * ¿Corresponde auto-marcar la cita como no_asistio? (pura, para testear)
+ * Reglas:
+ *  - Solo pendiente/confirmada con start_time y con su día (AR) ya cerrado.
+ *  - No backfilled: creada DESPUÉS de su horario = carga manual sobre algo pasado.
+ *  - CONFIRMADA editada DESPUÉS del cierre de su día → NO tocar: es una decisión
+ *    humana posterior (la operadora llama al otro día y la confirma). En prod el
+ *    barrido corría cada minuto y volvía a pisar esas confirmaciones con no_asistio.
+ */
+export function debeMarcarNoShow(
+  a: { status: string; start_time?: string | null; created_at?: string | null; updated_at?: string | null },
+  nowMs: number,
+): boolean {
+  if (!a.start_time) return false;
+  if (a.status !== 'pendiente' && a.status !== 'confirmada') return false;
+  const startMs = new Date(a.start_time).getTime();
+  if (a.created_at && new Date(a.created_at).getTime() > startMs) return false;
+  const eod = endOfDayArMs(startMs);
+  if (a.status === 'confirmada' && a.updated_at && new Date(a.updated_at).getTime() > eod) return false;
+  return nowMs > eod;
+}
+
 export class ReminderScheduler {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
@@ -106,15 +136,11 @@ export class ReminderScheduler {
       }
 
       // --- No-show: al cierre del día (hora AR), las citas no marcadas pasan a 'no_asistio' ---
-      // (Modo semi: solo marca; el recontacto lo hace el operador desde el inbox.)
+      // (Modo semi: solo marca; el recontacto lo hace el operador desde el inbox.
+      //  Reglas de elegibilidad en debeMarcarNoShow, incluida la de respetar la
+      //  confirmación manual posterior al día de la cita.)
       for (const a of appointments) {
-        if (!a.start_time) continue;
-        if (a.status !== 'pendiente' && a.status !== 'confirmada') continue;
-        const startMs = new Date(a.start_time).getTime();
-        // No auto-marcar citas "backfilled" (creadas DESPUÉS de su horario): son carga
-        // manual del operador sobre algo ya pasado, no un no-show real. Respetar su status.
-        if ((a as any).created_at && new Date((a as any).created_at).getTime() > startMs) continue;
-        if (now > this.endOfDayArMs(startMs)) {
+        if (debeMarcarNoShow(a as any, now)) {
           await AppointmentService.update(a.id, { status: 'no_asistio' }).catch(() => {});
           console.log(`[ReminderScheduler] no-show marcado: cita ${a.id} (${a.nombre || a.phone}) — para recontactar`);
         }
@@ -122,13 +148,5 @@ export class ReminderScheduler {
     } finally {
       this.running = false;
     }
-  }
-
-  /** Fin del día (23:59:59) de la fecha dada, en horario Argentina (UTC-3), en ms UTC. */
-  private endOfDayArMs(ms: number): number {
-    const AR_OFFSET = 3 * 60 * 60 * 1000; // UTC-3
-    const local = new Date(ms - AR_OFFSET);
-    local.setUTCHours(23, 59, 59, 999);
-    return local.getTime() + AR_OFFSET;
   }
 }
