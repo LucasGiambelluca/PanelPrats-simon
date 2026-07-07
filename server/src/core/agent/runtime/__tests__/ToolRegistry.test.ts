@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Stubs de las dependencias (se inyectan, no se mockea el módulo).
 const apptCreate = vi.fn();
+const apptList = vi.fn();
 const apptUpdate = vi.fn();
 const apptGetById = vi.fn();
 const kbSearch = vi.fn();
@@ -18,7 +19,7 @@ import { ToolRegistry } from '../ToolRegistry';
 
 function makeRegistry() {
   return new ToolRegistry({
-    appointments: { create: apptCreate, update: apptUpdate, getById: apptGetById, list: vi.fn().mockResolvedValue([]), hasOverlap: vi.fn() } as any,
+    appointments: { create: apptCreate, update: apptUpdate, getById: apptGetById, list: apptList, hasOverlap: vi.fn() } as any,
     knowledge: { search: kbSearch } as any,
     availability: { listOffices: avListOffices, getOffice: avGetOffice, freeSlots: avFreeSlots, hasCapacity: avHasCapacity, officeHasProfessionals: avOfficeHasProfessionals, pickProfessional: avPickProfessional } as any,
     handoff,
@@ -32,6 +33,7 @@ describe('ToolRegistry', () => {
     // Defaults: oficina sin profesionales => se conserva el chequeo de cupo fijo (hasCapacity).
     avOfficeHasProfessionals.mockResolvedValue(false);
     avGetOffice.mockResolvedValue({ nombre: 'CABA', modalidad: 'presencial', direccion: null });
+    apptList.mockResolvedValue([]);
   });
 
   it('expone los esquemas de las tools', () => {
@@ -429,5 +431,64 @@ describe('ToolRegistry — tools nuevas (Capacidades 3 y 4)', () => {
     expect(offered.set).toHaveBeenCalledWith('acc1', '549111', expect.arrayContaining([
       expect.objectContaining({ value: 'CABA' }),
     ]));
+  });
+});
+
+// Caso prod 2026-07-07 (Pablo Alonge): "puede ser mejor el miercoles" tras agendar
+// arranco un booking NUEVO y quedaron DOS citas pendientes (la vieja murio como
+// no-show falso). book_appointment con cita futura activa debe REPROGRAMARLA.
+describe('book_appointment — anti-duplicado', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    avOfficeHasProfessionals.mockResolvedValue(false);
+    avGetOffice.mockResolvedValue({ nombre: 'CABA', modalidad: 'presencial', direccion: null });
+    apptList.mockResolvedValue([]);
+  });
+  const FUTURO_VIEJO = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const FUTURO_NUEVO = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+
+  it('con cita futura activa del contacto → reprograma esa cita, NO crea otra', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    apptList.mockResolvedValue([
+      { id: 'appt-viejo', account_id: 'acc1', phone: '549111', status: 'pendiente', start_time: FUTURO_VIEJO, oficina: 'CABA' },
+    ]);
+    apptGetById.mockResolvedValue({ id: 'appt-viejo', account_id: 'acc1', phone: '549111', oficina: 'CABA' });
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Pablo', start_time: FUTURO_NUEVO, end_time: FUTURO_NUEVO, oficina: 'CABA', resumen: '' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(apptCreate).not.toHaveBeenCalled();
+    expect(apptUpdate).toHaveBeenCalledWith('appt-viejo', expect.objectContaining({ start_time: FUTURO_NUEVO }));
+  });
+
+  it('cita previa cancelada o pasada → crea una cita nueva normal', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    apptCreate.mockResolvedValue({ id: 'appt-nuevo' });
+    apptList.mockResolvedValue([
+      { id: 'a1', account_id: 'acc1', phone: '549111', status: 'cancelada', start_time: FUTURO_VIEJO },
+      { id: 'a2', account_id: 'acc1', phone: '549111', status: 'pendiente', start_time: '2026-07-01T12:00:00Z' },
+    ]);
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Pablo', start_time: FUTURO_NUEVO, end_time: FUTURO_NUEVO, oficina: 'CABA', resumen: '' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(apptCreate).toHaveBeenCalled();
+    expect(apptUpdate).not.toHaveBeenCalled();
+  });
+
+  it('cita futura de OTRO contacto → no interfiere, crea normal', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    apptCreate.mockResolvedValue({ id: 'appt-nuevo' });
+    apptList.mockResolvedValue([
+      { id: 'a1', account_id: 'acc1', phone: 'OTRO', status: 'pendiente', start_time: FUTURO_VIEJO },
+    ]);
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Pablo', start_time: FUTURO_NUEVO, end_time: FUTURO_NUEVO, oficina: 'CABA', resumen: '' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+    expect(apptCreate).toHaveBeenCalled();
   });
 });

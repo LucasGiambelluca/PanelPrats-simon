@@ -85,8 +85,16 @@ export function detectBookingIntent(text: string): { start: boolean; modalidad?:
 // el flujo de reprogramación (slots reales de la sede de la cita) sin depender de que
 // el LLM llame reschedule_appointment con una fecha inventada.
 const RESCHEDULE_WORDS = /\b(reprogramar|reprograma|reagendar|reagenda|cambiar (el|mi|la) (turno|cita|horario|hora)|mover (el|mi|la) (turno|cita)|correr (el|mi) turno|otro (dia|horario) para (mi|el) turno|cambiar la fecha)\b/;
+// Cambio SIN nombrar el turno ("puede ser mejor el miércoles", "prefiero el jueves",
+// "lo pasamos para el viernes"): exige palabra de cambio + referencia temporal JUNTAS
+// para no falsear. El runtime igual verifica que exista una cita próxima; sin cita,
+// cae al flujo normal. (Prod 2026-07-07: sin esto se arrancaba un booking nuevo y
+// quedaban dos citas vivas.)
+const CHANGE_HINT = /\b(mejor|puede ser|podria ser|prefiero|preferiria|me (viene|queda) mejor|(la|lo) pasamos|pasala|pasalo|pasar(la|lo)? para)\b/;
+const TIME_HINT = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|pasado manana|manana|otro dia|otro horario|otra hora|mas tarde|mas temprano|(a la|de la|de) (tarde|manana)|a las \d{1,2}|\d{1,2}[:.]\d{2}|\d{3,4}\s*(hs|h)\b)\b/;
 export function detectRescheduleIntent(text: string): boolean {
-  return RESCHEDULE_WORDS.test(norm(text));
+  const t = norm(text);
+  return RESCHEDULE_WORDS.test(t) || (CHANGE_HINT.test(t) && TIME_HINT.test(t));
 }
 
 function detectModalidad(text: string): 'presencial' | 'video' | null {

@@ -86,6 +86,24 @@ export class ToolRegistry {
           return { ok: true, data: { oficina: args.oficina, slots } };
         }
         case 'book_appointment': {
+          // Anti-duplicado (prod 2026-07-07): un cambio de horario tras agendar arrancaba
+          // un booking NUEVO y quedaban DOS citas vivas (la vieja moría como no-show
+          // falso). Si el contacto YA tiene una cita futura activa, esto es una
+          // REPROGRAMACIÓN de esa cita — nunca una segunda cita.
+          try {
+            const todas = await this.deps.appointments.list(ctx.accountId);
+            const nowMs = Date.now();
+            const vigente = (todas as any[])
+              .filter((x) => x.phone === ctx.phone
+                && (x.status === 'pendiente' || x.status === 'confirmada')
+                && x.start_time && new Date(x.start_time).getTime() > nowMs)
+              .sort((x, y) => new Date(x.start_time).getTime() - new Date(y.start_time).getTime())[0];
+            if (vigente) {
+              return await this.execute('reschedule_appointment',
+                { appointment_id: vigente.id, start_time: args.start_time, end_time: args.end_time, oficina: args.oficina },
+                ctx);
+            }
+          } catch { /* best-effort: si falla la lectura, se agenda normal */ }
           const office = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
           const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
           let assigned: string | null = null;

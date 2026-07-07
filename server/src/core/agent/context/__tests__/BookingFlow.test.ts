@@ -777,3 +777,29 @@ describe('rechazo explícito: nunca agendar contra un "no"', () => {
     expect(deps.book).not.toHaveBeenCalled();
   });
 });
+
+// Deteccion ampliada de reprogramacion (prod 2026-07-07): "puede ser mejor el
+// miercoles" tras agendar no matcheaba y arrancaba un booking nuevo (duplicado).
+describe('detectRescheduleIntent — cambio sin nombrar el turno', () => {
+  it.each([
+    'Uuu perdón puede ser mejor miércoles 1510',
+    'mejor a la tarde',
+    'prefiero el jueves',
+    'me queda mejor mañana',
+    'lo pasamos para el viernes?',
+    'reprogramar mi turno',
+  ])('"%s" → true', (t) => {
+    expect(detectRescheduleIntent(t)).toBe(true);
+  });
+
+  it.each([
+    'quiero un turno',
+    'mejor no',
+    'no gracias',
+    'tengo 64 años',
+    'me queda mejor la de Quilmes',
+    'gracias',
+  ])('"%s" → false (sin referencia temporal o sin cambio)', (t) => {
+    expect(detectRescheduleIntent(t)).toBe(false);
+  });
+});
