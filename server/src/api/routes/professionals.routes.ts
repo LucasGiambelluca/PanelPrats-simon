@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { supabase } from '../../config/supabase';
 import { validateBody } from '../middleware/validate';
+import { requireRole } from '../middleware/auth';
 
 const HHMM = /^\d{2}:\d{2}$/;
 
@@ -24,13 +25,23 @@ export function professionalsRouter(): Router {
   const r = Router();
 
   // Profesionales asignables = profiles activos (incluye admin). Solo id/name/role.
-  r.get('/', async (_req, res) => {
+  // Legible por admin o empleada con ver_todas_agendas: la Agenda necesita el listado
+  // para armar el selector de agendas. El resto del router sigue siendo admin-only.
+  r.get('/', (req, res, next) => {
+    if (req.user?.role !== 'admin' && !req.user?.verTodasAgendas) {
+      return res.status(403).json({ error: 'Sin permiso' });
+    }
+    next();
+  }, async (_req, res) => {
     const { data, error } = await supabase
       .from('profiles').select('id, name, role')
       .eq('active', true).order('name', { ascending: true });
     if (error) return res.status(400).json({ error: error.message });
     res.json(data ?? []);
   });
+
+  // Disponibilidad y bloqueos: configuración, solo admin.
+  r.use(requireRole('admin'));
 
   // Disponibilidad de un profesional en una oficina.
   r.get('/:id/availability', async (req, res) => {

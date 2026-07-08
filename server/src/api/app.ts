@@ -92,7 +92,9 @@ export function createApp(manager: AccountManager, webhookQueue?: WebhookQueue) 
   app.use('/api/team', authContext, requireRole('admin'), sensitiveLimiter, teamRouter());
   app.use('/api/offices', authContext, requireRole('admin'), officesRouter());
   app.use('/api/offices', authContext, requireRole('admin'), officeProfessionalsRouter());
-  app.use('/api/professionals', authContext, requireRole('admin'), professionalsRouter());
+  // Sin requireRole a nivel mount: el GET / (listado) lo pueden ver empleadas con
+  // ver_todas_agendas (selector de agendas); el resto del router exige admin adentro.
+  app.use('/api/professionals', authContext, professionalsRouter());
   app.use('/api/agenda', authContext, agendaRouter());
   app.use('/api/pendientes-llamar', authContext, pendientesRouter());
   app.use('/api/appointment-docs', authContext, appointmentDocsRouter());

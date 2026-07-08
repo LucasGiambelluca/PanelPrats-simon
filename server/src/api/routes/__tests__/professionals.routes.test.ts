@@ -16,6 +16,42 @@ function makeRes() {
     json(b: any) { this.body = b; if (!this.statusCode) this.statusCode = 200; return this; } } as any;
 }
 
+describe('professionalsRouter acceso GET / (listado)', () => {
+  it('empleada con ver_todas_agendas puede listar → next()', () => {
+    const guard = getMw(professionalsRouter(), 'get', '/', 0);
+    const res = makeRes(); const next = vi.fn();
+    guard({ user: { id: 'p1', role: 'empleada', verTodasAgendas: true } }, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(res.statusCode).toBe(0);
+  });
+
+  it('empleada sin ver_todas_agendas → 403', () => {
+    const guard = getMw(professionalsRouter(), 'get', '/', 0);
+    const res = makeRes(); const next = vi.fn();
+    guard({ user: { id: 'p1', role: 'empleada', verTodasAgendas: false } }, res, next);
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('admin puede listar → next()', () => {
+    const guard = getMw(professionalsRouter(), 'get', '/', 0);
+    const res = makeRes(); const next = vi.fn();
+    guard({ user: { id: 'a1', role: 'admin', verTodasAgendas: false } }, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('resto del router exige admin (requireRole a nivel router)', () => {
+    const router: any = professionalsRouter();
+    // El r.use(requireRole('admin')) queda como layer sin route en el stack.
+    const useLayer = router.stack.find((l: any) => !l.route && l.name !== 'router');
+    expect(useLayer).toBeTruthy();
+    const res = makeRes(); const next = vi.fn();
+    useLayer.handle({ user: { id: 'p1', role: 'empleada', verTodasAgendas: true } }, res, next);
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
 describe('professionalsRouter validation', () => {
   it('PUT availability rechaza ventana con hora_fin <= hora_inicio', () => {
     const validate = getMw(professionalsRouter(), 'put', '/:id/availability', 0);
