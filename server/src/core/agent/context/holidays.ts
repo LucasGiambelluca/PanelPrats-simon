@@ -14,7 +14,7 @@ const HOLIDAYS_AR = new Set<string>([
   '2026-06-15', // Güemes (trasladado)
   '2026-06-20', // Belgrano
   '2026-07-09', // Independencia
-  '2026-07-10', // Puente no laborable (estudio cerrado; las citas saltan al lunes)
+  // 2026-07-10 (puente) NO va: el estudio trabaja ese día (decisión 2026-07-07).
   '2026-08-17', // San Martín
   '2026-10-12', // Diversidad Cultural
   '2026-11-23', // Soberanía (trasladado)

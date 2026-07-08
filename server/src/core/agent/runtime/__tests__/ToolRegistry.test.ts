@@ -217,15 +217,14 @@ describe('ToolRegistry', () => {
     expect(apptCreate).not.toHaveBeenCalled();
   });
 
-  it('book_appointment rechaza el puente no laborable (2026-07-10)', async () => {
+  it('book_appointment acepta el viernes 10/07 (el estudio trabaja el puente)', async () => {
     avHasCapacity.mockResolvedValue(true);
+    apptCreate.mockResolvedValue({ id: 'appt1' });
     const reg = makeRegistry();
     const res = await reg.execute('book_appointment',
       { nombre: 'Ana', oficina: 'CABA', start_time: '2026-07-10T13:00:00.000Z', end_time: '2026-07-10T14:00:00.000Z', resumen: 'x' },
       { accountId: 'acc1', phone: '549111' });
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/feriado/i);
-    expect(apptCreate).not.toHaveBeenCalled();
+    expect(res.ok).toBe(true);
   });
 
   it('book_appointment acepta el lunes hábil siguiente (2026-07-13)', async () => {
