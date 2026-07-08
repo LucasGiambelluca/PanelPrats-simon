@@ -6,6 +6,7 @@ import type { OfferedOption } from '../context/OptionResolver';
 import { resolveOption } from '../context/OptionResolver';
 import { validarTelefonoAR } from '../../../utils/phone-ar';
 import { validateQualification } from '../context/QualificationRules';
+import { isHolidayARInstant } from '../context/holidays';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 // Monto de la consulta paga (análisis previsional). Fijo por ahora; configurable a futuro.
@@ -86,6 +87,12 @@ export class ToolRegistry {
           return { ok: true, data: { oficina: args.oficina, slots } };
         }
         case 'book_appointment': {
+          // Feriado (prod 2026-07-07): el LLM agendaba citas en feriados pasando una
+          // fecha directa (sin pasar por freeSlots, que sí los filtra). Rechazar acá
+          // cubre TODA reserva por tool, venga de donde venga la fecha.
+          if (isHolidayARInstant(args.start_time)) {
+            return { ok: false, error: 'Esa fecha es feriado y el estudio no atiende. Ofrecé horarios del siguiente día hábil (usá check_availability).' };
+          }
           // Anti-duplicado (prod 2026-07-07): un cambio de horario tras agendar arrancaba
           // un booking NUEVO y quedaban DOS citas vivas (la vieja moría como no-show
           // falso). Si el contacto YA tiene una cita futura activa, esto es una
@@ -188,6 +195,11 @@ export class ToolRegistry {
           const startMs = new Date(args.start_time).getTime();
           if (!args.start_time || Number.isNaN(startMs) || startMs < Date.now()) {
             return { ok: false, error: 'Ese horario no es válido (fecha pasada). Ofrecé un horario disponible real con el flujo de reprogramación.' };
+          }
+          // Mismo guard de feriados que book_appointment: una reprogramación tampoco
+          // puede caer en un día que el estudio no atiende.
+          if (isHolidayARInstant(args.start_time)) {
+            return { ok: false, error: 'Esa fecha es feriado y el estudio no atiende. Ofrecé horarios del siguiente día hábil (usá check_availability).' };
           }
           // Permite cambiar de SEDE: si viene args.oficina, valida cupo en la nueva.
           const targetOficina = (args.oficina ?? appt.oficina ?? '') as string;

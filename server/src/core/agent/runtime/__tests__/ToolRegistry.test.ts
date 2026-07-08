@@ -16,6 +16,7 @@ const avPickProfessional = vi.fn();
 const setCalificacion = vi.fn();
 
 import { ToolRegistry } from '../ToolRegistry';
+import { isHolidayARInstant } from '../../context/holidays';
 
 function makeRegistry() {
   return new ToolRegistry({
@@ -203,6 +204,52 @@ describe('ToolRegistry', () => {
     expect(res.ok).toBe(true);
     expect(res.data).toMatchObject({ appointment_id: 'appt1', direccion: 'Av. 1' });
     expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: 'acc1', phone: '549111', oficina: 'CABA' }));
+  });
+
+  it('book_appointment rechaza fecha en feriado AR (2026-07-09) aunque haya cupo', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Ana', oficina: 'CABA', start_time: '2026-07-09T13:00:00.000Z', end_time: '2026-07-09T14:00:00.000Z', resumen: 'x' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/feriado/i);
+    expect(apptCreate).not.toHaveBeenCalled();
+  });
+
+  it('book_appointment rechaza el puente no laborable (2026-07-10)', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Ana', oficina: 'CABA', start_time: '2026-07-10T13:00:00.000Z', end_time: '2026-07-10T14:00:00.000Z', resumen: 'x' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/feriado/i);
+    expect(apptCreate).not.toHaveBeenCalled();
+  });
+
+  it('book_appointment acepta el lunes hábil siguiente (2026-07-13)', async () => {
+    avHasCapacity.mockResolvedValue(true);
+    apptCreate.mockResolvedValue({ id: 'appt1' });
+    const reg = makeRegistry();
+    const res = await reg.execute('book_appointment',
+      { nombre: 'Ana', oficina: 'CABA', start_time: '2026-07-13T13:00:00.000Z', end_time: '2026-07-13T14:00:00.000Z', resumen: 'x' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(true);
+  });
+
+  it('reschedule_appointment rechaza mover una cita a un feriado', async () => {
+    apptGetById.mockResolvedValue({ id: 'a1', account_id: 'acc1', phone: '549111', oficina: 'CABA' });
+    avHasCapacity.mockResolvedValue(true);
+    const reg = makeRegistry();
+    // Feriado 2027 (no 2026): el backstop de "fecha pasada" corre antes y taparía
+    // el guard de feriado cuando el 10/07/2026 quede atrás del reloj real.
+    const res = await reg.execute('reschedule_appointment',
+      { appointment_id: 'a1', start_time: '2027-07-09T13:00:00.000Z', end_time: '2027-07-09T14:00:00.000Z' },
+      { accountId: 'acc1', phone: '549111' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/feriado/i);
+    expect(apptUpdate).not.toHaveBeenCalled();
   });
 });
 
@@ -444,8 +491,15 @@ describe('book_appointment — anti-duplicado', () => {
     avGetOffice.mockResolvedValue({ nombre: 'CABA', modalidad: 'presencial', direccion: null });
     apptList.mockResolvedValue([]);
   });
-  const FUTURO_VIEJO = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-  const FUTURO_NUEVO = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+  // Fechas relativas al reloj real: si caen en feriado AR, el guard de feriados
+  // rechazaría el booking y el test fallaría por el motivo equivocado. Se saltean.
+  const futuroHabil = (dias: number) => {
+    let d = new Date(Date.now() + dias * 24 * 3600 * 1000);
+    while (isHolidayARInstant(d)) d = new Date(d.getTime() + 24 * 3600 * 1000);
+    return d.toISOString();
+  };
+  const FUTURO_VIEJO = futuroHabil(1);
+  const FUTURO_NUEVO = futuroHabil(5); // gap > máx. feriados consecutivos: nunca pisa a VIEJO
 
   it('con cita futura activa del contacto → reprograma esa cita, NO crea otra', async () => {
     avHasCapacity.mockResolvedValue(true);

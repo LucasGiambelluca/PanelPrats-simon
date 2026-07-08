@@ -6,6 +6,7 @@ import { AIService } from '../../services/AIService';
 import { buildReceptionFicha } from '../agent/context/ReceptionFichaBuilder';
 import { redisPersistence } from '../../infrastructure/persistence/RedisPersistenceService';
 import { validarTelefonoAR } from '../../utils/phone-ar';
+import { isHolidayARInstant } from '../agent/context/holidays';
 
 // Ficha IA best-effort (Capacidad 2): arma resumen + perfil desde el historial.
 // Si no hay IA / historial, devuelve nulls (la cita se agenda igual).
@@ -110,6 +111,13 @@ export class AppointmentExecutor implements NodeExecutor {
             // Fin: hora_fin si hay; si no, +1h del inicio.
             end_time = buildISO(fecha, horaFin)
                 || (start_time ? new Date(new Date(start_time).getTime() + 60 * 60000).toISOString() : undefined);
+            // Fecha libre capturada del chat: si cae en feriado, la cita queda
+            // "a coordinar" (sin horario) en vez de agendarse un día sin atención.
+            if (start_time && isHolidayARInstant(start_time)) {
+                console.warn(`[AppointmentExecutor] fecha en feriado (${fecha}), cita queda a coordinar`);
+                start_time = undefined;
+                end_time = undefined;
+            }
         }
 
         console.log(`[AppointmentExecutor] Agendando cita para "${nombre}" (${telefono}) | ${start_time || 'sin fecha'}`);

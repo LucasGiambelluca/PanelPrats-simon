@@ -14,6 +14,7 @@ const HOLIDAYS_AR = new Set<string>([
   '2026-06-15', // Güemes (trasladado)
   '2026-06-20', // Belgrano
   '2026-07-09', // Independencia
+  '2026-07-10', // Puente no laborable (estudio cerrado; las citas saltan al lunes)
   '2026-08-17', // San Martín
   '2026-10-12', // Diversidad Cultural
   '2026-11-23', // Soberanía (trasladado)
@@ -27,5 +28,20 @@ const HOLIDAYS_AR = new Set<string>([
 
 /** ¿Es feriado nacional AR? `ymd` en formato 'YYYY-MM-DD' (fecha local AR). */
 export function isHolidayAR(ymd: string): boolean {
+  return HOLIDAYS_AR.has(ymd);
+}
+
+const TZ = 'America/Argentina/Buenos_Aires';
+
+/**
+ * ¿El instante (ISO o Date) cae en un día feriado según la fecha-calendario
+ * LOCAL del estudio? Fechas inválidas devuelven false (las valida otro guard).
+ */
+export function isHolidayARInstant(instant: string | Date): boolean {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(d.getTime())) return false;
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
   return HOLIDAYS_AR.has(ymd);
 }
