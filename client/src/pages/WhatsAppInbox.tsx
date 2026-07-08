@@ -252,6 +252,17 @@ export default function WhatsAppInbox() {
     if (match) {
       setActiveConvo(match);
       setTimeout(() => textareaRef.current?.focus(), 100);
+    } else if (ph) {
+      // No está en lo cargado (el inbox pagina de a 500): resolver contra la DB.
+      const acc = searchParams.get('account') || undefined;
+      conversationsApi.find(ph, acc)
+        .then((conv) => {
+          // Merge a la lista para que aparezca seleccionada en el panel izquierdo.
+          setConversations(prev => prev.some(c => c.id === conv.id) ? prev : [...prev, conv]);
+          setActiveConvo(conv);
+          setTimeout(() => textareaRef.current?.focus(), 100);
+        })
+        .catch(() => toast.error('No hay conversación con este contacto'));
     } else {
       toast.error('No hay conversación con este contacto');
     }

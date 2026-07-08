@@ -141,6 +141,12 @@ export const conversationsApi = {
   listAll: (offset = 0) =>
     api<WhatsAppConversation[]>(`/api/conversations?account_id=all&offset=${offset}`),
 
+  // Resuelve teléfono → conversación contra la DB (deep-link Agenda→chat).
+  // Cubre conversaciones que quedaron fuera de la primera página del inbox.
+  find: (phone: string, accountId?: string) =>
+    api<WhatsAppConversation>(
+      `/api/conversations/find?phone=${encodeURIComponent(phone)}${accountId ? `&account_id=${encodeURIComponent(accountId)}` : ''}`),
+
   messages: (conversationId: string) =>
     api<WhatsAppMessage[]>(`/api/conversations/${conversationId}/messages`),
 

@@ -3,8 +3,48 @@ import { supabase } from '../../config/supabase';
 import { redisPersistence } from '../../infrastructure/persistence/RedisPersistenceService';
 import { PhoneUtils } from '../../utils/phoneUtils';
 
+// Sufijo de 10 dígitos para matchear teléfonos entre citas y conversaciones:
+// las citas pueden venir en formato local ("341 640-3395") y las conversaciones
+// guardan el wa_id (549341..., a veces sin el 9). El sufijo iguala todas las formas.
+export function phoneSuffix(raw: string): string | null {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.length < 6) return null;
+  return digits.slice(-10);
+}
+
+// Elige la conversación para un deep-link: la de la cuenta pedida si existe,
+// si no la más reciente (las filas ya vienen ordenadas por last_message_at desc).
+export function pickConversationForPhone<T extends { account_id: string }>(
+  rows: T[], accountId: string | undefined,
+): T | null {
+  if (rows.length === 0) return null;
+  if (accountId) {
+    const own = rows.find((c) => c.account_id === accountId);
+    if (own) return own;
+  }
+  return rows[0];
+}
+
 export function conversationsRouter(): Router {
   const r = Router();
+
+  // Resuelve teléfono → conversación (deep-link Agenda→chat). Autoritativo contra
+  // la DB: el inbox pagina de a 500 y el contacto puede no estar cargado todavía.
+  r.get('/find', async (req, res) => {
+    const suffix = phoneSuffix(String(req.query.phone ?? ''));
+    if (!suffix) return res.status(400).json({ error: 'Teléfono inválido' });
+    const accountId = (req.query.account_id as string) || undefined;
+    const { data, error } = await supabase
+      .from('whatsapp_conversations')
+      .select('*')
+      .like('phone', `%${suffix}`)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(5);
+    if (error) return res.status(400).json({ error: error.message });
+    const match = pickConversationForPhone(data ?? [], accountId);
+    if (!match) return res.status(404).json({ error: 'Sin conversación para ese teléfono' });
+    res.json(match);
+  });
 
   r.get('/', async (req, res) => {
     const accountId = req.query.account_id as string;
