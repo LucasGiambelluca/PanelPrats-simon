@@ -63,6 +63,41 @@ export class ToolRegistry {
 
   schemas() { return SCHEMAS; }
 
+  /**
+   * Resuelve el pool (oficina + profesional) para un slot. Si el pool pedido no
+   * tiene cupo y es de VIDEO, prueba los otros pools de video para el MISMO
+   * horario (queja prod 2026-07-09: el bot corría la fecha en vez de agendar con
+   * otra abogada). Presencial nunca cambia de sede: el cliente eligió un lugar.
+   * Devuelve null si no hay cupo en ningún pool elegible.
+   */
+  private async resolvePool(accountId: string, oficina: string, start: string, end: string):
+    Promise<{ office: any | null; oficina: string; assigned: string | null } | null> {
+    const tryOffice = async (office: any | null, nombre: string) => {
+      const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
+      if (hasProfs) {
+        const assigned = await this.deps.availability.pickProfessional(office, start, end);
+        return assigned ? { office, oficina: nombre, assigned } : null;
+      }
+      const ok = await this.deps.availability.hasCapacity(accountId, nombre, start, end);
+      return ok ? { office, oficina: nombre, assigned: null } : null;
+    };
+
+    const office = await this.deps.availability.getOffice(accountId, oficina);
+    const direct = await tryOffice(office, oficina);
+    if (direct) return direct;
+    if (office?.modalidad !== 'video') return null;
+
+    try {
+      const candidatas = (await this.deps.availability.listOffices(accountId))
+        .filter((o: any) => o.nombre !== office.nombre && (o.modalidad === 'video' || o.modalidad === 'ambas'));
+      for (const alt of candidatas) {
+        const r = await tryOffice(alt, alt.nombre);
+        if (r) return r;
+      }
+    } catch { /* fallback best-effort: sin listado, se responde sin cupo */ }
+    return null;
+  }
+
   /** Ejecuta una tool. La identidad (accountId/phone) viene del ctx, NUNCA de args. */
   async execute(name: string, args: any, ctx: ToolContext): Promise<ToolResult> {
     try {
@@ -111,15 +146,9 @@ export class ToolRegistry {
                 ctx);
             }
           } catch { /* best-effort: si falla la lectura, se agenda normal */ }
-          const office = await this.deps.availability.getOffice(ctx.accountId, args.oficina);
-          const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
-          let assigned: string | null = null;
-          if (hasProfs) {
-            assigned = await this.deps.availability.pickProfessional(office!, args.start_time, args.end_time);
-            if (!assigned) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
-          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, args.oficina, args.start_time, args.end_time))) {
-            return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
-          }
+          const pool = await this.resolvePool(ctx.accountId, args.oficina, args.start_time, args.end_time);
+          if (!pool) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
+          const { office, oficina: oficinaFinal, assigned } = pool;
           // Enriquecimiento pre-INSERT (Capacidad 2): ficha estructurada + resumen
           // natural, en el MISMO registro. Best-effort: si falla, se agenda igual.
           let resumen_ia: string | null = null;
@@ -167,7 +196,7 @@ export class ToolRegistry {
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono,
             nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
-            start_time: args.start_time, end_time: args.end_time, oficina: args.oficina,
+            start_time: args.start_time, end_time: args.end_time, oficina: oficinaFinal,
             assigned_profile_id: assigned,
             resumen_ia, perfil_json,
             // Calificación (validada) manda sobre la ficha IA para edad/nacionalidad/insalubres/aportes;
@@ -182,7 +211,7 @@ export class ToolRegistry {
             tipo_consulta: intake.tipo_consulta ?? null,
             monto_a_cobrar: intake.monto_a_cobrar ?? 0,
           } as any);
-          return { ok: true, data: { appointment_id: appt.id, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
+          return { ok: true, data: { appointment_id: appt.id, oficina: oficinaFinal, modalidad: office?.modalidad, direccion: office?.direccion ?? undefined, video_link: office?.video_link ?? undefined } };
         }
         case 'reschedule_appointment': {
           const appt = await this.deps.appointments.getById(args.appointment_id);
@@ -202,18 +231,13 @@ export class ToolRegistry {
             return { ok: false, error: 'Esa fecha es feriado y el estudio no atiende. Ofrecé horarios del siguiente día hábil (usá check_availability).' };
           }
           // Permite cambiar de SEDE: si viene args.oficina, valida cupo en la nueva.
+          // Video sin cupo → resolvePool prueba los otros pools de video (mismo horario).
           const targetOficina = (args.oficina ?? appt.oficina ?? '') as string;
-          const office = await this.deps.availability.getOffice(ctx.accountId, targetOficina);
-          const hasProfs = office ? await this.deps.availability.officeHasProfessionals(office) : false;
-          let assigned: string | null = null;
-          if (hasProfs) {
-            assigned = await this.deps.availability.pickProfessional(office!, args.start_time, args.end_time);
-            if (!assigned) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
-          } else if (!(await this.deps.availability.hasCapacity(ctx.accountId, targetOficina, args.start_time, args.end_time))) {
-            return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
-          }
-          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, oficina: targetOficina, assigned_profile_id: assigned });
-          return { ok: true, data: { direccion: office?.direccion ?? undefined, video_link: (office as any)?.video_link ?? undefined, modalidad: office?.modalidad } };
+          const pool = await this.resolvePool(ctx.accountId, targetOficina, args.start_time, args.end_time);
+          if (!pool) return { ok: false, error: 'Ese horario ya no tiene cupo, ofrecé otro.' };
+          const { office, oficina: oficinaFinal, assigned } = pool;
+          await this.deps.appointments.update(args.appointment_id, { start_time: args.start_time, end_time: args.end_time, oficina: oficinaFinal, assigned_profile_id: assigned });
+          return { ok: true, data: { oficina: oficinaFinal, direccion: office?.direccion ?? undefined, video_link: (office as any)?.video_link ?? undefined, modalidad: office?.modalidad } };
         }
         case 'cancel_appointment': {
           const appt = await this.deps.appointments.getById(args.appointment_id);

@@ -480,6 +480,98 @@ describe('ToolRegistry — tools nuevas (Capacidades 3 y 4)', () => {
   });
 });
 
+// Caso prod 2026-07-09 (queja R.Prats): el cliente acepta un horario de video pero
+// el pool ofrecido (DANIELA) ya se llenó → el bot corría la FECHA en vez de agendar
+// el MISMO horario con otra abogada de video. Fallback determinístico de pool:
+// video lleno → probar los otros pools de video para el mismo slot. Presencial NO
+// (el cliente eligió un lugar físico).
+describe('book/reschedule — fallback de pool video (mismo horario, otra abogada)', () => {
+  const ctx = { accountId: 'acc1', phone: '549111' } as any;
+  const daniela = { id: 'v1', account_id: 'acc1', nombre: 'DANIELA VIDEOS', modalidad: 'video', direccion: null, video_link: 'https://meet/daniela' };
+  const lara = { id: 'v2', account_id: 'acc1', nombre: 'LARA VIDEOS', modalidad: 'video', direccion: null, video_link: 'https://meet/lara' };
+  const caba = { id: 'p1', account_id: 'acc1', nombre: 'CABA', modalidad: 'presencial', direccion: 'Av 1', video_link: null };
+  const OFFICES = [daniela, lara, caba];
+
+  const futuro = (dias: number) => {
+    let d = new Date(Date.now() + dias * 24 * 3600 * 1000);
+    while (isHolidayARInstant(d)) d = new Date(d.getTime() + 24 * 3600 * 1000);
+    return d.toISOString();
+  };
+  const START = futuro(2);
+  const END = new Date(new Date(START).getTime() + 15 * 60 * 1000).toISOString();
+
+  const makeDeps = (overrides: any = {}) => {
+    const created: any[] = [];
+    const updated: any[] = [];
+    const deps: any = {
+      appointments: {
+        list: () => Promise.resolve([]),
+        create: (a: any) => { created.push(a); return Promise.resolve({ id: 'a1' }); },
+        update: (id: string, u: any) => { updated.push({ id, ...u }); return Promise.resolve({ id }); },
+        getById: () => Promise.resolve(null),
+      },
+      availability: {
+        getOffice: (_a: string, nombre: string) => Promise.resolve(OFFICES.find((o) => o.nombre === nombre) ?? null),
+        listOffices: () => Promise.resolve(OFFICES),
+        officeHasProfessionals: () => Promise.resolve(true),
+        // DANIELA llena, LARA con lugar.
+        pickProfessional: (office: any) => Promise.resolve(office.nombre === 'LARA VIDEOS' ? 'p-lara' : null),
+      },
+      knowledge: {}, handoff: () => Promise.resolve(),
+      ...overrides,
+    };
+    return { deps, created, updated };
+  };
+
+  it('pool video lleno → agenda el MISMO horario en otro pool video (otra abogada)', async () => {
+    const { deps, created } = makeDeps();
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment',
+      { nombre: 'Ana', start_time: START, end_time: END, oficina: 'DANIELA VIDEOS', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(created[0].oficina).toBe('LARA VIDEOS');
+    expect(created[0].assigned_profile_id).toBe('p-lara');
+    expect(created[0].start_time).toBe(START);
+    expect(r.data.oficina).toBe('LARA VIDEOS');
+    expect(r.data.video_link).toBe('https://meet/lara');
+  });
+
+  it('todos los pools video llenos → error sin cupo, no crea nada', async () => {
+    const { deps, created } = makeDeps();
+    deps.availability.pickProfessional = () => Promise.resolve(null);
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment',
+      { nombre: 'Ana', start_time: START, end_time: END, oficina: 'DANIELA VIDEOS', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(created.length).toBe(0);
+  });
+
+  it('presencial lleno → NO cambia de sede (el cliente eligió un lugar)', async () => {
+    const { deps, created } = makeDeps();
+    deps.availability.officeHasProfessionals = () => Promise.resolve(false);
+    deps.availability.hasCapacity = () => Promise.resolve(false);
+    const listSpy = vi.fn(() => Promise.resolve(OFFICES));
+    deps.availability.listOffices = listSpy;
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('book_appointment',
+      { nombre: 'Ana', start_time: START, end_time: END, oficina: 'CABA', resumen: 'x' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(created.length).toBe(0);
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  it('reschedule: pool video lleno → mueve la cita al mismo horario con otra abogada', async () => {
+    const { deps, updated } = makeDeps();
+    deps.appointments.getById = () => Promise.resolve({ id: 'x1', account_id: 'acc1', phone: '549111', oficina: 'DANIELA VIDEOS' });
+    const reg = new ToolRegistry(deps);
+    const r = await reg.execute('reschedule_appointment',
+      { appointment_id: 'x1', start_time: START, end_time: END }, ctx);
+    expect(r.ok).toBe(true);
+    expect(updated[0]).toMatchObject({ id: 'x1', oficina: 'LARA VIDEOS', assigned_profile_id: 'p-lara', start_time: START });
+    expect(r.data.video_link).toBe('https://meet/lara');
+  });
+});
+
 // Caso prod 2026-07-07 (Pablo Alonge): "puede ser mejor el miercoles" tras agendar
 // arranco un booking NUEVO y quedaron DOS citas pendientes (la vieja murio como
 // no-show falso). book_appointment con cita futura activa debe REPROGRAMARLA.
