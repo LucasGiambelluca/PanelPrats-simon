@@ -61,9 +61,12 @@ export class WebhookQueue {
     await redis.lpush(QUEUE, JSON.stringify(job));
   }
 
+  // Recover pendiente hasta que Redis responda: al boot suele fallar porque la
+  // conexión (enableOfflineQueue=false) todavía no está lista; el tick lo reintenta.
+  private recovered = false;
+
   start(): void {
     if (this.timer) return;
-    this.recoverProcessing().catch((e) => logger.error(`[WebhookQueue] recover error: ${e?.message ?? e}`));
     this.timer = setInterval(() => {
       this.tick().catch((e) => logger.error(`[WebhookQueue] tick error: ${e?.message ?? e}`));
     }, this.TICK_MS);
@@ -86,6 +89,10 @@ export class WebhookQueue {
     if (this.running) return; // evita solapamiento si un tick tarda
     this.running = true;
     try {
+      if (!this.recovered) {
+        await this.recoverProcessing(); // si Redis aún no está, tira y se reintenta el próximo tick
+        this.recovered = true;
+      }
       await this.promoteDueRetries();
       for (let i = 0; i < this.BATCH; i++) {
         const raw = await redis.rpoplpush(QUEUE, PROCESSING);

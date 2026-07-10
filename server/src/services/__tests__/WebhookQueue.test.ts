@@ -153,4 +153,23 @@ describe('WebhookQueue.recoverProcessing', () => {
     expect(h.L(PROCESSING)).toHaveLength(0);
     expect(h.L(QUEUE)).toHaveLength(1);
   });
+
+  // Caso prod 2026-07-10: al boot Redis todavía no conectó (enableOfflineQueue=false),
+  // recover tiraba "Stream isn't writeable" UNA vez y los jobs colgados en
+  // wh:processing quedaban varados hasta el próximo reinicio.
+  it('si recover falla al boot (Redis caído), un tick posterior lo reintenta y rescata el job', async () => {
+    const mgr = makeManager();
+    const q = new WebhookQueue(mgr);
+    h.L(PROCESSING).push(JSON.stringify({ kind: 'meta', entry: { id: 'X' }, attempts: 0 }));
+
+    // Redis caído durante el primer intento de recover (el del tick 1).
+    h.redis.rpoplpush.mockRejectedValueOnce(new Error("Stream isn't writeable and enableOfflineQueue options is false"));
+    await q.tick().catch(() => { /* el error del tick se loguea, no tumba el worker */ });
+    expect(h.L(PROCESSING)).toHaveLength(1); // sigue varado
+
+    // Redis ya conectado: el próximo tick recupera y procesa.
+    await q.tick();
+    expect(h.L(PROCESSING)).toHaveLength(0);
+    expect(mgr.handleMetaWebhook).toHaveBeenCalledWith({ id: 'X' });
+  });
 });
