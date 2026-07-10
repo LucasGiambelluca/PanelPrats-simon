@@ -50,4 +50,34 @@ describe('AppointmentFollowupScheduler — cuentas sin templates', () => {
     await s.tick();
     expect(manager.sendTemplate).toHaveBeenCalledTimes(1);
   });
+
+  // Caso prod 2026-07-10: el template "recordatorio_cita_24h" no existe/aprobado en
+  // Meta (#132001). Error PERMANENTE: reintentarlo cada tick es spam infinito.
+  // Se deshabilita ese template hasta el reinicio y se avisa UNA vez.
+  it('error permanente de Meta (template no existe) → deshabilita el template, no reintenta cada tick', async () => {
+    const manager = makeManager(true);
+    manager.sendTemplate.mockRejectedValue(new Error(
+      'Error enviando template: {"message":"(#132001) Template name does not exist in the translation","code":132001}',
+    ));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = new AppointmentFollowupScheduler(manager as any);
+
+    await s.tick();
+    expect(manager.sendTemplate).toHaveBeenCalledTimes(1);
+    expect(AppointmentService.setSchedulerFlags).not.toHaveBeenCalled(); // no marca enviado
+
+    await s.tick(); // segundo tick: template deshabilitado, ni lo intenta
+    expect(manager.sendTemplate).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1); // aviso una sola vez
+  });
+
+  it('error transitorio (no permanente) → sigue reintentando el próximo tick', async () => {
+    const manager = makeManager(true);
+    manager.sendTemplate.mockRejectedValue(new Error('ETIMEDOUT'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = new AppointmentFollowupScheduler(manager as any);
+    await s.tick();
+    await s.tick();
+    expect(manager.sendTemplate).toHaveBeenCalledTimes(2);
+  });
 });

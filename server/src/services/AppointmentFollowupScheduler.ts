@@ -41,6 +41,32 @@ export class AppointmentFollowupScheduler {
   // Cuentas ya salteadas por no soportar templates (log una sola vez, no por tick).
   private skippedNoTemplates = new Set<string>();
 
+  // Templates que Meta rechazó con error PERMANENTE (#132001: no existe/no aprobado).
+  // Reintentarlos cada tick es spam infinito; quedan deshabilitados hasta el reinicio.
+  private disabledTemplates = new Set<string>();
+
+  /** Envía un template. false = no se envió (deshabilitado o inexistente en Meta);
+   *  el caller NO debe marcar el flag. Errores transitorios se propagan (reintento). */
+  private async sendTpl(
+    accountId: string,
+    phone: string,
+    t: { name: string; lang: string; components: unknown[]; preview?: string },
+  ): Promise<boolean> {
+    if (this.disabledTemplates.has(t.name)) return false;
+    try {
+      await this.manager.sendTemplate(accountId, phone, t.name, t.lang, t.components, t.preview);
+      return true;
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      if (/132001|does not exist/i.test(msg)) {
+        this.disabledTemplates.add(t.name);
+        console.error(`[FollowupScheduler] template "${t.name}" no existe/no está aprobado en Meta: deshabilitado hasta el reinicio. Crearlo y aprobarlo en Meta (ver página "Plantillas WA").`);
+        return false;
+      }
+      throw err;
+    }
+  }
+
   /** Los templates son de WhatsApp Cloud API. FB/IG/baileys no los soportan:
    *  intentarlo tiraba el mismo error por cita en CADA tick (spam de logs prod 9/7). */
   private canTemplate(accountId: string): boolean {
@@ -75,22 +101,26 @@ export class AppointmentFollowupScheduler {
             if (ev === 'reminder_24h' && a.start_time) {
               const sede = a.oficina?.trim() || 'el estudio';
               const t = buildTemplate('reminder_24h', [nombre, fechaAR(a.start_time), horaAR(a.start_time), sede]);
-              await this.manager.sendTemplate(a.account_id, a.phone, t.name, t.lang, t.components, t.preview);
-              await AppointmentService.setSchedulerFlags(a.id, { reminder_24h_sent: true });
+              if (await this.sendTpl(a.account_id, a.phone, t)) {
+                await AppointmentService.setSchedulerFlags(a.id, { reminder_24h_sent: true });
+              }
             } else if (ev === 'followup' && a.start_time) {
               if (a.status === 'no_asistio') {
                 const t = buildTemplate('reagendar', [nombre, fechaAR(a.start_time)]);
-                await this.manager.sendTemplate(a.account_id, a.phone, t.name, t.lang, t.components, t.preview);
-                await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true });
+                if (await this.sendTpl(a.account_id, a.phone, t)) {
+                  await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true });
+                }
               } else if (pending.length > 0) {
                 // Follow-up + primer pedido de docs en un solo mensaje.
                 const t = buildTemplate('docs_pendientes', [nombre, pending.join(', ')]);
-                await this.manager.sendTemplate(a.account_id, a.phone, t.name, t.lang, t.components, t.preview);
-                await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true, doc_chase_count: 1, doc_chase_last_at: nowIso });
+                if (await this.sendTpl(a.account_id, a.phone, t)) {
+                  await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true, doc_chase_count: 1, doc_chase_last_at: nowIso });
+                }
               } else {
                 const t = buildTemplate('seguimiento', [nombre]);
-                await this.manager.sendTemplate(a.account_id, a.phone, t.name, t.lang, t.components, t.preview);
-                await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true });
+                if (await this.sendTpl(a.account_id, a.phone, t)) {
+                  await AppointmentService.setSchedulerFlags(a.id, { followup_sent: true });
+                }
               }
             }
           } catch (err: any) {
@@ -103,12 +133,13 @@ export class AppointmentFollowupScheduler {
         if (docChaseDue(a as any, pending.length, now, this.DOC_CFG)) {
           try {
             const t = buildTemplate('docs_pendientes', [nombre, pending.join(', ')]);
-            await this.manager.sendTemplate(a.account_id, a.phone, t.name, t.lang, t.components, t.preview);
-            await AppointmentService.setSchedulerFlags(a.id, {
-              doc_chase_count: (a.doc_chase_count ?? 0) + 1,
-              doc_chase_last_at: nowIso,
-            });
-            console.log(`[FollowupScheduler] doc_chase → ${a.phone} (cita ${a.id})`);
+            if (await this.sendTpl(a.account_id, a.phone, t)) {
+              await AppointmentService.setSchedulerFlags(a.id, {
+                doc_chase_count: (a.doc_chase_count ?? 0) + 1,
+                doc_chase_last_at: nowIso,
+              });
+              console.log(`[FollowupScheduler] doc_chase → ${a.phone} (cita ${a.id})`);
+            }
           } catch (err: any) {
             console.error(`[FollowupScheduler] error doc_chase cita ${a.id}:`, err?.message ?? err);
           }
