@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { X, Calendar, Loader2 } from 'lucide-react';
+import { X, Calendar, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   availabilityApi, appointmentsApi, MOTIVO_LABELS,
@@ -37,6 +37,9 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
   const [loadingOffices, setLoadingOffices] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Cita futura activa YA existente para este contacto (aviso anti-duplicado:
+  // caso prod 9/7 — se re-agendaban a mano citas que el bot ya había creado).
+  const [citaExistente, setCitaExistente] = useState<{ start_time: string; oficina?: string } | null>(null);
 
   const office = offices.find((o) => o.id === officeId) || null;
 
@@ -51,7 +54,20 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
       .then((os) => setOffices(os))
       .catch((e) => toast.error(e?.message || 'No se pudieron cargar las oficinas'))
       .finally(() => setLoadingOffices(false));
-  }, [open, accountId, contactName]);
+    // Chequeo best-effort de cita ya existente (si falla, no bloquea el modal).
+    setCitaExistente(null);
+    appointmentsApi.list(accountId)
+      .then((apps: any[]) => {
+        const now = Date.now();
+        const vigente = apps
+          .filter((a) => a.phone === phone
+            && (a.status === 'pendiente' || a.status === 'confirmada')
+            && a.start_time && new Date(a.start_time).getTime() > now)
+          .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0];
+        if (vigente) setCitaExistente({ start_time: vigente.start_time, oficina: vigente.oficina });
+      })
+      .catch(() => { /* sin aviso, el modal funciona igual */ });
+  }, [open, accountId, phone, contactName]);
 
   // Cargar slots del día elegido cuando cambia oficina / profesional / fecha.
   const loadSlots = useCallback(() => {
@@ -115,6 +131,18 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
         </div>
 
         <div className="px-5 py-4 space-y-3.5">
+          {/* Aviso anti-duplicado: el contacto ya tiene una cita futura activa */}
+          {citaExistente && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                Este contacto <b>ya tiene una cita</b> el{' '}
+                <b>{new Date(citaExistente.start_time).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</b>
+                {citaExistente.oficina ? <> en <b>{citaExistente.oficina}</b></> : null}.
+                Si agendás acá, va a quedar <b>duplicada</b> — conviene reprogramar la existente desde la Agenda.
+              </span>
+            </div>
+          )}
           {/* Nombre */}
           <label className="block">
             <span className="text-xs font-semibold text-brand-inkmuted">Nombre</span>
