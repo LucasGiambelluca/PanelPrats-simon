@@ -258,7 +258,14 @@ export class AvailabilityService {
    * MOTOR de asignación: propone horarios en CASCADA por prioridad (`orden`),
    * filtrando por modalidad (video/presencial) y, en presencial, por zona.
    * Respeta inmediatez (mínimo `minLeadMin` minutos hacia adelante, default 60).
-   * Llena la agenda de mayor prioridad primero; si no alcanza, baja a la siguiente.
+   *
+   * Semántica (reglas del estudio, agendas.txt 24/6): INMEDIATEZ primero —
+   * el día disponible más cercano gana aunque sea de una agenda de menor
+   * prioridad; DENTRO de un mismo día se llena primero la agenda de mayor
+   * prioridad (Daniela 1°, Lourdes 2°, ...). Antes la prioridad mandaba sobre
+   * la fecha y el bot corría días con Daniela en vez de ofrecer HOY con otra
+   * abogada (queja prod 9/7). Mismo horario en dos agendas → se ofrece una
+   * sola vez, con la de mayor prioridad.
    * Cada slot vuelve etiquetado con `oficina` + `profileId` (la chica de esa agenda).
    */
   async proposeCascade(
@@ -282,14 +289,29 @@ export class AvailabilityService {
       if (byZona.length) offices = byZona;
     }
 
-    const out: Array<Slot & { oficina: string; profileId: string | null }> = [];
+    // Slots por agenda (cada una ya en orden temporal, desde leadNow).
+    const perOffice: Array<{ office: Office; slots: Slot[] }> = [];
     for (const o of offices) {
-      if (out.length >= max) break;
-      const slots = await this.freeSlots(accountId, o.nombre, { max: max - out.length, now: leadNow });
-      for (const s of slots) {
-        if (out.length >= max) break;
-        const profileId = await this.pickProfessional(o, s.start, s.end);
-        out.push({ ...s, oficina: o.nombre, profileId });
+      perOffice.push({ office: o, slots: await this.freeSlots(accountId, o.nombre, { max, now: leadNow }) });
+    }
+
+    // Buckets por día-calendario AR: días ascendentes; dentro del día, agendas por prioridad.
+    const ymdAR = (iso: string) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(iso));
+    const days = [...new Set(perOffice.flatMap((p) => p.slots.map((s) => ymdAR(s.start))))].sort();
+
+    const out: Array<Slot & { oficina: string; profileId: string | null }> = [];
+    const seenStart = new Set<string>();
+    for (const day of days) {
+      for (const { office, slots } of perOffice) {
+        for (const s of slots) {
+          if (out.length >= max) return out;
+          if (ymdAR(s.start) !== day || seenStart.has(s.start)) continue;
+          seenStart.add(s.start);
+          const profileId = await this.pickProfessional(office, s.start, s.end);
+          out.push({ ...s, oficina: office.nombre, profileId });
+        }
       }
     }
     return out;

@@ -25,6 +25,10 @@ export interface BookingServiceDeps {
   suggestOffice: (accountId: string, text: string) => Promise<{ oficina_sugerida: any; necesita_aclaracion: boolean; pregunta_aclaracion?: string }>;
   listOffices: (accountId: string) => Promise<Array<{ nombre: string; modalidad: string; direccion?: string | null }>>;
   freeSlots: (accountId: string, oficina: string, opts?: { desde?: Date; max?: number }) => Promise<Array<{ start: string; end: string }>>;
+  // Cascada de agendas de VIDEO (reglas del estudio: inmediatez + prioridad por día).
+  // Si está, los slots de video salen de TODAS las agendas de video, cada uno
+  // etiquetado con su oficina/profesional; si falta, se degrada a freeSlots de una.
+  videoCascade?: (accountId: string, opts?: { desde?: Date; max?: number }) => Promise<Array<{ start: string; end: string; oficina: string; profileId?: string | null }>>;
   // Agenda reusando book_appointment del ToolRegistry. Throw si no hay cupo.
   // b.telefono: número real dado en el chat (FB/IG); si falta, el caller usa el id de canal.
   book: (accountId: string, phone: string, conversation: string, zona: string | null, b: { nombre: string; start: string; end: string; oficina: string; profileId?: string | null; telefono?: string }) => Promise<{ direccion?: string | null; video_link?: string | null; modalidad?: string }>;
@@ -58,7 +62,19 @@ export class BookingService {
           .filter((o) => o.modalidad === 'presencial' || o.modalidad === 'ambas')
           .map((o) => ({ nombreInterno: o.nombre, zona: zonaFromNombre(o.nombre), direccion: o.direccion ?? null }));
       },
-      freeSlots: async (oficina, opts) => (await this.deps.freeSlots(accountId, oficina, opts)).map((s) => ({ start: s.start, end: s.end, oficina })),
+      freeSlots: async (oficina, opts) => {
+        // Video → cascada entre TODAS las agendas de video (Daniela 1°, Lourdes 2°, ...):
+        // el flujo pide slots de "la" oficina de video, pero la oferta real cruza pools.
+        if (this.deps.videoCascade) {
+          const offs = await this.deps.listOffices(accountId);
+          const off = offs.find((o) => norm(o.nombre) === norm(oficina));
+          if (off?.modalidad === 'video') {
+            return (await this.deps.videoCascade(accountId, opts))
+              .map((s) => ({ start: s.start, end: s.end, oficina: s.oficina, profileId: s.profileId ?? null }));
+          }
+        }
+        return (await this.deps.freeSlots(accountId, oficina, opts)).map((s) => ({ start: s.start, end: s.end, oficina }));
+      },
       book: (b) => this.deps.book(accountId, phone, conversation, getState()?.zona ?? null, b),
       reschedule: (b) => this.deps.reschedule(accountId, phone, conversation, b),
     };

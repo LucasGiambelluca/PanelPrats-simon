@@ -194,6 +194,14 @@ export function getAgentRuntime(): AgentRuntime {
     suggestOffice: (a, t) => suggestOfficeResolved(a, t),
     listOffices: (a) => availability.listOffices(a).then((offs) => offs.map((o) => ({ nombre: o.nombre, modalidad: o.modalidad, direccion: o.direccion ?? null }))),
     freeSlots: (a, oficina, opts) => availability.freeSlots(a, oficina, { max: opts?.max ?? 3, ...(opts?.desde ? { now: opts.desde } : {}) }),
+    // Video: cascada entre agendas (reglas del estudio: inmediatez + prioridad por día).
+    // Con `desde` explícito (el cliente pidió un día/franja) no se suma el lead de 60'.
+    videoCascade: (a, opts) => availability.proposeCascade(a, {
+      modalidad: 'video',
+      max: opts?.max ?? 3,
+      minLeadMin: opts?.desde ? 0 : 60,
+      ...(opts?.desde ? { now: opts.desde } : {}),
+    }),
     book: async (a, phone, conversation, _zona, b) => {
       // zona NO se thread-ea cruda: que gpt-4o extraiga la localidad limpia del diálogo.
       // telefono: número real dado en el chat (FB/IG). Si falta, book_appointment cae al id de canal.
@@ -239,6 +247,8 @@ export function getAgentRuntime(): AgentRuntime {
   singleton = new AgentRuntime({
     ai: { completeWithTools: (o) => AIService.completeWithTools(o) },
     persona: { build: buildPersona },
+    // Área persistida de la conversación (para podar el libreto por área).
+    getArea: (a, p) => memory.getDialogueState(a, p).then((s) => s?.area ?? null).catch(() => null),
     memory: { load: (a, p) => memory.load(a, p) },
     tools: { schemas: () => tools.schemas(), execute: (n, args, ctx) => tools.execute(n, args, ctx) },
     loadAccount,
