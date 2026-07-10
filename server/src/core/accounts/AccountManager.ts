@@ -142,6 +142,15 @@ export class AccountManager {
   }
 
   /**
+   * ¿La cuenta puede mandar templates (HSM)? Solo WhatsApp oficial (Cloud API).
+   * Los schedulers proactivos consultan esto ANTES de intentar, para no
+   * generar un error por cita en cada tick con cuentas FB/IG/baileys.
+   */
+  supportsTemplates(accountId: string): boolean {
+    return this.clients.get(accountId) instanceof WhatsAppOfficialClient;
+  }
+
+  /**
    * Envía un template (HSM) por Cloud API. Solo aplica a WhatsApp oficial
    * (`WhatsAppOfficialClient`); los templates son específicos de esa API.
    */

@@ -38,6 +38,22 @@ export class AppointmentFollowupScheduler {
     return s === 'WORKING' || s === 'connected';
   }
 
+  // Cuentas ya salteadas por no soportar templates (log una sola vez, no por tick).
+  private skippedNoTemplates = new Set<string>();
+
+  /** Los templates son de WhatsApp Cloud API. FB/IG/baileys no los soportan:
+   *  intentarlo tiraba el mismo error por cita en CADA tick (spam de logs prod 9/7). */
+  private canTemplate(accountId: string): boolean {
+    const m = this.manager as any;
+    if (typeof m.supportsTemplates !== 'function') return true; // manager viejo: comportamiento previo
+    if (m.supportsTemplates(accountId)) return true;
+    if (!this.skippedNoTemplates.has(accountId)) {
+      this.skippedNoTemplates.add(accountId);
+      console.log(`[FollowupScheduler] cuenta ${accountId} sin soporte de templates: se saltean sus citas`);
+    }
+    return false;
+  }
+
   async tick(): Promise<void> {
     if (this.running) return;
     this.running = true;
@@ -49,6 +65,7 @@ export class AppointmentFollowupScheduler {
 
       for (const a of appts) {
         if (!this.isConnected(a.account_id)) continue;
+        if (!this.canTemplate(a.account_id)) continue;
         const nombre = a.nombre?.trim() || 'Hola';
         const pending = pendingByAppt.get(a.id) ?? [];
         const events = dueAppointmentEvents(a as any, now, this.CFG);
