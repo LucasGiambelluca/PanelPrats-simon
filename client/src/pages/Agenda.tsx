@@ -172,7 +172,17 @@ export default function Agenda() {
   // ver_todas_agendas. Solo lectura — reasignar sigue siendo admin-only.
   const puedeVerTodasAgendas = role === 'admin' || verTodasAgendas;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [allLines, setAllLines] = useState(false); // true = agenda unificada de todas las líneas
+  // true = agenda unificada de todas las líneas. Default TRUE (queja prod 9/7: las citas
+  // del bot caen en la cuenta del canal — FB/IG/WA — y con "línea activa" quedaban
+  // invisibles y parecían perdidas). La elección del usuario persiste entre sesiones.
+  const [allLines, setAllLines] = useState(() => {
+    try { return localStorage.getItem('agenda_all_lines') !== '0'; } catch { return true; }
+  });
+  const toggleAllLines = () => setAllLines((v) => {
+    const next = !v;
+    try { localStorage.setItem('agenda_all_lines', next ? '1' : '0'); } catch { /* noop */ }
+    return next;
+  });
   const [professionals, setProfessionals] = useState<ProfessionalLite[]>([]);
   // Agendas (profesionales) visibles. null = sin inicializar → muestra todo
   // (evita agenda en blanco si falla la carga). Set vacío = "Ninguna" (nada visible).
@@ -1069,7 +1079,7 @@ export default function Agenda() {
 
             {/* Toggle: todas las líneas vs línea activa */}
             <button
-              onClick={() => setAllLines(v => !v)}
+              onClick={toggleAllLines}
               title={allLines ? 'Mostrando TODAS las líneas (todos los canales)' : 'Mostrando solo la línea activa'}
               className={`ml-1 px-3 py-1 text-xs font-bold rounded-lg border transition whitespace-nowrap ${
                 allLines
