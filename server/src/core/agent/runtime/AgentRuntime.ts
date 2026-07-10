@@ -16,7 +16,9 @@ const FALLBACK = 'Disculpá, esto mejor lo ve una persona del estudio. Ya te der
 // Dependencias inyectadas (facilita el test y respeta el aislamiento).
 export interface RuntimeDeps {
   ai: { completeWithTools: (opts: any) => Promise<{ content?: string; toolCalls?: Array<{ id: string; name: string; args: any }> }> };
-  persona: { build: (account: any, fichaText: string, continuityBlock?: string) => string };
+  persona: { build: (account: any, fichaText: string, continuityBlock?: string, objetivo?: string, area?: string | null) => string };
+  // Área de la conversación (DialogueState.area) para podar el libreto por área.
+  getArea?: (accountId: string, phone: string) => Promise<string | null>;
   memory: { load: (accountId: string, phone: string) => Promise<{ fichaText: string; calificacion?: Record<string, any> | null }> };
   tools: { schemas: () => any[]; execute: (name: string, args: any, ctx: ToolContext) => Promise<{ ok: boolean; data?: any; error?: string }> };
   loadAccount: (accountId: string) => Promise<any>;
@@ -96,7 +98,12 @@ export class AgentRuntime {
     const ttlDays = Number((account as any)?.calificacionTtlDays) || 30;
     const calBlock = buildCalificacionFicha(ficha.calificacion, msgArea, ttlDays, (this.deps.now ?? Date.now)());
     const fichaText = calBlock ? `${ficha.fichaText}\n${calBlock}` : ficha.fichaText;
-    let systemPrompt = this.deps.persona.build(account, fichaText, continuity);
+    // Área de ESTA conversación (estado persistido > detector del mensaje) para
+    // podar el libreto: solo la sección del área + generales, no las 7 áreas.
+    const areaConv = this.deps.getArea
+      ? await this.deps.getArea(accountId, phone).catch(() => null)
+      : null;
+    let systemPrompt = this.deps.persona.build(account, fichaText, continuity, '', areaConv ?? msgArea ?? null);
     const tools = this.deps.tools.schemas();
     const messages: any[] = [...history, { role: 'user', content: text }];
 

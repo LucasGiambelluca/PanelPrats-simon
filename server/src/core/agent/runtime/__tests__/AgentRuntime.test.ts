@@ -46,7 +46,7 @@ describe('AgentRuntime.handle', () => {
     const rt = new AgentRuntime(deps as any);
     await rt.handle('acc1', '549111', 'quiero turno', {});
     // persona recibió el bloque de continuidad
-    expect(deps.persona.build).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'CONTINUIDAD: ya habló antes.');
+    expect(deps.persona.build).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'CONTINUIDAD: ya habló antes.', '', null);
     // las tools reciben la conversación (para armar la ficha en book_appointment)
     const ctxArg = deps.tools.execute.mock.calls[0][2];
     expect(ctxArg.conversation).toContain('quiero turno');

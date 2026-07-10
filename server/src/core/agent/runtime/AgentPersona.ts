@@ -1,6 +1,7 @@
 import type { AgentAccountConfig } from './types';
+import { selectProcedures } from './selectProcedures';
 
-export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string, continuityBlock = '', objetivo = ''): string {
+export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: string, continuityBlock = '', objetivo = '', area?: string | null): string {
   const nombre = account.agentName?.trim() || 'Sofía';
   const estudio = account.estudioNombre?.trim() || 'el estudio';
   const tono = account.agentPersona?.trim();
@@ -41,8 +42,10 @@ export function buildPersona(account: Partial<AgentAccountConfig>, fichaText: st
     '- Cuando termines las preguntas de calificación del PROCEDIMIENTO (jubilación, pensión, laboral, ART, tránsito), registrá el resultado con la tool set_qualification (resultado: gratis/pago/descartar, + edad/hijos/aportes si los tenés) ANTES de ofrecer agendar.',
     '- Si la FICHA incluye un bloque CALIFICACIÓN PREVIA, NO repitas esas preguntas: retomá desde ahí y ofrecé agendar (o el análisis pago), según el resultado registrado.',
     '',
+    // Área conocida → solo el libreto de ESA área + secciones generales (el blob
+    // completo son ~11k tokens que diluyen las instrucciones, sobre todo en mini).
     account.agentProcedures?.trim()
-      ? `PROCEDIMIENTOS (seguí estas instrucciones del estudio para atender):\n${account.agentProcedures.trim()}\n`
+      ? `PROCEDIMIENTOS (seguí estas instrucciones del estudio para atender):\n${selectProcedures(account.agentProcedures.trim(), area)}\n`
       : '',
     account.businessContext ? `DATOS DEL ESTUDIO:\n${account.businessContext}\n` : '',
     continuityBlock ? `${continuityBlock}\n` : '',
