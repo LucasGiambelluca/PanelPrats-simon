@@ -264,6 +264,9 @@ export default function Agenda() {
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Firma de la última carga: evita re-render del calendario cuando el poll de 10s
+  // trae datos idénticos (queja prod 13/7: "la agenda se actualiza sola constantemente").
+  const lastLoadSig = useRef<string>('');
 
   // Sync real time line
   useEffect(() => {
@@ -288,7 +291,13 @@ export default function Agenda() {
     if (!silent) setLoading(true);
     try {
       const data = await appointmentsApi.list(useAll ? 'all' : activeAccountId!);
-      setAppointments(data);
+      // Solo actualizar el estado si el contenido cambió: un array con nueva
+      // referencia pero mismos datos re-renderiza todo el calendario sin motivo.
+      const sig = JSON.stringify(data);
+      if (sig !== lastLoadSig.current) {
+        lastLoadSig.current = sig;
+        setAppointments(data);
+      }
     } catch (err: any) {
       toast.error('Error al cargar la agenda: ' + err.message);
     } finally {
@@ -2206,7 +2215,7 @@ export default function Agenda() {
 
       {/* Popup recordatorio de cita + botones de llamada */}
       <CallReminderModal
-        appointments={appointments}
+        appointments={filteredAppointments}
         provider={accounts.find(a => a.id === activeAccountId)?.provider}
       />
 
