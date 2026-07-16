@@ -9,6 +9,7 @@
 
 import { resolveOption, type OfferedOption } from './OptionResolver';
 import { validarTelefonoAR } from '../../../utils/phone-ar';
+import { esPsid } from '../../../utils/psid';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -173,8 +174,9 @@ const DOW: Record<string, number> = { domingo: 0, lunes: 1, martes: 2, miercoles
  * undefined (mejor no filtrar que filtrar mal). `t` ya viene normalizado (sin acentos).
  */
 function extractMinHour(t: string): number | undefined {
-  // "pasado el mediodía" / "después del mediodía" → 13.
-  if (/\b(pasad[oa]s?|despues del?)\s+(el\s+)?mediodia\b/.test(t)) return 13;
+  // "pasado el mediodía" / "después del mediodía" → 13. Tolera "medio dia" en dos
+  // palabras y el typo "despus" (prod 2026-07-13: "despus del medio dia").
+  if (/\b(pasad[oa]s?|despue?s del?)\s+(el\s+)?medio\s*dia\b/.test(t)) return 13;
 
   // "antes de las N" es un TECHO, no un piso: ignorar salvo negación ("no puedo antes
   // de las 4") o "recién". Sin esta guarda, "antes de las 15" invertía la restricción.
@@ -252,7 +254,9 @@ function cleanName(text: string): string {
 // El LLM a veces pasa un nombre-relleno ("Cliente") en vez del real. No se acepta:
 // se guardaron 15 citas con nombre "Cliente" en producción por esto.
 const NAME_PLACEHOLDERS = new Set(['cliente', 'usuario', 'senor', 'senora', 'sr', 'sra', 'sin nombre', 'na', 'n a', 'test', 'desconocido']);
-function isPlaceholderName(s: string): boolean { return NAME_PLACEHOLDERS.has(norm(s)); }
+// PSID de FB/IG (todo dígitos, 11+): el LLM a veces lo pasa como "nombre" del contacto
+// (prod 2026-07-16: citas a nombre de "25516497748025583"). Nunca es un nombre.
+function isPlaceholderName(s: string): boolean { return NAME_PLACEHOLDERS.has(norm(s)) || esPsid(s); }
 
 const SLOT_LABEL = (s: BookingSlot): string => fmt(s.start);
 

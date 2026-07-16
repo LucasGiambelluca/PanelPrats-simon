@@ -367,6 +367,12 @@ describe('parseSlotRequest minHour', () => {
   it('"pasado el mediodía" → 13', () => {
     expect(parseSlotRequest('recién pasado el mediodía', now).minHour).toBe(13);
   });
+  it('"despues del medio dia" (dos palabras) → 13', () => {
+    expect(parseSlotRequest('despues del medio dia', now).minHour).toBe(13);
+  });
+  it('"despus del mediodía" (typo prod Graciela) → 13', () => {
+    expect(parseSlotRequest('despus del mediodía', now).minHour).toBe(13);
+  });
   it('sin restricción de hora → minHour undefined', () => {
     expect(parseSlotRequest('el martes', now).minHour).toBeUndefined();
   });
@@ -801,5 +807,39 @@ describe('detectRescheduleIntent — cambio sin nombrar el turno', () => {
     'gracias',
   ])('"%s" → false (sin referencia temporal o sin cambio)', (t) => {
     expect(detectRescheduleIntent(t)).toBe(false);
+  });
+});
+
+// Bug prod 2026-07-16: citas creadas con el PSID de FB/IG como nombre
+// ("25516497748025583"). Un nombre todo-dígitos largo NUNCA es un nombre.
+describe('BookingFlow — PSID nunca es un nombre', () => {
+  it('startBooking con nombre=PSID lo descarta (el flujo pedirá el nombre)', async () => {
+    const deps = makeDeps();
+    const s = await startBooking({ zona: 'Quilmes', nombre: '25516497748025583' }, deps);
+    expect(s.state.nombre).toBeUndefined();
+  });
+
+  it('en ask_name, un PSID re-pregunta el nombre (no agenda)', async () => {
+    const deps = makeDeps();
+    let { state } = await reachSlots(deps);
+    let step = await advanceBooking(state, 'el primero', deps);
+    expect(step.state.stage).toBe('ask_name');
+    step = await advanceBooking(step.state, '25516497748025583', deps);
+    expect(step.state.stage).toBe('ask_name');           // sigue esperando un nombre real
+    expect(deps.book).not.toHaveBeenCalled();
+  });
+});
+
+// Caso prod 2026-07-13 (Graciela): en await_slot, "Despus del medio dia 2 de la tarde"
+// agendó la opción del medio (12:15) en vez de re-buscar por la tarde.
+describe('BookingFlow — await_slot con "medio dia" en dos palabras', () => {
+  it('re-busca por la tarde en vez de tomar la opción del medio', async () => {
+    const deps = makeDeps();
+    const { state } = await reachSlots(deps);
+    const step = await advanceBooking(state, 'Despus del medio dia 2 de la tarde', deps);
+    // No debe haber elegido slot (las 14 no está ofrecida): re-busca y sigue en await_slot.
+    expect(step.state.stage).toBe('await_slot');
+    expect(step.state.chosenStart).toBeUndefined();
+    expect(deps.freeSlots).toHaveBeenCalledTimes(2);     // la oferta inicial + la re-búsqueda
   });
 });
