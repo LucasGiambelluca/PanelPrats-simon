@@ -204,7 +204,7 @@ export interface Appointment {
   updated_at: string;
   start_time?: string;
   end_time?: string;
-  oficina?: string; // modalidad/oficina (Videollamada, Presencial CABA…)
+  oficina?: string | null; // modalidad/oficina (Videollamada, Presencial CABA…)
   assigned_profile_id?: string | null; // abogada/profesional
 
   // Ficha de recepción (migración 0023).

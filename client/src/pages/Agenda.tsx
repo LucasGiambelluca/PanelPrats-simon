@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAccounts } from '../context/AccountContext';
 import { useAuth } from '../context/AuthContext';
 import {
-  appointmentsApi, professionalsApi, agendaApi, Appointment,
+  appointmentsApi, professionalsApi, agendaApi, availabilityApi, Appointment,
   MOTIVO_LABELS, CANAL_LABELS, RESULTADO_LABELS,
   type AppointmentMotivo, type AppointmentCanal, type AppointmentResultado,
+  type AvailabilityOffice,
 } from '../lib/api';
 import type { ProfessionalLite } from '../types';
 import CallReminderModal from '../components/CallReminderModal';
@@ -15,7 +16,7 @@ import { toast } from 'sonner';
 import {
   Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Trash2, Search, RefreshCw,
   Phone, UserCheck, Shield, Plus, ChevronLeft, ChevronRight, Info, User,
-  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon, Minus, MessageSquare
+  FileText, Menu, Check, Filter, CalendarDays, Sun, Moon, Minus, MessageSquare, MapPin
 } from 'lucide-react';
 
 function formatDistanceToNow(dateInput: Date | string): string {
@@ -260,8 +261,13 @@ export default function Agenda() {
     startHour: '09:00',
     endHour: '10:00',
     account_id: '',
+    oficina: '',
     ...emptyIntake(),
   });
+  // Agendas/oficinas de la cuenta elegida en el modal. Bug prod 16/7: el form no
+  // tenía campo oficina → 12 citas/semana sin agenda y empleadas anotando el
+  // destino en el nombre ("SONIA Para Daniela C").
+  const [formOffices, setFormOffices] = useState<AvailabilityOffice[]>([]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // Firma de la última carga: evita re-render del calendario cuando el poll de 10s
@@ -275,6 +281,19 @@ export default function Agenda() {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Oficinas de la cuenta del form (para el select del modal). Best-effort: si la
+  // cuenta no tiene oficinas configuradas, el campo queda opcional.
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const accId = (formData.account_id && formData.account_id !== 'all') ? formData.account_id : '';
+    if (!accId) { setFormOffices([]); return; }
+    let alive = true;
+    availabilityApi.offices(accId)
+      .then((os) => { if (alive) setFormOffices(os); })
+      .catch(() => { if (alive) setFormOffices([]); });
+    return () => { alive = false; };
+  }, [isModalOpen, formData.account_id]);
 
   // Scroll to active business hour (8 AM) on load
   useEffect(() => {
@@ -531,6 +550,7 @@ export default function Agenda() {
       // en el select "Asignar a Cuenta". Sin esto se enviaba account_id='all' → la DB
       // rechazaba (uuid inválido) y no se podía agendar desde la agenda.
       account_id: (activeAccountId && activeAccountId !== 'all') ? activeAccountId : (accounts[0]?.id || ''),
+      oficina: '',
       ...emptyIntake(),
       canal_origen: autoCanalFromAccount(accounts.find(a => a.id === ((activeAccountId && activeAccountId !== 'all') ? activeAccountId : accounts[0]?.id))?.channel),
     });
@@ -557,6 +577,7 @@ export default function Agenda() {
       // en el select "Asignar a Cuenta". Sin esto se enviaba account_id='all' → la DB
       // rechazaba (uuid inválido) y no se podía agendar desde la agenda.
       account_id: (activeAccountId && activeAccountId !== 'all') ? activeAccountId : (accounts[0]?.id || ''),
+      oficina: '',
       ...emptyIntake(),
       canal_origen: autoCanalFromAccount(accounts.find(a => a.id === ((activeAccountId && activeAccountId !== 'all') ? activeAccountId : accounts[0]?.id))?.channel),
     });
@@ -582,6 +603,7 @@ export default function Agenda() {
       startHour: startHourStr,
       endHour: endHourStr,
       account_id: app.account_id || activeAccountId || '',
+      oficina: app.oficina ?? '',
       motivo: app.motivo ?? '',
       dni: app.dni ?? '',
       faltante: app.faltante ?? '',
@@ -619,6 +641,12 @@ export default function Agenda() {
     }
     if (!formData.telefono.trim()) {
       toast.error('El teléfono es requerido');
+      return;
+    }
+    // Si la cuenta tiene agendas configuradas, la cita DEBE ir a una: sin esto las
+    // empleadas anotaban el destino en el nombre ("SONIA Para Daniela C").
+    if (formOffices.length > 0 && !formData.oficina) {
+      toast.error('Elegí la agenda/oficina de la cita');
       return;
     }
     if (submitting) return; // evita doble-submit → citas duplicadas
@@ -671,6 +699,7 @@ export default function Agenda() {
           status: formData.status,
           start_time: startTimeISO,
           end_time: endTimeISO,
+          oficina: formData.oficina || null,
           ...intake,
         });
         toast.success('Cita actualizada con éxito');
@@ -685,6 +714,7 @@ export default function Agenda() {
           status: formData.status,
           start_time: startTimeISO,
           end_time: endTimeISO,
+          oficina: formData.oficina || null,
           ...intake,
         });
         toast.success('Cita agendada con éxito');
@@ -1969,6 +1999,33 @@ export default function Agenda() {
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id} className={theme === 'light' ? 'bg-white' : 'bg-brand-card'}>
                         {acc.name} ({acc.phone_number || 'Sin número'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Agenda / Oficina (obligatoria si la cuenta tiene agendas) */}
+                <div className="space-y-1">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                    theme === 'light' ? 'text-brand-inkmuted' : 'text-brand-secondary/80'
+                  }`}>
+                    <MapPin size={10} />
+                    <span>Agenda / Oficina</span>
+                  </label>
+                  <select
+                    value={formData.oficina}
+                    onChange={(e) => setFormData({ ...formData, oficina: e.target.value })}
+                    disabled={formOffices.length === 0}
+                    className={`w-full border rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 transition-all disabled:opacity-50 ${
+                      theme === 'light'
+                        ? 'bg-brand-ivory border-brand-hairline text-brand-ink focus:bg-brand-surface focus:ring-brand-primary/40 focus:border-brand-primary'
+                        : 'bg-brand-dark/60 border-white/10 text-white focus:ring-brand-secondary/50 focus:border-brand-secondary/50'
+                    }`}
+                  >
+                    <option value="">{formOffices.length === 0 ? 'Sin agendas en esta cuenta' : 'Seleccionar agenda...'}</option>
+                    {formOffices.map((o) => (
+                      <option key={o.id} value={o.nombre} className={theme === 'light' ? 'bg-white' : 'bg-brand-card'}>
+                        {o.nombre}
                       </option>
                     ))}
                   </select>
