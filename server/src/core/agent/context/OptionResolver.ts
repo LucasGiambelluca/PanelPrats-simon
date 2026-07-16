@@ -103,7 +103,18 @@ function labelHasDay(label: string, day: string): boolean {
 // borra el ':'). Devuelve la hora pedida o 'mediodia'.
 function requestedTime(rawText: string): { h: number; m?: number } | 'mediodia' | null {
   const t = canonTimes(rawText);
-  if (/\bmediod[ií]a\b/.test(t)) return 'mediodia';
+  // "2 de la tarde" / "9 de la mañana": hora coloquial. Va ANTES que "mediodía"
+  // porque "después del mediodía, 2 de la tarde" pide las 14, no las 12 (prod 2026-07-13).
+  const col = t.match(/\b([1-9]|1[01])\s+de\s+la\s+(tarde|noche|manana|mañana)\b/);
+  if (col) {
+    let h = Number(col[1]);
+    if ((col[2] === 'tarde' || col[2] === 'noche') && h < 12) h += 12;
+    return { h };
+  }
+  // "después del / pasado el mediodía" es una COTA INFERIOR (la maneja parseSlotRequest
+  // como minHour), NO un pedido de las 12. "medio dia" en dos palabras también cuenta.
+  if (/\b(despue?s|pasad[oa]s?)\s+(del?\s+)?(el\s+)?medio\s*d[ií]a\b/.test(t)) return null;
+  if (/\bmedio\s*d[ií]a\b/.test(t)) return 'mediodia';
   let m = t.match(/\b(?:a\s+las|las|de\s+las)\s+([01]?\d|2[0-3])(?:[:.]([0-5]\d))?/);
   if (m) return { h: Number(m[1]), m: m[2] !== undefined ? Number(m[2]) : undefined };
   m = t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);          // "10:30"
@@ -144,8 +155,10 @@ export function resolveOption(input: { userText: string; offered: OfferedOption[
   const n = offered.length;
   const byIndex = (i: number) => offered.find((o) => o.index === i) ?? offered[i - 1];
 
-  // 1) "del medio" / "el de al medio".
-  if (/\b(del medio|al medio|el medio|la del medio)\b/.test(text)) {
+  // 1) "del medio" / "el de al medio". Lookahead: "del medio dia" es el MEDIODÍA
+  //    escrito en dos palabras, no la opción del medio (prod 2026-07-13: "despus del
+  //    medio dia 2 de la tarde" agendó la opción 2 de 3 en vez de re-buscar).
+  if (/\b(del medio|al medio|el medio|la del medio)\b(?!\s+d[ií]a\b)/.test(text)) {
     const mid = Math.round((n + 1) / 2);
     return { matchedValue: byIndex(mid).value, confianza: 0.85 };
   }

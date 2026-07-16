@@ -186,6 +186,36 @@ describe('formatos de hora extra (fricción prod)', () => {
   it('no rompe: "tengo 3 hijos" no matchea horario', () => { expect(pick('tengo 3 hijos').matchedValue).toBeNull(); });
 });
 
+// Caso prod 2026-07-13 (Graciela): pidió "Despus del medio dia 2 de la tarde" con
+// oferta 11:45 / 12:15 / 16:30 y la regla posicional "del medio" (opción del medio)
+// matcheó "del medio( )dia" → agendó 12:15. "medio dia" escrito en dos palabras es
+// el MEDIODÍA, nunca la opción del medio.
+describe('mediodía en dos palabras vs opción "del medio"', () => {
+  const offered = [
+    { index: 1, label: 'lun 13/07 11:45', value: 'v1145' },
+    { index: 2, label: 'lun 13/07 12:15', value: 'v1215' },
+    { index: 3, label: 'lun 13/07 16:30', value: 'v1630' },
+  ];
+  const pick = (t: string) => resolveOption({ userText: t, offered });
+
+  it('caso Graciela: "Despues del medio dia 2 de la tarde" NO elige la opción del medio', () => {
+    expect(pick('Despues del medio dia 2 de la tarde').matchedValue).not.toBe('v1215');
+  });
+  it('caso Graciela: pide las 14 (no ofrecida) → null, que el caller re-busque', () => {
+    expect(pick('Despues del medio dia 2 de la tarde').matchedValue).toBeNull();
+  });
+  it('"2 de la tarde" con slot de 14 ofrecido → lo elige', () => {
+    const conCatorce = [...offered, { index: 4, label: 'lun 13/07 14:00', value: 'v1400' }];
+    expect(resolveOption({ userText: 'a las 2 de la tarde', offered: conCatorce }).matchedValue).toBe('v1400');
+  });
+  it('"al medio dia" (dos palabras) → slot del mediodía (12:15)', () => {
+    expect(pick('al medio dia').matchedValue).toBe('v1215');
+  });
+  it('regresión: "el del medio" (posicional real) sigue eligiendo la opción del medio', () => {
+    expect(pick('el del medio').matchedValue).toBe('v1215');
+  });
+});
+
 // Caso prod 2026-07-06: el cliente pidió presencial mirando una lista de SOLO
 // horarios de video; la regla "presencial genérico" eligió el primer slot y terminó
 // agendando una videollamada rechazada.
