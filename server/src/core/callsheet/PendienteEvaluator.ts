@@ -4,6 +4,7 @@
 // Regla: sin cita coordinada + sin opt_out + teléfono LLAMABLE.
 import { validarTelefonoAR } from '../../utils/phone-ar';
 import { PhoneUtils } from '../../utils/phoneUtils';
+import { esPsid } from '../../utils/psid';
 
 export type Canal = 'whatsapp' | 'facebook' | 'instagram';
 
@@ -66,11 +67,6 @@ function telefonoDesdeMemoria(contact: ContactMemoryRow | null): string | null {
   }
   const parcial = strOrNull(contact.current_thread?.datos_parciales?.telefono as unknown);
   return parcial;
-}
-
-/** ¿El valor parece un PSID de FB/IG (todo dígitos y largo)? No sirve como nombre. */
-function esPsid(v: string): boolean {
-  return /^\d{11,}$/.test(v);
 }
 
 /** Nombre real del contacto en cualquier canal, nunca el PSID de FB. null si no hay. */

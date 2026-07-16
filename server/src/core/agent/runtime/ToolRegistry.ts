@@ -5,6 +5,7 @@ import type { AvailabilityService } from '../../../services/AvailabilityService'
 import type { OfferedOption } from '../context/OptionResolver';
 import { resolveOption } from '../context/OptionResolver';
 import { validarTelefonoAR } from '../../../utils/phone-ar';
+import { esPsid } from '../../../utils/psid';
 import { validateQualification } from '../context/QualificationRules';
 import { isHolidayARInstant } from '../context/holidays';
 
@@ -33,7 +34,7 @@ export interface ToolDeps {
   // Opciones ofrecidas (Capacidad 4): persisten qué se mostró y en qué orden.
   offered?: { set: (accountId: string, phone: string, opts: OfferedOption[]) => Promise<void>; get: (accountId: string, phone: string) => Promise<OfferedOption[]> };
   // Ficha IA al agendar (Capacidad 2).
-  buildFicha?: (conversation: string, ctx: { telefono: string; modalidad: 'presencial' | 'video'; zona?: string | null }) => Promise<{ resumen_ia: string; perfil: Record<string, any> }>;
+  buildFicha?: (conversation: string, ctx: { telefono: string | null; modalidad: 'presencial' | 'video'; zona?: string | null }) => Promise<{ resumen_ia: string; perfil: Record<string, any> }>;
   // Registro de la calificación del área (memoria estructurada por área).
   setCalificacion?: (accountId: string, phone: string, area: string, entry: { resultado: string; datos: Record<string, any>; calificado_at: string }) => Promise<void>;
   // Lectura de la calificación vigente del contacto (Fix 4): se copia a columnas
@@ -154,8 +155,11 @@ export class ToolRegistry {
           let resumen_ia: string | null = null;
           let perfil_json: Record<string, any> | null = null;
           // telefono real: en FB/IG ctx.phone es el id de la red (PSID/IGSID), NO un teléfono.
-          // El BookingFlow lo pide al usuario y lo pasa en args.telefono. WhatsApp: ctx.phone ya es el número.
-          const telefono = (args?.telefono && String(args.telefono).trim()) || ctx.phone;
+          // El BookingFlow lo pide al usuario y lo pasa en args.telefono. WhatsApp: ctx.phone ya
+          // es el número. El fallback a ctx.phone SOLO si valida como teléfono: en prod quedaban
+          // citas con telefono = PSID y el recordatorio salía a un id de red (2026-07-16).
+          const telefono = (args?.telefono && String(args.telefono).trim())
+            || (validarTelefonoAR(ctx.phone).valido ? ctx.phone : null);
           if (this.deps.buildFicha && ctx.conversation) {
             try {
               const modalidad = office?.modalidad === 'video' ? 'video' : 'presencial';
@@ -193,9 +197,13 @@ export class ToolRegistry {
           if (Array.isArray(intake.a_confirmar) && intake.a_confirmar.length) {
             perfil_json = { ...(perfil_json || {}), a_confirmar: intake.a_confirmar };
           }
+          // El LLM a veces pasa el PSID del contacto como "nombre" (prod 2026-07-16:
+          // citas a nombre de "25516497748025583"). Preferir el nombre real de la ficha.
+          const nombreFinal = !esPsid(args?.nombre) ? args.nombre
+            : (perfil_json?.nombre && !esPsid(perfil_json.nombre) ? perfil_json.nombre : 'Sin nombre');
           const appt = await this.deps.appointments.create({
             account_id: ctx.accountId, phone: ctx.phone, telefono,
-            nombre: args.nombre, resumen: args.resumen ?? '', status: 'pendiente',
+            nombre: nombreFinal, resumen: args.resumen ?? '', status: 'pendiente',
             start_time: args.start_time, end_time: args.end_time, oficina: oficinaFinal,
             assigned_profile_id: assigned,
             resumen_ia, perfil_json,

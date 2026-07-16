@@ -5,6 +5,7 @@ import {
   availabilityApi, appointmentsApi, MOTIVO_LABELS,
   type AvailabilityOffice, type FreeSlot, type AppointmentMotivo,
 } from '../lib/api';
+import { esPsid } from '../lib/psid';
 
 interface Props {
   open: boolean;
@@ -31,7 +32,8 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<FreeSlot[]>([]);
   const [selectedStart, setSelectedStart] = useState<string | null>(null);
-  const [nombre, setNombre] = useState(contactName || '');
+  // En FB/IG contactName puede ser el PSID (id numérico de la red): no sirve como nombre.
+  const [nombre, setNombre] = useState(esPsid(contactName) ? '' : (contactName || ''));
   const [motivo, setMotivo] = useState<AppointmentMotivo | ''>('');
   const [nota, setNota] = useState('');
   const [loadingOffices, setLoadingOffices] = useState(false);
@@ -46,7 +48,7 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
   // Reset al abrir.
   useEffect(() => {
     if (!open) return;
-    setNombre(contactName || '');
+    setNombre(esPsid(contactName) ? '' : (contactName || ''));
     setOfficeId(''); setProfesionalId(''); setSlots([]); setSelectedStart(null);
     setDate(todayStr()); setMotivo(''); setNota('');
     setLoadingOffices(true);
@@ -94,7 +96,9 @@ export default function BookFromChatModal({ open, onClose, accountId, phone, con
       await appointmentsApi.create({
         account_id: accountId,
         phone,
-        telefono: phone,
+        // En FB/IG `phone` es el PSID: no es un teléfono llamable (bug prod 16/7:
+        // el recordatorio saludó "¡Hola, 27208676225498134!").
+        telefono: esPsid(phone) ? null : phone,
         nombre: nombre.trim(),
         resumen: nota.trim(),
         status: 'pendiente',

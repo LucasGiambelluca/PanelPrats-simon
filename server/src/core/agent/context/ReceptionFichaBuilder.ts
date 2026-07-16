@@ -10,7 +10,7 @@
 import type { AppointmentMotivo } from '../../../services/AppointmentService';
 
 export interface FichaContext {
-  telefono: string;
+  telefono: string | null;   // null en FB/IG cuando no hay teléfono real (ctx.phone es el PSID)
   modalidad: 'presencial' | 'video';
   zona?: string | null;
 }
@@ -19,7 +19,7 @@ export interface ReceptionFicha {
   nombre: string | null;
   dni: string | null;
   edad: number | null;
-  telefono: string;
+  telefono: string | null;
   zona: string | null;
   modalidad: 'presencial' | 'video';
   motivo: AppointmentMotivo | null;

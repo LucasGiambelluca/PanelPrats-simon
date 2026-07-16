@@ -2,6 +2,7 @@ import type { AccountManager } from '../core/accounts/AccountManager';
 import { AppointmentService } from './AppointmentService';
 import { messageStore } from './MessageStore';
 import { supabase } from '../config/supabase';
+import { esPsid } from '../utils/psid';
 
 /**
  * ReminderScheduler — recordatorio proactivo de citas por WhatsApp.
@@ -42,6 +43,15 @@ export function debeMarcarNoShow(
   const eod = endOfDayArMs(startMs);
   if (a.status === 'confirmada' && a.updated_at && new Date(a.updated_at).getTime() > eod) return false;
   return nowMs > eod;
+}
+
+/**
+ * Texto del recordatorio (pura, para testear). Si el "nombre" de la cita es un PSID
+ * de FB/IG, saluda sin nombre: en prod salió "¡Hola, 27208676225498134!" al cliente.
+ */
+export function textoRecordatorio(nombre: string | null | undefined, hora: string): string {
+  const n = nombre && !esPsid(nombre) ? `, ${nombre}` : '';
+  return `⏰ ¡Hola${n}! Te recordamos tu *cita* de hoy a las *${hora} hs*. ¡Te esperamos! 🟢`;
 }
 
 export class ReminderScheduler {
@@ -122,8 +132,7 @@ export class ReminderScheduler {
         const hora = new Date(a.start_time).toLocaleTimeString('es-AR', {
           hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires',
         });
-        const nombre = a.nombre ? `, ${a.nombre}` : '';
-        const texto = `⏰ ¡Hola${nombre}! Te recordamos tu *cita* de hoy a las *${hora} hs*. ¡Te esperamos! 🟢`;
+        const texto = textoRecordatorio(a.nombre, hora);
 
         try {
           await this.manager.sendMessage(a.account_id, a.phone, texto);

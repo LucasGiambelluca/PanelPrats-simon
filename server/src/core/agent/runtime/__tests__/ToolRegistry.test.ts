@@ -637,3 +637,40 @@ describe('book_appointment — anti-duplicado', () => {
     expect(apptCreate).toHaveBeenCalled();
   });
 });
+
+// Bug prod 2026-07-16: en FB/IG ctx.phone es el PSID (id de la red, 15-17 dígitos).
+// Sin args.telefono, el fallback guardaba el PSID como TELEFONO de la cita, y el
+// LLM a veces pasa el PSID como NOMBRE. Ninguno de los dos debe llegar a la cita.
+describe('book_appointment — PSID nunca es teléfono ni nombre', () => {
+  beforeEach(() => {
+    avHasCapacity.mockResolvedValue(true);
+    apptCreate.mockResolvedValue({ id: 'appt1' });
+  });
+
+  it('ctx.phone PSID sin args.telefono → telefono null (no el PSID)', async () => {
+    const reg = makeRegistry();
+    await reg.execute('book_appointment',
+      { nombre: 'Graciela', start_time: 's', end_time: 'e', resumen: '' },
+      { accountId: 'acc1', phone: '27208676225498134' });
+    expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({
+      phone: '27208676225498134',   // id del canal: se conserva (linkea el chat)
+      telefono: null,               // nunca el PSID como teléfono llamable
+    }));
+  });
+
+  it('ctx.phone WhatsApp válido sin args.telefono → sigue usándolo como telefono', async () => {
+    const reg = makeRegistry();
+    await reg.execute('book_appointment',
+      { nombre: 'Ana', start_time: 's', end_time: 'e', resumen: '' },
+      { accountId: 'acc1', phone: '5493416403395' });
+    expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({ telefono: '5493416403395' }));
+  });
+
+  it('args.nombre PSID → se guarda "Sin nombre", no el PSID', async () => {
+    const reg = makeRegistry();
+    await reg.execute('book_appointment',
+      { nombre: '25516497748025583', start_time: 's', end_time: 'e', resumen: '' },
+      { accountId: 'acc1', phone: '25516497748025583' });
+    expect(apptCreate).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Sin nombre' }));
+  });
+});
